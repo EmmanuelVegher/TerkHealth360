@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Python Virtual Environments & Cache
+.venv/
+*/.venv/
+**/.venv/
+venv/
+*/venv/
+env/
+*/env/
+__pycache__/
+*/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Build outputs & releases
+dist/
+build/
+*/dist/
+*/build/
+release/
+*/release/
+**/release/
+out/
+dist_electron/
+
+# Large binaries & packaging artifacts
+*.exe
+*.asar
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.zip
+*.tar.gz
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Database
+*.db
+*.sqlite
+
+# Logs & Debugging
+logs/
+*.log
+npm-debug.log*
+firebase-debug.log*
+firestore-debug.log*
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Uploads & Temporary
+uploads/
+*/uploads/
+temp/
+tmp/
+
+# Prisma
+prisma/migrations/*.sql
+!prisma/migrations/migration_lock.toml

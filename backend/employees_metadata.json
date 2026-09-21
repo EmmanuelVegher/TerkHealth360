@@ -1,0 +1,60 @@
+{
+  "FF-0001": {
+    "id": "FF-0001",
+    "phone": "07014113723",
+    "salaryGrade": "L8-Step 1",
+    "baseSalary": 1000000,
+    "bankName": "Access Bank",
+    "accountNo": "0058949360",
+    "fundingSource": "HOSPITAL_FUNDED",
+    "donorProgramme": "",
+    "licenseExpiry": "2027-12-31"
+  },
+  "EMP-002": {
+    "id": "EMP-002",
+    "phone": "08198765432",
+    "salaryGrade": "L8-Step 2",
+    "baseSalary": 120000,
+    "bankName": "Access Bank",
+    "accountNo": "0029312198",
+    "fundingSource": "HOSPITAL_FUNDED",
+    "donorProgramme": "",
+    "licenseExpiry": "2026-10-15",
+    "status": "ACTIVE"
+  },
+  "EMP-003": {
+    "id": "EMP-003",
+    "phone": "07055551234",
+    "salaryGrade": "L9-Step 1",
+    "baseSalary": 180000,
+    "bankName": "GTBank",
+    "accountNo": "0118833912",
+    "fundingSource": "HOSPITAL_FUNDED",
+    "donorProgramme": "",
+    "licenseExpiry": "2025-12-31",
+    "status": "ACTIVE"
+  },
+  "EMP-004": {
+    "id": "EMP-004",
+    "phone": "08077774321",
+    "salaryGrade": "L1-Step 1",
+    "baseSalary": 140000,
+    "bankName": "Citibank Nigeria",
+    "accountNo": "2029983191",
+    "fundingSource": "DONOR_FUNDED",
+    "donorProgramme": "CDC/CARITAS",
+    "licenseExpiry": "2026-08-30",
+    "status": "ACTIVE"
+  },
+  "FF-0002": {
+    "id": "FF-0002",
+    "phone": "09020101642",
+    "salaryGrade": "L8-Step 1",
+    "baseSalary": 1000000,
+    "bankName": "Access Bank",
+    "accountNo": "0058949360",
+    "fundingSource": "HOSPITAL_FUNDED",
+    "donorProgramme": "",
+    "licenseExpiry": "2027-12-31"
+  }
+}

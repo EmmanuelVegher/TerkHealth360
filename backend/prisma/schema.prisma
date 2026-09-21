@@ -1,0 +1,3774 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  username            String               @unique
+  email               String               @unique
+  passwordHash        String
+  role                UserRole             @default(PATIENT)
+  isActive            Boolean              @default(true)
+  twoFactorEnabled    Boolean              @default(false)
+  twoFactorSecret     String?
+  twoFactorType       String               @default("NONE")
+  emailOtpCode        String?
+  emailOtpExpiresAt   DateTime?
+  passwordExpiresAt   DateTime?
+  passwordChangedAt   DateTime             @default(now())
+  isTemporaryPassword Boolean              @default(false)
+  failedLoginAttempts Int                  @default(0)
+  lockedUntil         DateTime?
+  profilePicture      String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+  breakGlassLogs      BreakGlassLog[]
+  DepartmentHistory   DepartmentHistory[]
+  approvedEncounters  Encounter[]          @relation("EncounterApprover")
+  passwordHistories   PasswordHistory[]
+  passwordResetTokens PasswordResetToken[]
+  createdPatients     Patient[]            @relation("PatientCreator")
+  patient             Patient?
+  refreshTokens       RefreshToken[]
+  staff               Staff?
+  departments         UserDepartment[]
+  roles               UserRoleMapping[]
+  aiChatConversations AiChatConversation[]
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @db.VarChar(512)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Patient {
+  id                           String                        @id @default(uuid())
+  fhirId                       String?                       @unique
+  userId                       String                        @unique
+  patientNumber                String                        @unique
+  firstName                    String
+  lastName                     String
+  middleName                   String?
+  maidenName                   String?
+  birthDate                    DateTime?
+  gender                       Gender
+  maritalStatus                MaritalStatus?
+  bloodGroup                   BloodGroup?
+  genotype                     String?
+  nationality                  String?
+  stateOfOrigin                String?
+  lga                          String?
+  occupation                   String?
+  religion                     String?
+  spokenLanguage               String?
+  nin                          String?                       @unique
+  photoUrl                     String?
+  status                       String                        @default("ACTIVE")
+  identification               String?
+  isActive                     Boolean                       @default(true)
+  openmrsUuid                  String?
+  moniepointCustomerId         String?
+  walletBalance                Decimal                       @default(0) @db.Decimal(12, 2)
+  amountOwed                   Decimal                       @default(0) @db.Decimal(12, 2)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  familyAccountId              String?
+  familyRelationship           String?
+  nokName                      String?
+  nokRelationship              String?
+  nokPhone                     String?
+  nokAddress                   String?
+  emergencyName                String?
+  emergencyPhone               String?
+  emergencyRelationship        String?
+  emergencyAddress             String?
+  createdById                  String?
+  admissions                   Admission[]
+  allergies                    Allergy[]
+  appointments                 Appointment[]
+  bloodDonors                  BloodDonor[]
+  transfusionRecords           BloodTransfusionRecord[]
+  transfusionRequests          BloodTransfusionRequest[]
+  cervicalScreenings           CervicalCancerScreening[]     @relation("CervicalScreenings")
+  clinicalAlerts               ClinicalAlert[]
+  clinicalAttachments          ClinicalAttachment[]
+  discussions                  ClinicalDiscussion[]
+  clinicalMessages             ClinicalMessage[]
+  conditions                   Condition[]
+  consultationNotes            ConsultationNote[]
+  emarRecords                  EMARRecord[]
+  emergencyArrivals            EmergencyArrival[]
+  emergencyIncidentRecords     EmergencyIncidentRecord[]
+  encounters                   Encounter[]
+  familyPlanningEnrollments    FamilyPlanningEnrollment[]    @relation("FamilyPlanningEnrollments")
+  fertilityAssessments         FertilityAssessment[]         @relation("FertilityAssessments")
+  gynaecologyConsultations     GynaecologyConsultation[]     @relation("GynaecologyConsultations")
+  gynaecologyProcedures        GynaecologyProcedure[]        @relation("GynaecologyProcedures")
+  icuAdmissions                IcuAdmission[]
+  icuDialysisLifeSupports      IcuDialysisLifeSupport[]
+  icuDischargeHandovers        IcuDischargeHandover[]
+  icuEarlyWarningAlerts        IcuEarlyWarningAlert[]
+  icuIncidentRecords           IcuIncidentRecord[]
+  icuInfusionTherapies         IcuInfusionTherapy[]
+  icuNeurologicalObservations  IcuNeurologicalObservation[]
+  icuPhysiologicalObservations IcuPhysiologicalObservation[]
+  invoices                     Invoice[]
+  labOrders                    LabOrder[]
+  maternalDeathReviews         MaternalDeathReview[]         @relation("MaternalDeaths")
+  maternityProfile             MaternityProfile?             @relation("MaternityProfile")
+  medicalHistory               MedicalHistory?
+  medicationRequests           MedicationRequest[]
+  monnifyVirtualAccounts       MonnifyVirtualAccount[]
+  neonatalMothers              NeonatalRecord[]              @relation("MotherBaby")
+  nurseAssignments             NurseAssignment[]
+  nursingCarePlans             NursingCarePlan[]
+  nursingInterventions         NursingIntervention[]
+  nursingTasks                 NursingTask[]
+  observations                 Observation[]
+  pacuRecoveries               PACURecoveryRecord[]
+  addresses                    PatientAddress[]
+  cardReprints                 PatientCardReprint[]
+  feedbacks                    PatientFeedback[]
+  identifiers                  PatientIdentifier[]
+  insurancePolicies            PatientInsurancePolicy[]
+  queues                       PatientQueue[]
+  telecoms                     PatientTelecom[]
+  createdBy                    User?                         @relation("PatientCreator", fields: [createdById], references: [id])
+  familyAccount                FamilyAccount?                @relation(fields: [familyAccountId], references: [id])
+  user                         User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pharmacyADEs                 PharmacyADE[]
+  pharmacyPrescriptions        PharmacyPrescription[]
+  portalAccount                PortalAccount?
+  preOpAssessments             PreOpAssessment[]
+  pregnancyRecords             PregnancyRecord[]
+  radiologyIncidents           RadiologyIncident[]
+  radiologyOrders              RadiologyOrder[]
+  referrals                    Referral[]
+  handovers                    ShiftHandover[]
+  surgicalBookings             SurgicalBooking[]
+  consentForms                 SurgicalConsent[]
+  surgicalRequests             SurgicalRequest[]
+  telemedicineSessions         TelemedicineSession[]
+  triageRecords                TriageRecord[]
+  visits                       Visit[]
+
+  @@index([familyAccountId])
+  @@index([lastName, firstName])
+  @@index([firstName])
+  @@index([lastName])
+  @@index([walletBalance])
+  @@index([amountOwed])
+  @@index([createdAt])
+  @@index([status])
+  @@index([status, isActive])
+  @@map("patients")
+}
+
+model PatientIdentifier {
+  id          String  @id @default(uuid())
+  patientId   String
+  system      String?
+  value       String
+  typeCode    String?
+  typeDisplay String?
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, system, value])
+  @@map("patient_identifiers")
+}
+
+model MonnifyVirtualAccount {
+  id                   String                     @id @default(uuid())
+  patientId            String
+  accountReference     String                     @unique
+  accountName          String
+  accountNumber        String?
+  bankName             String?
+  bankCode             String?
+  reservationReference String?
+  status               String                     @default("PENDING")
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  createdById          String?
+  patient              Patient                    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  transactions         MonnifyWalletTransaction[]
+
+  @@index([patientId])
+  @@map("monnify_virtual_accounts")
+}
+
+model MonnifyWalletTransaction {
+  id                String                @id @default(uuid())
+  virtualAccountId  String
+  patientId         String
+  transactionRef    String?               @unique
+  amount            Decimal               @db.Decimal(12, 2)
+  type              String
+  status            String                @default("PENDING")
+  narration         String?
+  channel           String?
+  bankName          String?
+  sourceAccountName String?
+  method            String                @default("MONNIFY")
+  balanceBefore     Decimal               @default(0) @db.Decimal(12, 2)
+  balanceAfter      Decimal               @default(0) @db.Decimal(12, 2)
+  createdAt         DateTime              @default(now())
+  processedAt       DateTime?
+  notes             String?
+  virtualAccount    MonnifyVirtualAccount @relation(fields: [virtualAccountId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([virtualAccountId])
+  @@map("monnify_wallet_transactions")
+}
+
+model PatientTelecom {
+  id        String        @id @default(uuid())
+  patientId String
+  system    TelecomSystem @default(phone)
+  value     String
+  use       TelecomUse?
+  rank      Int?
+  patient   Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_telecoms")
+}
+
+model PatientAddress {
+  id         String       @id @default(uuid())
+  patientId  String
+  line       String?
+  city       String?
+  district   String?
+  state      String?
+  postalCode String?
+  country    String?
+  use        AddressUse?
+  type       AddressType?
+  patient    Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_addresses")
+}
+
+model Staff {
+  id                          String                         @id @default(uuid())
+  userId                      String                         @unique
+  employeeId                  String                         @unique
+  firstName                   String
+  lastName                    String
+  department                  String?
+  designation                 String?
+  qualification               String?
+  specialization              String?
+  licenseNumber               String?
+  isActive                    Boolean                        @default(true)
+  createdAt                   DateTime                       @default(now())
+  updatedAt                   DateTime                       @updatedAt
+  pharmacyRequisitions        PharmacyRequisition[]          @relation("RequisitionRequester")
+  appointments                Appointment[]
+  scientistCompatibilityTests BloodCompatibilityTest[]       @relation("CompatibilityScientist")
+  technologistComponents      BloodComponent[]               @relation("ComponentProcessor")
+  phlebotomistDonations       BloodDonation[]                @relation("DonationCollector")
+  administeredTransfusions    BloodTransfusionRecord[]       @relation("TransfusionAdministrator")
+  requestedTransfusions       BloodTransfusionRequest[]      @relation("TransfusionRequester")
+  discussionComments          ClinicalDiscussionComment[]    @relation("CommentAuthor")
+  discussionsCreated          ClinicalDiscussion[]           @relation("DiscussionCreator")
+  receivedMessages            ClinicalMessage[]              @relation("MessageRecipient")
+  sentMessages                ClinicalMessage[]              @relation("MessageSender")
+  conditions                  Condition[]
+  certifiedSterilizations     CSSDSterilizationCycle[]       @relation("CSSDOfficer")
+  birthsAttended              DeliveryRecord[]               @relation("BirthAttendant")
+  emarAdministered            EMARRecord[]                   @relation("EMARAdministeredBy")
+  emergencyIncidentReports    EmergencyIncidentRecord[]      @relation("EmergencyIncidentReporter")
+  emergencyObservations       EmergencyObservationLog[]      @relation("EmergencyObserver")
+  emergencyProcedures         EmergencyProcedure[]           @relation("EmergencyOperator")
+  emergencyStaffingShifts     EmergencyStaffingShift[]       @relation("EmergencyStaffClinician")
+  traumaSurgeons              EmergencyTraumaTeam[]          @relation("TraumaSurgeon")
+  traumaTeamsLed              EmergencyTraumaTeam[]          @relation("TraumaTeamLeader")
+  encounters                  Encounter[]
+  gynaecologyConsultations    GynaecologyConsultation[]      @relation("GynaecologyClinician")
+  icuApprovedAdmissions       IcuAdmission[]                 @relation("IcuAdmittingClinician")
+  icuDischargedHandovers      IcuDischargeHandover[]         @relation("IcuHandoverClinician")
+  icuIncidentReporters        IcuIncidentRecord[]            @relation("IcuIncidentReporter")
+  icuNeurologicalLogs         IcuNeurologicalObservation[]   @relation("IcuNeuroClinician")
+  icuPhysiologicalLogs        IcuPhysiologicalObservation[]  @relation("IcuObservingClinician")
+  icuStaffingShifts           IcuStaffingShift[]             @relation("IcuStaffClinician")
+  labOrdersRequested          LabOrder[]                     @relation("LabOrderRequester")
+  labResultsValidated         LabResult[]                    @relation("LabResultValidator")
+  labResultsVerified          LabResult[]                    @relation("LabResultVerifier")
+  labWorksheetsDone           LabWorksheet[]                 @relation("LabTechnician")
+  riskAssessments             MaternalRiskAssessment[]       @relation("RiskAssessor")
+  medicationRequests          MedicationRequest[]
+  nurseAssignments            NurseAssignment[]
+  nurseShifts                 NurseShift[]
+  carePlansDone               NursingCarePlan[]              @relation("CarePlanCreator")
+  interventionsDone           NursingIntervention[]          @relation("InterventionPerformer")
+  assignedTasks               NursingTask[]                  @relation("AssignedNurse")
+  completedTasks              NursingTask[]                  @relation("CompletedNurse")
+  observations                Observation[]
+  supervisedRecoveries        PACURecoveryRecord[]           @relation("PACUClinician")
+  clinicalInterventions       PharmacyClinicalIntervention[] @relation("ClinicalPharmacist")
+  prescriberInterventions     PharmacyClinicalIntervention[] @relation("PrescriberClinicalReview")
+  dispensedRecords            PharmacyDispensingRecord[]     @relation("PharmacyDispenser")
+  prescribedPrescriptions     PharmacyPrescription[]         @relation("PharmacyPrescriber")
+  verifiedPrescriptions       PharmacyPrescription[]         @relation("PharmacyVerifier")
+  loggedStockAdjustments      PharmacyStockAdjustment[]      @relation("StockAdjustmentUser")
+  preAnaestheticClearances    PreAnaestheticAssessment[]     @relation("PreAnaestheticClinician")
+  preOpAssessments            PreOpAssessment[]              @relation("PreOpAssessmentClinician")
+  calendarBlocks              ProviderCalendarBlock[]
+  loggedRadiologyIncidents    RadiologyIncident[]            @relation("RadiologyIncidentReporter")
+  requestedRadiologyOrders    RadiologyOrder[]               @relation("RadiologyRequester")
+  draftedRadiologyReports     RadiologyReport[]              @relation("RadiologyReporter")
+  verifiedRadiologyReports    RadiologyReport[]              @relation("RadiologyVerifier")
+  scheduledRadiologySchedules RadiologySchedule[]            @relation("RadiologyTechnician")
+  incomingHandovers           ShiftHandover[]                @relation("IncomingNurse")
+  outgoingHandovers           ShiftHandover[]                @relation("OutgoingNurse")
+  user                        User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anaesthetistBookings        SurgicalBooking[]              @relation("SurgicalBookingAnaesthetist")
+  ledSurgicalBookings         SurgicalBooking[]              @relation("SurgicalBookingSurgeon")
+  ledSurgicalRequests         SurgicalRequest[]              @relation("SurgicalRequestSurgeon")
+  telemedicineSessions        TelemedicineSession[]          @relation("TelemedicineHost")
+  triagesDone                 TriageRecord[]                 @relation("TriageCreator")
+  wardNurseRosters            WardNurseRoster[]
+
+  @@map("staff")
+}
+
+model Appointment {
+  id                  String            @id @default(uuid())
+  fhirId              String?           @unique
+  patientId           String
+  staffId             String?
+  serviceType         String?
+  status              AppointmentStatus @default(BOOKED)
+  start               DateTime
+  end                 DateTime
+  reasonText          String?
+  comment             String?
+  appointmentNumber   String?           @unique
+  appointmentType     String?
+  visitType           String?
+  duration            Int               @default(15)
+  statusReason        String?
+  isRecurring         Boolean           @default(false)
+  recurrencePattern   String?
+  parentAppointmentId String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  patient             Patient           @relation(fields: [patientId], references: [id])
+  staff               Staff?            @relation(fields: [staffId], references: [id])
+
+  @@index([patientId])
+  @@index([staffId])
+  @@index([status])
+  @@index([start])
+  @@map("appointments")
+}
+
+model Encounter {
+  id                String          @id @default(uuid())
+  fhirId            String?         @unique
+  patientId         String
+  staffId           String?
+  visitId           String?
+  status            EncounterStatus @default(PLANNED)
+  class             EncounterClass  @default(AMBULATORY)
+  type              String?
+  serviceType       String?
+  start             DateTime?
+  end               DateTime?
+  reasonText        String?
+  diagnosis         Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  approvalSignature String?
+  approvedAt        DateTime?
+  approvedById      String?
+  approvedBy        User?           @relation("EncounterApprover", fields: [approvedById], references: [id])
+  patient           Patient         @relation(fields: [patientId], references: [id])
+  staff             Staff?          @relation(fields: [staffId], references: [id])
+  visit             Visit?          @relation(fields: [visitId], references: [id])
+
+  @@map("encounters")
+}
+
+model Observation {
+  id                String            @id @default(uuid())
+  fhirId            String?           @unique
+  patientId         String
+  staffId           String?
+  encounterId       String?
+  status            ObservationStatus @default(FINAL)
+  category          String?
+  code              String
+  display           String
+  valueQuantity     Json?
+  valueString       String?
+  valueDateTime     DateTime?
+  effectiveDateTime DateTime?
+  note              String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  patient           Patient           @relation(fields: [patientId], references: [id])
+  staff             Staff?            @relation(fields: [staffId], references: [id])
+
+  @@map("observations")
+}
+
+model Condition {
+  id                 String             @id @default(uuid())
+  fhirId             String?            @unique
+  patientId          String
+  staffId            String?
+  encounterId        String?
+  clinicalStatus     ClinicalStatus     @default(ACTIVE)
+  verificationStatus VerificationStatus @default(CONFIRMED)
+  category           String?
+  code               String
+  display            String
+  onsetDateTime      DateTime?
+  abatementDateTime  DateTime?
+  note               String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  patient            Patient            @relation(fields: [patientId], references: [id])
+  staff              Staff?             @relation(fields: [staffId], references: [id])
+
+  @@map("conditions")
+}
+
+model MedicationRequest {
+  id                String                  @id @default(uuid())
+  fhirId            String?                 @unique
+  patientId         String
+  staffId           String?
+  encounterId       String?
+  status            MedicationRequestStatus @default(ACTIVE)
+  intent            MedicationRequestIntent @default(ORDER)
+  medicationCode    String?
+  medicationDisplay String?
+  dosageText        String?
+  note              String?
+  authoredOn        DateTime                @default(now())
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  patient           Patient                 @relation(fields: [patientId], references: [id])
+  staff             Staff?                  @relation(fields: [staffId], references: [id])
+
+  @@map("medication_requests")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  action       String
+  resourceType String
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  changes      Json?
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Invoice {
+  id         String   @id @default(uuid())
+  fhirId     String?  @unique
+  patientId  String
+  status     String
+  total      Float
+  amountPaid Float    @default(0)
+  reasonText String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+model Role {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  description String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  permissions RolePermission[]
+  users       UserRoleMapping[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  name        String
+  description String?
+  module      String
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRoleMapping {
+  userId String
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_role_mappings")
+}
+
+model Department {
+  id          String              @id @default(uuid())
+  name        String
+  code        String              @unique
+  headStaffId String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  histories   DepartmentHistory[]
+  members     UserDepartment[]
+
+  @@map("departments")
+}
+
+model UserDepartment {
+  userId       String
+  departmentId String
+  assignedAt   DateTime   @default(now())
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, departmentId])
+  @@map("user_departments")
+}
+
+model DepartmentHistory {
+  id              String     @id @default(uuid())
+  userId          String
+  oldDepartmentId String?
+  newDepartmentId String
+  transferredAt   DateTime   @default(now())
+  justification   String?
+  department      Department @relation(fields: [newDepartmentId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("department_histories")
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_histories")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model BreakGlassLog {
+  id              String   @id @default(uuid())
+  userId          String
+  reason          String
+  actionPerformed String
+  accessedAt      DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("break_glass_logs")
+}
+
+model PatientCardReprint {
+  id          String   @id @default(uuid())
+  patientId   String
+  reprintedAt DateTime @default(now())
+  reprintedBy String
+  reason      String?
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_card_reprints")
+}
+
+model FamilyAccount {
+  id            String    @id @default(uuid())
+  familyNumber  String    @unique
+  headPatientId String    @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  members       Patient[]
+
+  @@map("family_accounts")
+}
+
+model Visit {
+  id                    String               @id @default(uuid())
+  visitNumber           String               @unique
+  patientId             String
+  visitType             String
+  status                String               @default("REGISTERED")
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  createdBy             String?
+  chiefComplaint        String?
+  consultationServiceId String?
+  ConsultationNote      ConsultationNote[]
+  encounters            Encounter[]
+  PatientQueue          PatientQueue[]
+  workflowState         VisitWorkflowState?
+  consultationService   ConsultationService? @relation(fields: [consultationServiceId], references: [id])
+  patient               Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([status])
+  @@map("visits")
+}
+
+model WorkflowTemplate {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  visitType   String
+  description String?
+  isDefault   Boolean        @default(false)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  steps       WorkflowStep[]
+
+  @@map("workflow_templates")
+}
+
+model WorkflowStep {
+  id               String           @id @default(uuid())
+  templateId       String
+  stepOrder        Int
+  statusCode       String
+  label            String
+  description      String?
+  isOptional       Boolean          @default(false)
+  isBillingGate    Boolean          @default(false)
+  skipForEmergency Boolean          @default(false)
+  assignedRole     String?
+  module           String?
+  moduleRoute      String?
+  template         WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, stepOrder])
+  @@map("workflow_steps")
+}
+
+model VisitWorkflowState {
+  id               String   @id @default(uuid())
+  visitId          String   @unique
+  templateId       String
+  currentStepOrder Int      @default(1)
+  currentStatus    String   @default("REGISTERED")
+  completedSteps   Json     @default("[]")
+  updatedAt        DateTime @updatedAt
+  visit            Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@map("visit_workflow_states")
+}
+
+model ConsultationService {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  name           String
+  category       String
+  price          Decimal  @db.Decimal(12, 2)
+  description    String?
+  duration       Int      @default(15)
+  isActive       Boolean  @default(true)
+  requiresDoctor Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  visits         Visit[]
+
+  @@map("consultation_services")
+}
+
+model InsuranceBenefitCatalogItem {
+  id              String               @id @default(uuid())
+  planId          String
+  serviceCode     String
+  serviceName     String
+  serviceCategory String
+  coverageType    String
+  coveragePct     Float                @default(100)
+  maxAmount       Decimal?             @db.Decimal(12, 2)
+  requiresPreAuth Boolean              @default(false)
+  notes           String?
+  createdAt       DateTime             @default(now())
+  plan            InsuranceBenefitPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, serviceCode])
+  @@map("insurance_benefit_catalog")
+}
+
+model Ward {
+  id            String            @id @default(uuid())
+  name          String            @unique
+  type          String
+  isActive      Boolean           @default(true)
+  capacity      Int               @default(0)
+  color         String?
+  description   String?
+  gender        String?
+  wardCategory  String            @default("GENERAL")
+  beds          Bed[]
+  nurseRoster   WardNurseRoster[]
+  transfersFrom WardTransfer[]    @relation("FromWard")
+  transfersTo   WardTransfer[]    @relation("ToWard")
+
+  @@map("wards")
+}
+
+model Bed {
+  id         String      @id @default(uuid())
+  number     String
+  wardId     String
+  status     String      @default("AVAILABLE")
+  bedType    String      @default("STANDARD")
+  admissions Admission[]
+  ward       Ward        @relation(fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@unique([wardId, number])
+  @@map("beds")
+}
+
+model Admission {
+  id                  String         @id @default(uuid())
+  patientId           String
+  bedId               String
+  admittingStaffId    String?
+  admittedAt          DateTime       @default(now())
+  dischargedAt        DateTime?
+  dischargeReason     String?
+  status              String         @default("ADMITTED")
+  clinicalCondition   String         @default("STABLE")
+  clinicalDesignation String?
+  bed                 Bed            @relation(fields: [bedId], references: [id])
+  patient             Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  transfers           WardTransfer[]
+
+  @@map("admissions")
+}
+
+model WardTransfer {
+  id                  String    @id @default(uuid())
+  admissionId         String
+  fromWardId          String
+  toWardId            String
+  fromBedId           String
+  toBedId             String
+  transferredById     String?
+  transferReason      String
+  transferType        String
+  clinicalDesignation String?
+  isOverflow          Boolean   @default(false)
+  transferredAt       DateTime  @default(now())
+  notes               String?
+  admission           Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  fromWard            Ward      @relation("FromWard", fields: [fromWardId], references: [id])
+  toWard              Ward      @relation("ToWard", fields: [toWardId], references: [id])
+
+  @@map("ward_transfers")
+}
+
+model WardNurseRoster {
+  id        String    @id @default(uuid())
+  wardId    String
+  staffId   String
+  shift     String
+  startDate DateTime
+  endDate   DateTime?
+  isPrimary Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  ward      Ward      @relation(fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@map("ward_nurse_roster")
+}
+
+model Referral {
+  id                String   @id @default(uuid())
+  patientId         String
+  referringStaffId  String
+  receivingDept     String?
+  receivingHospital String?
+  type              String
+  status            String   @default("PENDING")
+  notes             String?
+  createdAt         DateTime @default(now())
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("referrals")
+}
+
+model InsuranceProvider {
+  id             String                   @id @default(uuid())
+  name           String                   @unique
+  code           String                   @unique
+  contactDetails String?
+  isActive       Boolean                  @default(true)
+  plans          InsuranceBenefitPlan[]
+  policies       PatientInsurancePolicy[]
+
+  @@map("insurance_providers")
+}
+
+model InsuranceBenefitPlan {
+  id               String                        @id @default(uuid())
+  name             String
+  providerId       String
+  coverageDetails  Json?
+  copayPercentage  Float                         @default(0)
+  coverageNotes    String?
+  deductibleAmount Decimal?                      @db.Decimal(12, 2)
+  maxAnnualLimit   Decimal?                      @db.Decimal(12, 2)
+  catalogItems     InsuranceBenefitCatalogItem[]
+  provider         InsuranceProvider             @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  policies         PatientInsurancePolicy[]
+
+  @@map("insurance_benefit_plans")
+}
+
+model PatientInsurancePolicy {
+  id               String               @id @default(uuid())
+  patientId        String
+  providerId       String
+  planId           String
+  membershipNumber String
+  enrolleeNumber   String?
+  effectiveDate    DateTime
+  expiryDate       DateTime
+  isActive         Boolean              @default(true)
+  isPrimary        Boolean              @default(true)
+  claims           Claim[]
+  patient          Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plan             InsuranceBenefitPlan @relation(fields: [planId], references: [id])
+  provider         InsuranceProvider    @relation(fields: [providerId], references: [id])
+
+  @@unique([providerId, membershipNumber])
+  @@map("patient_insurance_policies")
+}
+
+model Claim {
+  id             String                 @id @default(uuid())
+  patientId      String
+  policyId       String
+  encounterId    String?
+  status         String                 @default("DRAFT")
+  totalAmount    Float
+  approvedAmount Float                  @default(0)
+  createdAt      DateTime               @default(now())
+  policy         PatientInsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@map("claims")
+}
+
+model MedicalHistory {
+  id                    String    @id @default(uuid())
+  patientId             String    @unique
+  lmp                   DateTime?
+  edd                   DateTime?
+  gravida               Int?
+  para                  Int?
+  abortions             Int?
+  livingChildren        Int?
+  tobaccoUse            String?
+  alcoholUse            String?
+  lifestyleNotes        String?
+  pastSurgicalNotes     String?
+  familyHereditaryNotes String?
+  reviewedAt            DateTime?
+  reviewedBy            String?
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("medical_histories")
+}
+
+model Allergy {
+  id        String    @id @default(uuid())
+  patientId String
+  allergen  String
+  category  String
+  status    String
+  severity  String
+  reaction  String?
+  onset     DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("allergies")
+}
+
+model ClinicalAlert {
+  id        String   @id @default(uuid())
+  patientId String
+  message   String
+  severity  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_alerts")
+}
+
+model ConsultationNote {
+  id          String                      @id @default(uuid())
+  visitId     String?
+  encounterId String?
+  patientId   String
+  authorId    String
+  subjective  String
+  objective   String
+  assessment  String
+  plan        String
+  signature   String?
+  signedAt    DateTime?
+  isFinalized Boolean                     @default(false)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  amendments  ConsultationNoteAmendment[]
+  patient     Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visit       Visit?                      @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_notes")
+}
+
+model ConsultationNoteAmendment {
+  id            String           @id @default(uuid())
+  noteId        String
+  amendedBy     String
+  amendedAt     DateTime         @default(now())
+  oldSubjective String
+  oldObjective  String
+  oldAssessment String
+  oldPlan       String
+  justification String
+  note          ConsultationNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_note_amendments")
+}
+
+model ClinicalAttachment {
+  id        String   @id @default(uuid())
+  patientId String
+  category  String
+  title     String
+  fileUrl   String
+  uploader  String
+  createdAt DateTime @default(now())
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_attachments")
+}
+
+model ProviderCalendarBlock {
+  id        String   @id @default(uuid())
+  staffId   String?
+  startTime DateTime
+  endTime   DateTime
+  reason    String
+  staff     Staff?   @relation(fields: [staffId], references: [id])
+
+  @@map("provider_calendar_blocks")
+}
+
+model PatientQueue {
+  id               String    @id @default(uuid())
+  patientId        String
+  visitId          String?
+  tokenNumber      String
+  department       String
+  status           String    @default("WAITING")
+  priority         Int       @default(0)
+  priorityReason   String?
+  calledAt         DateTime?
+  serviceStartedAt DateTime?
+  completedAt      DateTime?
+  assignedDoctorId String?
+  assignedDoctorName String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visit            Visit?    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@map("patient_queues")
+}
+
+model PatientFeedback {
+  id           String   @id @default(uuid())
+  patientId    String
+  rating       Int
+  feedbackText String?
+  category     String?
+  createdAt    DateTime @default(now())
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_feedbacks")
+}
+
+model PortalAccount {
+  id              String    @id @default(uuid())
+  patientId       String    @unique
+  passwordHash    String
+  isVerified      Boolean   @default(false)
+  verificationOtp String?
+  otpExpiresAt    DateTime?
+  lastLogin       DateTime?
+  createdAt       DateTime  @default(now())
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("portal_accounts")
+}
+
+model NurseAssignment {
+  id         String   @id @default(uuid())
+  patientId  String
+  staffId    String
+  shiftId    String?
+  assignedAt DateTime @default(now())
+  status     String   @default("ACTIVE")
+  notes      String?
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  nurse      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("nurse_assignments")
+}
+
+model NurseShift {
+  id               String   @id @default(uuid())
+  staffId          String
+  shiftType        String
+  date             DateTime
+  status           String   @default("ASSIGNED")
+  changedToStaffId String?
+  nurse            Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("nurse_shifts")
+}
+
+model ShiftHandover {
+  id                    String    @id @default(uuid())
+  outgoingNurseId       String
+  incomingNurseId       String
+  shiftDate             DateTime
+  patientId             String
+  condition             String
+  outstandingTasks      String?
+  medicationsDue        String?
+  pendingInvestigations String?
+  clinicalConcerns      String?
+  risks                 String?
+  isAcknowledged        Boolean   @default(false)
+  acknowledgedAt        DateTime?
+  incomingNurse         Staff     @relation("IncomingNurse", fields: [incomingNurseId], references: [id])
+  outgoingNurse         Staff     @relation("OutgoingNurse", fields: [outgoingNurseId], references: [id])
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("shift_handovers")
+}
+
+model NursingTask {
+  id               String    @id @default(uuid())
+  patientId        String
+  description      String
+  priority         String    @default("ROUTINE")
+  status           String    @default("PENDING")
+  assignedNurseId  String
+  completedNurseId String?
+  completedAt      DateTime?
+  dueDate          DateTime
+  deferredReason   String?
+  assignedNurse    Staff     @relation("AssignedNurse", fields: [assignedNurseId], references: [id])
+  completedNurse   Staff?    @relation("CompletedNurse", fields: [completedNurseId], references: [id])
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("nursing_tasks")
+}
+
+model TriageRecord {
+  id                   String   @id @default(uuid())
+  patientId            String
+  encounterId          String?
+  triageType           String   @default("OUTPATIENT")
+  systolic             Float
+  diastolic            Float
+  temperature          Float
+  pulseRate            Float
+  respiratoryRate      Float
+  spo2                 Float
+  weight               Float?
+  height               Float?
+  bmi                  Float?
+  presentingComplaints String
+  painScore            Int      @default(0)
+  consciousnessLevel   String   @default("ALERT")
+  mobility             String?
+  hydration            String?
+  nutrition            String?
+  priority             String   @default("STANDARD")
+  news2Score           Int      @default(0)
+  news2Risk            String   @default("LOW")
+  triageStart          DateTime @default(now())
+  triageEnd            DateTime @default(now())
+  createdById          String
+  createdAt            DateTime @default(now())
+  creator              Staff    @relation("TriageCreator", fields: [createdById], references: [id])
+  patient              Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("triage_records")
+}
+
+model NursingCarePlan {
+  id               String                @id @default(uuid())
+  patientId        String
+  nursingDiagnosis String
+  goals            String
+  expectedOutcomes String
+  status           String                @default("ACTIVE")
+  createdById      String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  creator          Staff                 @relation("CarePlanCreator", fields: [createdById], references: [id])
+  patient          Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  interventions    NursingIntervention[]
+
+  @@map("nursing_care_plans")
+}
+
+model NursingIntervention {
+  id            String          @id @default(uuid())
+  carePlanId    String
+  patientId     String
+  description   String
+  status        String          @default("COMPLETED")
+  missedReason  String?
+  performedById String
+  performedAt   DateTime        @default(now())
+  carePlan      NursingCarePlan @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  patient       Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  performer     Staff           @relation("InterventionPerformer", fields: [performedById], references: [id])
+
+  @@map("nursing_interventions")
+}
+
+model EMARRecord {
+  id               String    @id @default(uuid())
+  patientId        String
+  medicationName   String
+  dosage           String
+  route            String
+  site             String?
+  scheduledTime    DateTime
+  administeredTime DateTime?
+  status           String    @default("SCHEDULED")
+  administeredById String?
+  omittedReason    String?
+  notes            String?
+  administerer     Staff?    @relation("EMARAdministeredBy", fields: [administeredById], references: [id])
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("emar_records")
+}
+
+model PregnancyRecord {
+  id              String           @id @default(uuid())
+  patientId       String
+  gestationNumber Int              @default(1)
+  lmpDate         DateTime
+  eddDate         DateTime
+  isHighRisk      Boolean          @default(false)
+  highRiskReason  String?
+  status          String           @default("ACTIVE")
+  createdAt       DateTime         @default(now())
+  customFields    String?
+  antenatalVisits AntenatalVisit[]
+  deliveryRecords DeliveryRecord[]
+  labourRecords   LabourRecord[]
+  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("pregnancy_records")
+}
+
+model AntenatalVisit {
+  id                String          @id @default(uuid())
+  pregnancyId       String
+  visitDate         DateTime        @default(now())
+  gestationalWeeks  Int
+  weight            Float?
+  systolic          Float?
+  diastolic         Float?
+  urineProtein      String?
+  urineGlucose      String?
+  fundalHeight      Float?
+  fetalPresentation String?
+  fetalLie          String?
+  fetalHeartRate    Float?
+  fetalMovement     String?
+  dangerSigns       String?
+  educationTopics   String?
+  nextVisitDate     DateTime?
+  pregnancy         PregnancyRecord @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@map("antenatal_visits")
+}
+
+model LabourRecord {
+  id                    String                  @id @default(uuid())
+  pregnancyId           String
+  admittedAt            DateTime                @default(now())
+  membranesStatus       String                  @default("INTACT")
+  cervicalDilatation    Float
+  contractionsFrequency Int
+  fetalHeartRate        Float
+  maternalPulse         Float
+  maternalBp            String
+  status                String                  @default("ACTIVE")
+  partographData        String?
+  monitoringEntries     LabourMonitoringEntry[]
+  pregnancy             PregnancyRecord         @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@map("labour_records")
+}
+
+model DeliveryRecord {
+  id                String           @id @default(uuid())
+  pregnancyId       String
+  motherId          String
+  deliveryType      String           @default("VAGINAL")
+  birthTimestamp    DateTime         @default(now())
+  bloodLossMl       Float            @default(0)
+  complications     String?
+  placentaCondition String?
+  birthAttendantId  String
+  attendant         Staff            @relation("BirthAttendant", fields: [birthAttendantId], references: [id])
+  pregnancy         PregnancyRecord  @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+  neonatalRecords   NeonatalRecord[]
+
+  @@map("delivery_records")
+}
+
+model NeonatalRecord {
+  id                  String              @id @default(uuid())
+  deliveryRecordId    String
+  motherId            String
+  babyName            String
+  birthWeight         Float
+  birthLength         Float?
+  headCircumference   Float?
+  sex                 String              @default("MALE")
+  apgar1Min           Int
+  apgar5Min           Int
+  examinationNotes    String?
+  createdAt           DateTime            @default(now())
+  birthNotification   BirthNotification?
+  neonatalCareEntries NeonatalCareEntry[]
+  delivery            DeliveryRecord      @relation(fields: [deliveryRecordId], references: [id], onDelete: Cascade)
+  mother              Patient             @relation("MotherBaby", fields: [motherId], references: [id], onDelete: Cascade)
+
+  @@map("neonatal_records")
+}
+
+model ClinicalDiscussion {
+  id          String                      @id @default(uuid())
+  patientId   String
+  subject     String
+  status      String                      @default("ACTIVE")
+  createdById String
+  createdAt   DateTime                    @default(now())
+  comments    ClinicalDiscussionComment[]
+  creator     Staff                       @relation("DiscussionCreator", fields: [createdById], references: [id])
+  patient     Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_discussions")
+}
+
+model ClinicalDiscussionComment {
+  id               String             @id @default(uuid())
+  discussionId     String
+  authorId         String
+  comment          String
+  isRecommendation Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  author           Staff              @relation("CommentAuthor", fields: [authorId], references: [id])
+  discussion       ClinicalDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_discussion_comments")
+}
+
+model MDTMeeting {
+  id             String   @id @default(uuid())
+  title          String
+  scheduledAt    DateTime
+  status         String   @default("SCHEDULED")
+  agenda         String
+  casesJson      String?
+  minutes        String?
+  decisionsJson  String?
+  attendanceJson String?
+  createdAt      DateTime @default(now())
+
+  @@map("mdt_meetings")
+}
+
+model TelemedicineSession {
+  id                   String    @id @default(uuid())
+  appointmentId        String?
+  patientId            String
+  staffId              String
+  roomName             String
+  status               String    @default("SCHEDULED")
+  hasConsent           Boolean   @default(true)
+  recordingConsentText String?
+  isRecorded           Boolean   @default(false)
+  recordingUrl         String?
+  sessionStart         DateTime?
+  sessionEnd           DateTime?
+  notes                String?
+  patient              Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  host                 Staff     @relation("TelemedicineHost", fields: [staffId], references: [id])
+
+  @@map("telemedicine_sessions")
+}
+
+model ClinicalMessage {
+  id            String    @id @default(uuid())
+  senderId      String
+  recipientId   String
+  patientId     String?
+  body          String
+  attachmentUrl String?
+  priority      String    @default("ROUTINE")
+  isRead        Boolean   @default(false)
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+  patient       Patient?  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recipient     Staff     @relation("MessageRecipient", fields: [recipientId], references: [id])
+  sender        Staff     @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@map("clinical_messages")
+}
+
+model LabTestCatalog {
+  id              String         @id @default(uuid())
+  testCode        String         @unique
+  testName        String
+  category        String
+  subCategory     String?
+  specimenType    String
+  specimenVolume  String?
+  containerType   String?
+  turnaroundHours Int            @default(24)
+  referenceRange  String?
+  unit            String?
+  price           Decimal        @default(0) @db.Decimal(12, 2)
+  isActive        Boolean        @default(true)
+  requiresFasting Boolean        @default(false)
+  criticalLow     Float?
+  criticalHigh    Float?
+  loincCode       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  orderItems      LabOrderItem[]
+
+  @@map("lab_test_catalog")
+}
+
+model LabOrder {
+  id                String             @id @default(uuid())
+  orderNumber       String             @unique
+  patientId         String
+  requestedById     String
+  visitId           String?
+  department        String?
+  priority          String             @default("ROUTINE")
+  clinicalNotes     String?
+  diagnosis         String?
+  status            String             @default("PENDING")
+  paymentStatus     String             @default("UNPAID")
+  insurancePolicyNo String?
+  totalAmount       Decimal            @default(0) @db.Decimal(12, 2)
+  orderedAt         DateTime           @default(now())
+  completedAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  criticalAlerts    LabCriticalAlert[]
+  items             LabOrderItem[]
+  patient           Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  requestedBy       Staff              @relation("LabOrderRequester", fields: [requestedById], references: [id])
+  specimens         LabSpecimen[]
+
+  @@map("lab_orders")
+}
+
+model LabOrderItem {
+  id          String         @id @default(uuid())
+  orderId     String
+  testId      String
+  status      String         @default("PENDING")
+  price       Decimal        @db.Decimal(12, 2)
+  worksheetId String?
+  createdAt   DateTime       @default(now())
+  order       LabOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  test        LabTestCatalog @relation(fields: [testId], references: [id])
+  worksheet   LabWorksheet?  @relation(fields: [worksheetId], references: [id])
+  result      LabResult?
+
+  @@map("lab_order_items")
+}
+
+model LabSpecimen {
+  id              String    @id @default(uuid())
+  orderId         String
+  barcodeId       String    @unique
+  specimenType    String
+  containerType   String?
+  collectedAt     DateTime?
+  collectedBy     String?
+  receivedAt      DateTime?
+  receivedBy      String?
+  volume          String?
+  condition       String    @default("ACCEPTABLE")
+  rejectionReason String?
+  storageLocation String?
+  status          String    @default("PENDING_COLLECTION")
+  chainOfCustody  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  order           LabOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("lab_specimens")
+}
+
+model LabWorksheet {
+  id           String         @id @default(uuid())
+  worksheetNo  String         @unique
+  department   String
+  technicianId String
+  date         DateTime       @default(now())
+  status       String         @default("OPEN")
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  orderItems   LabOrderItem[]
+  results      LabResult[]
+  technician   Staff          @relation("LabTechnician", fields: [technicianId], references: [id])
+
+  @@map("lab_worksheets")
+}
+
+model LabResult {
+  id                 String             @id @default(uuid())
+  orderItemId        String             @unique
+  worksheetId        String?
+  resultValue        String?
+  resultUnit         String?
+  referenceRange     String?
+  interpretation     String?
+  resultText         String?
+  isCritical         Boolean            @default(false)
+  criticalNotified   Boolean            @default(false)
+  criticalNotifiedAt DateTime?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  validatedById      String?
+  validatedAt        DateTime?
+  resultedAt         DateTime           @default(now())
+  amendmentReason    String?
+  isAmended          Boolean            @default(false)
+  previousValue      String?
+  attachmentUrl      String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  criticalAlerts     LabCriticalAlert[]
+  orderItem          LabOrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  validatedBy        Staff?             @relation("LabResultValidator", fields: [validatedById], references: [id])
+  verifiedBy         Staff?             @relation("LabResultVerifier", fields: [verifiedById], references: [id])
+  worksheet          LabWorksheet?      @relation(fields: [worksheetId], references: [id])
+
+  @@map("lab_results")
+}
+
+model LabQCRecord {
+  id              String    @id @default(uuid())
+  department      String
+  analyzerName    String
+  controlName     String
+  lotNumber       String?
+  expiryDate      DateTime?
+  testName        String
+  expectedRange   String
+  measuredValue   String
+  isWithinRange   Boolean
+  runDate         DateTime  @default(now())
+  performedBy     String
+  comments        String?
+  correctionTaken String?
+  createdAt       DateTime  @default(now())
+
+  @@map("lab_qc_records")
+}
+
+model LabInventoryItem {
+  id               String                    @id @default(uuid())
+  itemCode         String                    @unique
+  itemName         String
+  category         String
+  department       String
+  unit             String
+  currentStock     Float                     @default(0)
+  minimumStock     Float                     @default(10)
+  reorderLevel     Float                     @default(20)
+  unitCost         Decimal                   @default(0) @db.Decimal(12, 2)
+  supplier         String?
+  storageCondition String?
+  expiryDate       DateTime?
+  lotNumber        String?
+  isActive         Boolean                   @default(true)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  transactions     LabInventoryTransaction[]
+
+  @@map("lab_inventory_items")
+}
+
+model LabInventoryTransaction {
+  id          String           @id @default(uuid())
+  itemId      String
+  type        String
+  quantity    Float
+  balance     Float
+  reference   String?
+  performedBy String
+  notes       String?
+  createdAt   DateTime         @default(now())
+  item        LabInventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("lab_inventory_transactions")
+}
+
+model LabEquipment {
+  id              String    @id @default(uuid())
+  equipmentName   String
+  model           String?
+  serialNumber    String?   @unique
+  department      String
+  status          String    @default("OPERATIONAL")
+  lastCalibrated  DateTime?
+  nextCalibration DateTime?
+  lastServiced    DateTime?
+  nextService     DateTime?
+  installDate     DateTime?
+  warrantyExpiry  DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("lab_equipment")
+}
+
+model LabCriticalAlert {
+  id             String    @id @default(uuid())
+  orderId        String
+  resultId       String
+  testName       String
+  criticalValue  String
+  notifiedTo     String
+  notifiedAt     DateTime  @default(now())
+  acknowledgedAt DateTime?
+  responseAction String?
+  channel        String    @default("SYSTEM")
+  order          LabOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  result         LabResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@map("lab_critical_alerts")
+}
+
+model LabReferral {
+  id             String    @id @default(uuid())
+  referralNumber String    @unique
+  orderId        String?
+  patientName    String
+  mrn            String
+  testRequested  String
+  referredTo     String
+  referralDate   DateTime  @default(now())
+  resultReceived Boolean   @default(false)
+  resultDate     DateTime?
+  resultSummary  String?
+  status         String    @default("PENDING")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("lab_referrals")
+}
+
+model PharmacyInventoryItem {
+  id                  String                           @id @default(uuid())
+  itemCode            String                           @unique
+  genericName         String
+  brandName           String
+  dosageForm          String
+  strength            String
+  manufacturer        String?
+  supplierPreferred   String?
+  storageRequirements String?
+  unitOfMeasure       String
+  classification      String                           @default("PRESCRIPTION")
+  price               Decimal                          @default(0) @db.Decimal(12, 2)
+  requiresFasting     Boolean                          @default(false)
+  isActive            Boolean                          @default(true)
+  loincCode           String?
+  moniepointProductId String?
+  stockLeft           Int                              @default(0)
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
+  transfers           PharmacyTransfer[]               @relation("TransferMedication")
+  controlledLogs      PharmacyControlledSubstanceLog[]
+  grnItems            PharmacyGRNItem[]
+  prescriptionItems   PharmacyPrescriptionItem[]
+  purchaseOrderItems  PharmacyPurchaseOrderItem[]
+  adjustments         PharmacyStockAdjustment[]
+  batches             PharmacyStockBatch[]
+
+  @@map("pharmacy_inventory_items")
+}
+
+model PharmacyStockBatch {
+  id               String                     @id @default(uuid())
+  inventoryItemId  String
+  batchNumber      String
+  expiryDate       DateTime
+  manufacturerDate DateTime?
+  purchaseCost     Decimal                    @default(0) @db.Decimal(12, 2)
+  receivedQuantity Int
+  currentQuantity  Int
+  supplierId       String?
+  lotNumber        String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  warehouseId      String?
+  coldChainLogs    PharmacyColdChainLog[]
+  dispensedRecords PharmacyDispensingRecord[]
+  inventoryItem    PharmacyInventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  supplier         PharmacySupplier?          @relation(fields: [supplierId], references: [id])
+  warehouse        PharmacyWarehouse?         @relation(fields: [warehouseId], references: [id])
+
+  @@unique([inventoryItemId, batchNumber])
+  @@map("pharmacy_stock_batches")
+}
+
+model PharmacyPrescription {
+  id                    String                         @id @default(uuid())
+  prescriptionNumber    String                         @unique
+  patientId             String
+  prescribedById        String
+  verifiedById          String?
+  visitId               String?
+  encounterId           String?
+  department            String?
+  priority              String                         @default("ROUTINE")
+  clinicalNotes         String?
+  diagnosis             String?
+  openmrsUuid           String?
+  status                String                         @default("PENDING_VERIFICATION")
+  paymentStatus         String                         @default("UNPAID")
+  insurancePolicyNo     String?
+  totalAmount           Decimal                        @default(0) @db.Decimal(12, 2)
+  orderedAt             DateTime                       @default(now())
+  verifiedAt            DateTime?
+  completedAt           DateTime?
+  cancelReason          String?
+  allergyCheckDone      Boolean                        @default(false)
+  interactionCheckDone  Boolean                        @default(false)
+  duplicateCheckDone    Boolean                        @default(false)
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  antimicrobialRecords  PharmacyAntimicrobialRecord[]
+  clinicalInterventions PharmacyClinicalIntervention[]
+  dispensedRecords      PharmacyDispensingRecord[]
+  items                 PharmacyPrescriptionItem[]
+  patient               Patient                        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescriber            Staff                          @relation("PharmacyPrescriber", fields: [prescribedById], references: [id])
+  verifier              Staff?                         @relation("PharmacyVerifier", fields: [verifiedById], references: [id])
+
+  @@map("pharmacy_prescriptions")
+}
+
+model PharmacyPrescriptionItem {
+  id                 String                     @id @default(uuid())
+  prescriptionId     String
+  medicationId       String
+  strength           String
+  dosageForm         String
+  dose               String
+  frequency          String
+  duration           String
+  route              String
+  quantityPrescribed Int
+  quantityDispensed  Int                        @default(0)
+  refillsAllowed     Int                        @default(0)
+  refillsRemaining   Int                        @default(0)
+  clinicalIndication String?
+  status             String                     @default("PENDING")
+  createdAt          DateTime                   @default(now())
+  dispensedRecords   PharmacyDispensingRecord[]
+  medication         PharmacyInventoryItem      @relation(fields: [medicationId], references: [id])
+  prescription       PharmacyPrescription       @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_prescription_items")
+}
+
+model PharmacyDispensingRecord {
+  id                     String                   @id @default(uuid())
+  prescriptionId         String
+  prescriptionItemId     String
+  batchId                String
+  quantityDispensed      Int
+  dispensedById          String
+  dispensedAt            DateTime                 @default(now())
+  barcodeVerified        Boolean                  @default(false)
+  barcodeScanned         String?
+  insuranceStatus        String                   @default("PATIENT_PAY")
+  coPaymentAmount        Decimal                  @default(0) @db.Decimal(12, 2)
+  claimId                String?
+  counsellingDone        Boolean                  @default(false)
+  counsellingNotes       String?
+  counsellingPrecautions String?
+  patientAcknowledge     Boolean                  @default(false)
+  moniepointSaleId       String?
+  paymentMethod          String                   @default("Cash")
+  createdAt              DateTime                 @default(now())
+  batch                  PharmacyStockBatch       @relation(fields: [batchId], references: [id])
+  dispenser              Staff                    @relation("PharmacyDispenser", fields: [dispensedById], references: [id])
+  prescription           PharmacyPrescription     @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescriptionItem       PharmacyPrescriptionItem @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_dispensing_records")
+}
+
+model PharmacyControlledSubstanceLog {
+  id                  String                @id @default(uuid())
+  inventoryItemId     String
+  batchNumber         String
+  transactionType     String
+  quantity            Int
+  recordedBy          String
+  authorizedBy        String?
+  verificationDetails String?
+  patientName         String?
+  prescriptionNo      String?
+  comments            String?
+  createdAt           DateTime              @default(now())
+  inventoryItem       PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_controlled_substance_logs")
+}
+
+model PharmacySupplier {
+  id               String                  @id @default(uuid())
+  supplierName     String                  @unique
+  contactPerson    String?
+  phone            String?
+  email            String?
+  address          String?
+  licenseInfo      String?
+  licenseExpiry    DateTime?
+  certifications   String?
+  paymentTerms     String?
+  deliveryTimeDays Int                     @default(7)
+  orderAccuracyPct Float                   @default(100.0)
+  qualityIncidents Int                     @default(0)
+  isActive         Boolean                 @default(true)
+  contracts        String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  purchaseOrders   PharmacyPurchaseOrder[]
+  batches          PharmacyStockBatch[]
+
+  @@map("pharmacy_suppliers")
+}
+
+model PharmacyPurchaseOrder {
+  id               String                      @id @default(uuid())
+  poNumber         String                      @unique
+  supplierId       String
+  status           String                      @default("DRAFT")
+  totalAmount      Decimal                     @default(0) @db.Decimal(12, 2)
+  deliverySchedule String?
+  approvalWorkflow String?
+  approvedBy       String?
+  approvedAt       DateTime?
+  orderedAt        DateTime                    @default(now())
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  grns             PharmacyGRN[]
+  items            PharmacyPurchaseOrderItem[]
+  supplier         PharmacySupplier            @relation(fields: [supplierId], references: [id])
+
+  @@map("pharmacy_purchase_orders")
+}
+
+model PharmacyPurchaseOrderItem {
+  id               String                @id @default(uuid())
+  poId             String
+  medicationId     String
+  quantityOrdered  Int
+  quantityReceived Int                   @default(0)
+  unitCost         Decimal               @db.Decimal(12, 2)
+  createdAt        DateTime              @default(now())
+  medication       PharmacyInventoryItem @relation(fields: [medicationId], references: [id])
+  po               PharmacyPurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_purchase_order_items")
+}
+
+model PharmacyGRN {
+  id                 String                @id @default(uuid())
+  grnNumber          String                @unique
+  poId               String
+  receivedAt         DateTime              @default(now())
+  receivedBy         String
+  supplierInvoiceNo  String?
+  discrepanciesCount Int                   @default(0)
+  notes              String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  items              PharmacyGRNItem[]
+  po                 PharmacyPurchaseOrder @relation(fields: [poId], references: [id])
+
+  @@map("pharmacy_grns")
+}
+
+model PharmacyGRNItem {
+  id               String                @id @default(uuid())
+  grnId            String
+  medicationId     String
+  quantityReceived Int
+  batchNumber      String
+  expiryDate       DateTime
+  unitCost         Decimal               @db.Decimal(12, 2)
+  createdAt        DateTime              @default(now())
+  grn              PharmacyGRN           @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  medication       PharmacyInventoryItem @relation(fields: [medicationId], references: [id])
+
+  @@map("pharmacy_grn_items")
+}
+
+model PharmacyStockAdjustment {
+  id               String                @id @default(uuid())
+  inventoryItemId  String
+  batchNumber      String
+  physicalCount    Int
+  systemBalance    Int
+  discrepancy      Int
+  adjustmentReason String
+  authorizedById   String
+  adjustedAt       DateTime              @default(now())
+  createdAt        DateTime              @default(now())
+  warehouseId      String?
+  authorizer       Staff                 @relation("StockAdjustmentUser", fields: [authorizedById], references: [id])
+  inventoryItem    PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  warehouse        PharmacyWarehouse?    @relation(fields: [warehouseId], references: [id])
+
+  @@map("pharmacy_stock_adjustments")
+}
+
+model PharmacyADE {
+  id                String   @id @default(uuid())
+  patientId         String
+  medicationName    String
+  severity          String
+  causality         String
+  outcome           String
+  eventDescription  String
+  laboratoryResults String?
+  clinicalNotes     String?
+  reportedBy        String
+  reportedAt        DateTime @default(now())
+  status            String   @default("NEW")
+  createdAt         DateTime @default(now())
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_ades")
+}
+
+model PharmacyClinicalIntervention {
+  id               String               @id @default(uuid())
+  prescriptionId   String
+  pharmacistId     String
+  prescriberId     String
+  recommendation   String
+  prescriberAction String               @default("PENDING")
+  actionRationale  String?
+  clinicalOutcome  String?
+  documentedAt     DateTime             @default(now())
+  createdAt        DateTime             @default(now())
+  pharmacist       Staff                @relation("ClinicalPharmacist", fields: [pharmacistId], references: [id])
+  prescriber       Staff                @relation("PrescriberClinicalReview", fields: [prescriberId], references: [id])
+  prescription     PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_clinical_interventions")
+}
+
+model PharmacyAntimicrobialRecord {
+  id                   String               @id @default(uuid())
+  prescriptionId       String
+  clinicalIndication   String
+  intendedDurationDays Int
+  plannedReviewDate    DateTime
+  reviewStatus         String               @default("PENDING")
+  stewardshipNotes     String?
+  createdAt            DateTime             @default(now())
+  prescription         PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("pharmacy_antimicrobial_records")
+}
+
+model PharmacySyncLog {
+  id        String   @id @default(uuid())
+  system    String
+  direction String
+  status    String
+  details   String
+  syncedAt  DateTime @default(now())
+
+  @@map("pharmacy_sync_logs")
+}
+
+model RadiologyImagingCatalogItem {
+  id                String           @id @default(uuid())
+  code              String           @unique
+  name              String
+  modality          String
+  durationMinutes   Int              @default(15)
+  prepInstructions  String?
+  radiationCategory String?
+  price             Decimal          @db.Decimal(12, 2)
+  insuranceCovered  Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  orders            RadiologyOrder[]
+
+  @@map("radiology_imaging_catalog")
+}
+
+model RadiologyOrder {
+  id                   String                      @id @default(uuid())
+  orderNumber          String                      @unique
+  patientId            String
+  catalogItemId        String
+  requestedById        String
+  encounterId          String?
+  clinicalHistory      String?
+  provisionalDiagnosis String?
+  allergies            String?
+  pregnancyStatus      String                      @default("UNKNOWN")
+  priority             String                      @default("ROUTINE")
+  status               String                      @default("ORDERED")
+  insuranceStatus      String                      @default("PENDING")
+  preAuthCode          String?
+  cancelReason         String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  histories            RadiologyOrderHistory[]
+  catalogItem          RadiologyImagingCatalogItem @relation(fields: [catalogItemId], references: [id])
+  patient              Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  requester            Staff                       @relation("RadiologyRequester", fields: [requestedById], references: [id])
+  pacsStudies          RadiologyStudyPACS[]
+  reports              RadiologyReport[]
+  schedules            RadiologySchedule[]
+
+  @@map("radiology_orders")
+}
+
+model RadiologyOrderHistory {
+  id        String         @id @default(uuid())
+  orderId   String
+  status    String
+  notes     String?
+  changedBy String
+  changedAt DateTime       @default(now())
+  order     RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("radiology_order_histories")
+}
+
+model RadiologySchedule {
+  id              String         @id @default(uuid())
+  orderId         String
+  scheduledDate   DateTime
+  durationMinutes Int            @default(20)
+  roomId          String?
+  technicianId    String
+  status          String         @default("SCHEDULED")
+  createdAt       DateTime       @default(now())
+  order           RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  technician      Staff          @relation("RadiologyTechnician", fields: [technicianId], references: [id])
+
+  @@map("radiology_schedules")
+}
+
+model RadiologyStudyPACS {
+  id               String         @id @default(uuid())
+  orderId          String
+  studyInstanceUID String         @unique
+  modality         String
+  seriesCount      Int            @default(0)
+  imageCount       Int            @default(0)
+  pacsUrl          String?
+  storageSizeMB    Decimal        @default(0) @db.Decimal(10, 2)
+  radiationDose    Decimal?       @db.Decimal(10, 3)
+  acquiredAt       DateTime       @default(now())
+  order            RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("radiology_pacs_studies")
+}
+
+model RadiologyReport {
+  id                  String         @id @default(uuid())
+  orderId             String
+  reporterId          String
+  verifierId          String?
+  technique           String?
+  findings            String
+  impression          String
+  recommendations     String?
+  criticalLevel       String         @default("ROUTINE")
+  criticalNotified    Boolean        @default(false)
+  criticalAcknowledge DateTime?
+  status              String         @default("DRAFT")
+  amendedReason       String?
+  createdAt           DateTime       @default(now())
+  verifiedAt          DateTime?
+  releasedAt          DateTime?
+  order               RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reporter            Staff          @relation("RadiologyReporter", fields: [reporterId], references: [id])
+  verifier            Staff?         @relation("RadiologyVerifier", fields: [verifierId], references: [id])
+
+  @@map("radiology_reports")
+}
+
+model RadiologyEquipment {
+  id               String                          @id @default(uuid())
+  assetNumber      String                          @unique
+  name             String
+  manufacturer     String
+  model            String
+  modality         String
+  installationDate DateTime
+  status           String                          @default("ACTIVE")
+  maintenanceLogs  RadiologyEquipmentMaintenance[]
+  qaLogs           RadiologyEquipmentQA[]
+
+  @@map("radiology_equipment")
+}
+
+model RadiologyEquipmentQA {
+  id           String             @id @default(uuid())
+  equipmentId  String
+  checkDate    DateTime           @default(now())
+  checkOutcome String             @default("PASSED")
+  details      String
+  checkedBy    String
+  equipment    RadiologyEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@map("radiology_equipment_qa")
+}
+
+model RadiologyEquipmentMaintenance {
+  id             String             @id @default(uuid())
+  equipmentId    String
+  scheduledDate  DateTime
+  completedDate  DateTime?
+  type           String             @default("PREVENTIVE")
+  cost           Decimal            @default(0) @db.Decimal(12, 2)
+  outcomeDetails String?
+  performedBy    String
+  equipment      RadiologyEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@map("radiology_equipment_maintenance")
+}
+
+model RadiologyIncident {
+  id           String   @id @default(uuid())
+  incidentDate DateTime @default(now())
+  patientId    String?
+  reportedById String
+  category     String
+  severity     String   @default("LOW")
+  description  String
+  rootCause    String?
+  capaActions  String?
+  status       String   @default("OPEN")
+  createdAt    DateTime @default(now())
+  patient      Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  reporter     Staff    @relation("RadiologyIncidentReporter", fields: [reportedById], references: [id])
+
+  @@map("radiology_incidents")
+}
+
+model RadiologyAuditTrail {
+  id       String   @id @default(uuid())
+  action   String
+  orderId  String?
+  studyId  String?
+  userId   String
+  details  String
+  loggedAt DateTime @default(now())
+
+  @@map("radiology_audit_trails")
+}
+
+model BloodDonor {
+  id               String          @id @default(uuid())
+  donorNumber      String          @unique
+  patientId        String?
+  firstName        String
+  lastName         String
+  birthDate        DateTime
+  gender           String
+  bloodGroup       String
+  rhStatus         String
+  donorCategory    String          @default("VOLUNTARY")
+  consentSigned    Boolean         @default(false)
+  deferralStatus   String          @default("ELIGIBLE")
+  deferralReason   String?
+  deferralExpiry   DateTime?
+  lastDonationDate DateTime?
+  createdAt        DateTime        @default(now())
+  donations        BloodDonation[]
+  patient          Patient?        @relation(fields: [patientId], references: [id])
+
+  @@map("blood_donors")
+}
+
+model BloodDonation {
+  id                String            @id @default(uuid())
+  donationUnitNo    String            @unique
+  donorId           String
+  collectionDate    DateTime          @default(now())
+  collectionSite    String            @default("MAIN_BANK")
+  phlebotomistId    String
+  anticoagulantType String            @default("CPD")
+  volumeML          Int               @default(450)
+  adverseReaction   String?
+  status            String            @default("COLLECTED")
+  components        BloodComponent[]
+  donor             BloodDonor        @relation(fields: [donorId], references: [id], onDelete: Cascade)
+  phlebotomist      Staff             @relation("DonationCollector", fields: [phlebotomistId], references: [id])
+  testResults       BloodTestResult[]
+
+  @@map("blood_donations")
+}
+
+model BloodComponent {
+  id                 String                   @id @default(uuid())
+  donationId         String
+  componentCode      String                   @unique
+  componentType      String
+  volumeML           Int
+  expiryDate         DateTime
+  storageLocation    String
+  status             String                   @default("QUARANTINED")
+  reservedForId      String?
+  processedById      String
+  crossmatchTests    BloodCompatibilityTest[]
+  donation           BloodDonation            @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  processor          Staff                    @relation("ComponentProcessor", fields: [processedById], references: [id])
+  transfusionRecords BloodTransfusionRecord[]
+
+  @@map("blood_components")
+}
+
+model BloodTestResult {
+  id         String        @id @default(uuid())
+  donationId String
+  testType   String
+  outcome    String
+  details    String?
+  testedAt   DateTime      @default(now())
+  donation   BloodDonation @relation(fields: [donationId], references: [id], onDelete: Cascade)
+
+  @@map("blood_test_results")
+}
+
+model BloodTransfusionRequest {
+  id                 String                   @id @default(uuid())
+  requestNumber      String                   @unique
+  patientId          String
+  requesterId        String
+  urgency            String                   @default("ROUTINE")
+  componentType      String
+  quantityUnits      Int                      @default(1)
+  clinicalIndication String
+  intendedDate       DateTime
+  status             String                   @default("PENDING")
+  createdAt          DateTime                 @default(now())
+  crossmatches       BloodCompatibilityTest[]
+  transfusionRecords BloodTransfusionRecord[]
+  patient            Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  requester          Staff                    @relation("TransfusionRequester", fields: [requesterId], references: [id])
+
+  @@map("blood_transfusion_requests")
+}
+
+model BloodCompatibilityTest {
+  id             String                  @id @default(uuid())
+  requestId      String
+  componentId    String
+  crossmatchDate DateTime                @default(now())
+  method         String                  @default("GEL_COLUMN")
+  result         String                  @default("COMPATIBLE")
+  scientistId    String
+  component      BloodComponent          @relation(fields: [componentId], references: [id])
+  request        BloodTransfusionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  scientist      Staff                   @relation("CompatibilityScientist", fields: [scientistId], references: [id])
+
+  @@map("blood_compatibility_tests")
+}
+
+model BloodTransfusionRecord {
+  id                   String                  @id @default(uuid())
+  requestId            String
+  componentId          String
+  patientId            String
+  administeredById     String
+  wristbandScanned     Boolean                 @default(false)
+  bagLabelScanned      Boolean                 @default(false)
+  doubleCheckedBy      String
+  vitalsBaseline       String?
+  vitalsMidpoint       String?
+  vitalsCompletion     String?
+  startedAt            DateTime                @default(now())
+  completedAt          DateTime?
+  status               String                  @default("RUNNING")
+  suspectedReaction    Boolean                 @default(false)
+  reactionSeverity     String?
+  reactionDetails      String?
+  investigationOutcome String?
+  administrator        Staff                   @relation("TransfusionAdministrator", fields: [administeredById], references: [id])
+  component            BloodComponent          @relation(fields: [componentId], references: [id])
+  patient              Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  request              BloodTransfusionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("blood_transfusion_records")
+}
+
+model BloodBankEquipment {
+  id            String   @id @default(uuid())
+  equipmentCode String   @unique
+  name          String
+  componentType String
+  minTempLimit  Decimal  @db.Decimal(4, 2)
+  maxTempLimit  Decimal  @db.Decimal(4, 2)
+  currentTemp   Decimal  @db.Decimal(4, 2)
+  status        String   @default("NORMAL")
+  lastCheckDate DateTime @default(now())
+
+  @@map("blood_bank_equipment")
+}
+
+model SurgicalRequest {
+  id                   String            @id @default(uuid())
+  requestNumber        String            @unique
+  patientId            String
+  surgeonId            String
+  diagnosis            String
+  proposedProcedure    String
+  urgency              String            @default("ELECTIVE")
+  estimatedDurationMin Int               @default(60)
+  anaesthesiaReqs      String?
+  preferredDate        DateTime?
+  status               String            @default("PENDING")
+  cancelReason         String?
+  createdAt            DateTime          @default(now())
+  bookings             SurgicalBooking[]
+  patient              Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  surgeon              Staff             @relation("SurgicalRequestSurgeon", fields: [surgeonId], references: [id])
+
+  @@map("surgical_requests")
+}
+
+model SurgicalBooking {
+  id                    String                     @id @default(uuid())
+  requestId             String
+  patientId             String
+  surgeonId             String
+  anaesthetistId        String?
+  operatingRoom         String
+  scheduledStart        DateTime
+  scheduledEnd          DateTime
+  implantReserved       Boolean                    @default(false)
+  bloodProductsReserved Boolean                    @default(false)
+  sterileKitsReserved   Boolean                    @default(false)
+  status                String                     @default("BOOKED")
+  createdAt             DateTime                   @default(now())
+  intraOpRecords        IntraOpRecord?
+  pacuRecords           PACURecoveryRecord?
+  preAnaesthetics       PreAnaestheticAssessment[]
+  preOpAssessments      PreOpAssessment[]
+  anaesthetist          Staff?                     @relation("SurgicalBookingAnaesthetist", fields: [anaesthetistId], references: [id])
+  patient               Patient                    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  request               SurgicalRequest            @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  surgeon               Staff                      @relation("SurgicalBookingSurgeon", fields: [surgeonId], references: [id])
+  consents              SurgicalConsent[]
+  safetyChecklists      WHOSurgicalSafetyCheck[]
+
+  @@map("surgical_bookings")
+}
+
+model PreOpAssessment {
+  id                  String          @id @default(uuid())
+  bookingId           String
+  patientId           String
+  clinicianId         String
+  fastingHours        Int             @default(8)
+  medicalHistory      String
+  allergies           String
+  vitalsSigns         String
+  investigationStatus String          @default("COMPLETE")
+  status              String          @default("APPROVED")
+  createdAt           DateTime        @default(now())
+  booking             SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clinician           Staff           @relation("PreOpAssessmentClinician", fields: [clinicianId], references: [id])
+  patient             Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("pre_op_assessments")
+}
+
+model PreAnaestheticAssessment {
+  id                 String          @id @default(uuid())
+  bookingId          String
+  clinicianId        String
+  airwayEvaluation   String
+  asaClassification  String          @default("ASA_I")
+  anestheticRisks    String
+  plannedAnaesthesia String
+  clearanceStatus    String          @default("CLEARED")
+  createdAt          DateTime        @default(now())
+  booking            SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clinician          Staff           @relation("PreAnaestheticClinician", fields: [clinicianId], references: [id])
+
+  @@map("pre_anaesthetic_assessments")
+}
+
+model SurgicalConsent {
+  id                String          @id @default(uuid())
+  bookingId         String
+  patientId         String
+  consentCode       String          @unique
+  benefitsExplained Boolean         @default(true)
+  risksExplained    Boolean         @default(true)
+  signaturePatient  Boolean         @default(false)
+  signatureSurgeon  Boolean         @default(false)
+  signerName        String?
+  relationship      String?
+  signatureImage    String?
+  signedAt          DateTime        @default(now())
+  booking           SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  patient           Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("surgical_consents")
+}
+
+model WHOSurgicalSafetyCheck {
+  id              String          @id @default(uuid())
+  bookingId       String
+  signInComplete  Boolean         @default(false)
+  signInTime      DateTime?
+  timeoutComplete Boolean         @default(false)
+  timeoutTime     DateTime?
+  signoutComplete Boolean         @default(false)
+  signoutTime     DateTime?
+  completedBy     String
+  createdAt       DateTime        @default(now())
+  booking         SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("who_surgical_safety_checks")
+}
+
+model IntraOpRecord {
+  id                     String             @id @default(uuid())
+  bookingId              String             @unique
+  anaesthesiaStart       DateTime?
+  anaesthesiaEnd         DateTime?
+  surgicalIncision       DateTime?
+  surgicalClosure        DateTime?
+  initialInstrumentCount Int
+  closureInstrumentCount Int
+  instrumentReconciled   Boolean            @default(false)
+  initialSwabCount       Int
+  closureSwabCount       Int
+  swabsReconciled        Boolean            @default(false)
+  estimatedBloodLossML   Int                @default(0)
+  primaryProcedureNotes  String
+  booking                SurgicalBooking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  implantsUsed           SurgicalImplant[]
+  specimensCollected     SurgicalSpecimen[]
+
+  @@map("intra_op_records")
+}
+
+model SurgicalImplant {
+  id              String        @id @default(uuid())
+  intraOpRecordId String
+  implantType     String
+  manufacturer    String
+  modelNumber     String
+  lotNumber       String
+  serialNumber    String?
+  recallStatus    String        @default("NORMAL")
+  intraOpRecord   IntraOpRecord @relation(fields: [intraOpRecordId], references: [id], onDelete: Cascade)
+
+  @@map("surgical_implants")
+}
+
+model SurgicalSpecimen {
+  id                 String        @id @default(uuid())
+  intraOpRecordId    String
+  anatomicalSource   String
+  specimenLabelCode  String        @unique
+  collectedAt        DateTime      @default(now())
+  receivedAtLims     DateTime?
+  chainOfCustodyLogs String
+  intraOpRecord      IntraOpRecord @relation(fields: [intraOpRecordId], references: [id], onDelete: Cascade)
+
+  @@map("surgical_specimens")
+}
+
+model PACURecoveryRecord {
+  id                  String          @id @default(uuid())
+  bookingId           String          @unique
+  patientId           String
+  clinicianId         String
+  admissionTime       DateTime        @default(now())
+  dischargeTime       DateTime?
+  vitalsLog           String
+  painScore           Int             @default(0)
+  aldreteScore        Int             @default(10)
+  dischargeAuthorized Boolean         @default(false)
+  dischargeNotes      String?
+  booking             SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clinician           Staff           @relation("PACUClinician", fields: [clinicianId], references: [id])
+  patient             Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("pacu_recovery_records")
+}
+
+model CSSDSterilizationCycle {
+  id                  String   @id @default(uuid())
+  sterilizerCode      String
+  kitIdentifierCode   String
+  cycleNumber         String   @unique
+  temperatureCelsius  Decimal  @db.Decimal(5, 2)
+  pressurePsi         Decimal  @db.Decimal(4, 2)
+  exposureDurationMin Int
+  cycleOutcomeStatus  String   @default("PASSED")
+  officerId           String
+  sterilizedAt        DateTime @default(now())
+  officer             Staff    @relation("CSSDOfficer", fields: [officerId], references: [id])
+
+  @@map("cssd_sterilization_cycles")
+}
+
+model IcuBed {
+  id             String         @id @default(uuid())
+  bedCode        String         @unique
+  unit           String         @default("ICU")
+  status         String         @default("AVAILABLE")
+  isolationRules String?
+  admissions     IcuAdmission[]
+
+  @@map("icu_beds")
+}
+
+model IcuAdmission {
+  id                String                         @id @default(uuid())
+  admissionCode     String                         @unique
+  patientId         String
+  admittingStaffId  String
+  bedId             String?
+  diagnosis         String
+  severityScore     Int                            @default(0)
+  indication        String
+  urgency           String                         @default("URGENT")
+  status            String                         @default("PENDING")
+  admittedAt        DateTime                       @default(now())
+  dischargedAt      DateTime?
+  admittingStaff    Staff                          @relation("IcuAdmittingClinician", fields: [admittingStaffId], references: [id])
+  bed               IcuBed?                        @relation(fields: [bedId], references: [id])
+  patient           Patient                        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  careGoals         IcuCarePlanGoal[]
+  pathways          IcuClinicalPathwayCompliance[]
+  dialysisRuns      IcuDialysisLifeSupport[]
+  handovers         IcuDischargeHandover[]
+  warningAlerts     IcuEarlyWarningAlert[]
+  equipments        IcuEquipmentAssignment[]
+  incidents         IcuIncidentRecord[]
+  infectionChecks   IcuInfectionPreventionCheck[]
+  infusions         IcuInfusionTherapy[]
+  neuroObservations IcuNeurologicalObservation[]
+  observations      IcuPhysiologicalObservation[]
+  progressNotes     IcuProgressNote[]
+  ventilators       IcuVentilatorSetting[]
+
+  @@map("icu_admissions")
+}
+
+model IcuCarePlanGoal {
+  id          String       @id @default(uuid())
+  admissionId String
+  description String
+  discipline  String
+  targetDate  DateTime
+  status      String       @default("PENDING")
+  admission   IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_care_plan_goals")
+}
+
+model IcuEquipmentAssignment {
+  id                String       @id @default(uuid())
+  admissionId       String
+  equipmentType     String
+  equipmentCode     String
+  assignedAt        DateTime     @default(now())
+  status            String       @default("ACTIVE")
+  maintenanceStatus String       @default("VERIFIED")
+  admission         IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_equipment_assignments")
+}
+
+model IcuPhysiologicalObservation {
+  id                    String       @id @default(uuid())
+  admissionId           String
+  patientId             String
+  observerId            String
+  heartRate             Int
+  bpSystolic            Int
+  bpDiastolic           Int
+  respirationRate       Int
+  spo2                  Int
+  temperature           Decimal      @db.Decimal(4, 2)
+  centralVenousPressure Int?
+  arterialPressure      Int?
+  intracranialPressure  Int?
+  cardiacOutput         Decimal?     @db.Decimal(4, 2)
+  loggedAt              DateTime     @default(now())
+  admission             IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  observer              Staff        @relation("IcuObservingClinician", fields: [observerId], references: [id])
+  patient               Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_physiological_observations")
+}
+
+model IcuDeviceIntegrationLog {
+  id         String   @id @default(uuid())
+  deviceId   String
+  deviceType String
+  rawData    String
+  loggedAt   DateTime @default(now())
+
+  @@map("icu_device_integration_logs")
+}
+
+model IcuVentilatorSetting {
+  id                     String       @id @default(uuid())
+  admissionId            String
+  mode                   String
+  tidalVolumeML          Int
+  respirationRate        Int
+  fio2Percentage         Int
+  peepH2O                Int
+  supportPressureH2O     Int
+  pressureInspiratoryH2O Int
+  weaningStatus          String       @default("ONGOING")
+  extubationReadiness    String?
+  loggedAt               DateTime     @default(now())
+  admission              IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_ventilator_settings")
+}
+
+model IcuInfusionTherapy {
+  id                  String       @id @default(uuid())
+  admissionId         String
+  patientId           String
+  medicationName      String
+  concentration       String
+  doseRate            String
+  route               String       @default("IV")
+  initialClinicianId  String
+  verifiedClinicianId String?
+  isHighAlert         Boolean      @default(false)
+  startAt             DateTime     @default(now())
+  endAt               DateTime?
+  admission           IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  patient             Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_infusion_therapies")
+}
+
+model IcuDialysisLifeSupport {
+  id                      String       @id @default(uuid())
+  admissionId             String
+  patientId               String
+  dialysisType            String
+  ultrafiltrationRateMLHr Decimal      @db.Decimal(5, 2)
+  heparinDoseUnits        Int
+  status                  String       @default("ACTIVE")
+  startedAt               DateTime     @default(now())
+  admission               IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  patient                 Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_dialysis_life_supports")
+}
+
+model IcuNeurologicalObservation {
+  id                  String       @id @default(uuid())
+  admissionId         String
+  patientId           String
+  clinicianId         String
+  gcsEye              Int
+  gcsVerbal           Int
+  gcsMotor            Int
+  pupilReactivity     String
+  limbMovementGrading String
+  rassScore           Int          @default(0)
+  loggedAt            DateTime     @default(now())
+  admission           IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  clinician           Staff        @relation("IcuNeuroClinician", fields: [clinicianId], references: [id])
+  patient             Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_neurological_observations")
+}
+
+model IcuEarlyWarningAlert {
+  id               String       @id @default(uuid())
+  admissionId      String
+  patientId        String
+  newsScore        Int
+  abnormalTriggers String
+  responderNotes   String?
+  escalationLevel  String       @default("NONE")
+  status           String       @default("ACTIVE")
+  triggeredAt      DateTime     @default(now())
+  admission        IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  patient          Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_early_warning_alerts")
+}
+
+model IcuProgressNote {
+  id          String       @id @default(uuid())
+  admissionId String
+  notes       String
+  assessments String
+  loggedAt    DateTime     @default(now())
+  admission   IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_progress_notes")
+}
+
+model IcuInfectionPreventionCheck {
+  id                    String       @id @default(uuid())
+  admissionId           String
+  vapCompliance         Boolean      @default(true)
+  clabsiCompliance      Boolean      @default(true)
+  cautiCompliance       Boolean      @default(true)
+  handHygieneCompliance Boolean      @default(true)
+  auditDate             DateTime     @default(now())
+  admission             IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_infection_prevention_checks")
+}
+
+model IcuClinicalPathwayCompliance {
+  id                   String       @id @default(uuid())
+  admissionId          String
+  pathwayName          String
+  compliancePercentage Int
+  checklistsJson       String
+  overridesJson        String?
+  auditedAt            DateTime     @default(now())
+  admission            IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@map("icu_clinical_pathway_compliance")
+}
+
+model IcuDischargeHandover {
+  id                        String       @id @default(uuid())
+  admissionId               String
+  patientId                 String
+  clinicianId               String
+  targetWard                String
+  currentDiagnosis          String
+  medicationsActive         String
+  outstandingCare           String
+  receivingClinicianSignoff Boolean      @default(false)
+  handoverDate              DateTime     @default(now())
+  admission                 IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  clinician                 Staff        @relation("IcuHandoverClinician", fields: [clinicianId], references: [id])
+  patient                   Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("icu_discharge_handovers")
+}
+
+model IcuIncidentRecord {
+  id              String       @id @default(uuid())
+  admissionId     String
+  patientId       String
+  reporterId      String
+  incidentType    String
+  severityGrading String
+  rcaFindings     String
+  capaDetails     String
+  status          String       @default("OPEN")
+  reportedAt      DateTime     @default(now())
+  admission       IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  patient         Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  reporter        Staff        @relation("IcuIncidentReporter", fields: [reporterId], references: [id])
+
+  @@map("icu_incident_records")
+}
+
+model IcuStaffingShift {
+  id                  String   @id @default(uuid())
+  clinicianId         String
+  shiftName           String
+  patientRatio        Int
+  acuityWorkloadScore Int      @default(10)
+  shiftDate           DateTime @default(now())
+  clinician           Staff    @relation("IcuStaffClinician", fields: [clinicianId], references: [id])
+
+  @@map("icu_staffing_shifts")
+}
+
+model EmergencyArrival {
+  id                  String                       @id @default(uuid())
+  arrivalCode         String                       @unique
+  patientId           String?
+  tempPatientName     String?
+  arrivalMethod       String                       @default("WALK_IN")
+  presentingComplaint String
+  arrivalTime         DateTime                     @default(now())
+  status              String                       @default("ARRIVED")
+  bedId               String?
+  ambulances          AmbulancePreArrival[]
+  bed                 EmergencyBed?                @relation(fields: [bedId], references: [id])
+  patient             Patient?                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  handovers           EmergencyDischargeHandover[]
+  incidents           EmergencyIncidentRecord[]
+  observations        EmergencyObservationLog[]
+  procedures          EmergencyProcedure[]
+  resuscitations      EmergencyResuscitation[]
+  traumas             EmergencyTraumaTeam[]
+  triages             EmergencyTriage[]
+
+  @@map("emergency_arrivals")
+}
+
+model AmbulancePreArrival {
+  id                String           @id @default(uuid())
+  arrivalId         String
+  dispatchTime      DateTime?
+  departureTime     DateTime?
+  arrivalTime       DateTime         @default(now())
+  crewDetails       String
+  preHospitalVitals String?
+  preHospitalNotes  String?
+  turnaroundTimeMin Int              @default(0)
+  arrival           EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+
+  @@map("ambulance_pre_arrivals")
+}
+
+model EmergencyTriage {
+  id                  String           @id @default(uuid())
+  arrivalId           String
+  triageCategory      String           @default("BLUE")
+  presentingComplaint String
+  heartRate           Int
+  bpSystolic          Int
+  bpDiastolic         Int
+  respirationRate     Int
+  spo2                Int
+  temperature         Decimal          @db.Decimal(4, 2)
+  painScore           Int              @default(0)
+  gcsScore            Int              @default(15)
+  allergies           String           @default("NKDA")
+  pregnancyStatus     String?
+  triageNurseName     String
+  triageTime          DateTime         @default(now())
+  reassessmentDate    DateTime?
+  arrival             EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+
+  @@map("emergency_triages")
+}
+
+model EmergencyBed {
+  id       String             @id @default(uuid())
+  bedCode  String             @unique
+  bedType  String             @default("TREATMENT_CUBICLE")
+  status   String             @default("AVAILABLE")
+  arrivals EmergencyArrival[]
+
+  @@map("emergency_beds")
+}
+
+model EmergencyResuscitation {
+  id                   String           @id @default(uuid())
+  arrivalId            String
+  airwayNotes          String
+  circulationNotes     String
+  drugsAdministered    String
+  defibrillationShocks Int              @default(0)
+  cprDurationMin       Int              @default(0)
+  outcomeStatus        String           @default("ROSC")
+  resusStartTime       DateTime         @default(now())
+  resusEndTime         DateTime?
+  arrival              EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+
+  @@map("emergency_resuscitations")
+}
+
+model EmergencyTraumaTeam {
+  id                String           @id @default(uuid())
+  arrivalId         String
+  teamLeaderId      String
+  surgeonId         String?
+  activationTime    DateTime         @default(now())
+  mechanismOfInjury String
+  injuryLocation    String
+  traumaScoreRTS    Decimal          @db.Decimal(3, 2)
+  arrival           EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+  surgeon           Staff?           @relation("TraumaSurgeon", fields: [surgeonId], references: [id])
+  teamLeader        Staff            @relation("TraumaTeamLeader", fields: [teamLeaderId], references: [id])
+
+  @@map("emergency_trauma_teams")
+}
+
+model EmergencyProcedure {
+  id            String           @id @default(uuid())
+  arrivalId     String
+  clinicianId   String
+  procedureType String
+  indication    String
+  complications String?
+  outcomeStatus String           @default("SUCCESS")
+  performedAt   DateTime         @default(now())
+  arrival       EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+  clinician     Staff            @relation("EmergencyOperator", fields: [clinicianId], references: [id])
+
+  @@map("emergency_procedures")
+}
+
+model EmergencyObservationLog {
+  id                   String           @id @default(uuid())
+  arrivalId            String
+  nurseId              String
+  reasonForObservation String
+  expectedDurationHrs  Int              @default(24)
+  treatmentNotes       String
+  observedAt           DateTime         @default(now())
+  arrival              EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+  nurse                Staff            @relation("EmergencyObserver", fields: [nurseId], references: [id])
+
+  @@map("emergency_observation_logs")
+}
+
+model EmergencyDischargeHandover {
+  id                        String           @id @default(uuid())
+  arrivalId                 String
+  targetWard                String
+  currentDiagnosis          String
+  medicationsActive         String
+  outstandingCare           String
+  receivingClinicianSignoff Boolean          @default(false)
+  handoverDate              DateTime         @default(now())
+  arrival                   EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+
+  @@map("emergency_discharge_handovers")
+}
+
+model EmergencyDisasterIncident {
+  id                String   @id @default(uuid())
+  disasterName      String
+  activationTime    DateTime @default(now())
+  commanderId       String
+  resourceShortages String?
+  incidentStatus    String   @default("ACTIVE")
+
+  @@map("emergency_disaster_incidents")
+}
+
+model EmergencyIncidentRecord {
+  id              String           @id @default(uuid())
+  arrivalId       String
+  patientId       String?
+  reporterId      String
+  incidentType    String
+  severityGrading String
+  rcaFindings     String
+  capaDetails     String
+  status          String           @default("OPEN")
+  reportedAt      DateTime         @default(now())
+  arrival         EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
+  patient         Patient?         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  reporter        Staff            @relation("EmergencyIncidentReporter", fields: [reporterId], references: [id])
+
+  @@map("emergency_incident_records")
+}
+
+model EmergencyStaffingShift {
+  id                  String   @id @default(uuid())
+  clinicianId         String
+  shiftName           String
+  patientLoad         Int
+  acuityWorkloadScore Int      @default(10)
+  shiftDate           DateTime @default(now())
+  clinician           Staff    @relation("EmergencyStaffClinician", fields: [clinicianId], references: [id])
+
+  @@map("emergency_staffing_shifts")
+}
+
+model MaternityProfile {
+  id                        String                     @id @default(uuid())
+  patientId                 String                     @unique
+  ageAtRegistration         Int?
+  gravidity                 Int                        @default(1)
+  parity                    Int                        @default(0)
+  abortions                 Int                        @default(0)
+  livingChildren            Int                        @default(0)
+  bloodGroup                String?
+  rhesusStatus              String?
+  hivStatus                 String?
+  hivTestDate               DateTime?
+  pmtctEnrolled             Boolean                    @default(false)
+  pmtctArv                  String?
+  syphilisStatus            String?
+  hepatitisBStatus          String?
+  malariaStatus             String?
+  ttDoseCount               Int                        @default(0)
+  ironFolateSupplied        Boolean                    @default(false)
+  insuranceScheme           String?
+  referralSource            String?
+  bookingDate               DateTime                   @default(now())
+  nigeriaObstetricScore     String?
+  openMrsPatientUuid        String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  customFields              String?
+  familyPlanningEnrollments FamilyPlanningEnrollment[]
+  fetalSurveillance         FetalSurveillance[]
+  maternalComplications     MaternalComplication[]
+  riskAssessments           MaternalRiskAssessment[]
+  patient                   Patient                    @relation("MaternityProfile", fields: [patientId], references: [id], onDelete: Cascade)
+  pmtctFollowUps            PmtctFollowUp[]
+  postnatalVisits           PostnatalVisit[]
+
+  @@map("maternity_profiles")
+}
+
+model MaternalRiskAssessment {
+  id                 String           @id @default(uuid())
+  maternityProfileId String
+  assessmentDate     DateTime         @default(now())
+  assessorId         String
+  riskCategory       String           @default("LOW")
+  riskFactors        String
+  recommendedCare    String?
+  referralRequired   Boolean          @default(false)
+  referralReason     String?
+  referralFacility   String?
+  actionPlan         String?
+  nextReviewDate     DateTime?
+  createdAt          DateTime         @default(now())
+  assessor           Staff            @relation("RiskAssessor", fields: [assessorId], references: [id])
+  maternityProfile   MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+
+  @@map("maternal_risk_assessments")
+}
+
+model FetalSurveillance {
+  id                   String           @id @default(uuid())
+  maternityProfileId   String
+  pregnancyId          String?
+  surveillanceType     String
+  performedDate        DateTime         @default(now())
+  gestationalAgeWeeks  Int?
+  biparietal           Float?
+  fetalLength          Float?
+  abdominalCirc        Float?
+  estimatedFetalWeight Float?
+  amnioticFluidIndex   Float?
+  placentaGrade        String?
+  placentaLocation     String?
+  cervicalLength       Float?
+  fetalHeartRate       Float?
+  kicksPerHour         Int?
+  biophysicalScore     Int?
+  dopplerFindings      String?
+  anomaliesDetected    Boolean          @default(false)
+  anomalyDetails       String?
+  reportNotes          String?
+  reportedBy           String?
+  createdAt            DateTime         @default(now())
+  maternityProfile     MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+
+  @@map("fetal_surveillance")
+}
+
+model MaternalComplication {
+  id                 String           @id @default(uuid())
+  maternityProfileId String
+  pregnancyId        String?
+  complicationType   String
+  severity           String           @default("MILD")
+  onsetDate          DateTime         @default(now())
+  managementNotes    String?
+  drugsAdministered  String?
+  outcome            String?
+  resolvedDate       DateTime?
+  recordedBy         String?
+  createdAt          DateTime         @default(now())
+  maternityProfile   MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+
+  @@map("maternal_complications")
+}
+
+model LabourMonitoringEntry {
+  id                  String       @id @default(uuid())
+  labourRecordId      String
+  entryTime           DateTime     @default(now())
+  cervicalDilatation  Float
+  fetalStationLevel   String?
+  fetalPresentation   String?
+  fetalHeartRate      Float
+  uterineContractions Int
+  contractionDuration Int?
+  contractionStrength String?
+  membranesStatus     String?
+  liquidourColour     String?
+  maternalPulse       Float?
+  maternalBp          String?
+  maternalTemp        Float?
+  urineOutput         Float?
+  oxytocin            String?
+  epiduralGiven       Boolean      @default(false)
+  alertLine           Boolean      @default(false)
+  actionLine          Boolean      @default(false)
+  notes               String?
+  enteredBy           String?
+  labourRecord        LabourRecord @relation(fields: [labourRecordId], references: [id], onDelete: Cascade)
+
+  @@map("labour_monitoring_entries")
+}
+
+model BirthNotification {
+  id                 String         @id @default(uuid())
+  neonatalRecordId   String         @unique
+  notificationDate   DateTime       @default(now())
+  notificationRef    String?        @unique
+  facilityCode       String?
+  nhisSubmitted      Boolean        @default(false)
+  nhisRef            String?
+  nhmisSubmitted     Boolean        @default(false)
+  nhmisRef           String?
+  crvsSubmitted      Boolean        @default(false)
+  crvsRef            String?
+  birthCertRequested Boolean        @default(false)
+  birthCertNumber    String?
+  status             String         @default("DRAFT")
+  neonatalRecord     NeonatalRecord @relation(fields: [neonatalRecordId], references: [id])
+
+  @@map("birth_notifications")
+}
+
+model PostnatalVisit {
+  id                   String           @id @default(uuid())
+  maternityProfileId   String
+  neonatalRecordId     String?
+  visitDate            DateTime         @default(now())
+  visitType            String           @default("ROUTINE")
+  dayPostDelivery      Int?
+  motherVitalsBp       String?
+  motherPulse          Float?
+  motherTemp           Float?
+  uterineInvolution    String?
+  lochiaCharacter      String?
+  perinealHealing      String?
+  breastfeedingStatus  String?
+  epsychologicalScreen String?
+  maternalDepression   Boolean          @default(false)
+  babyWeight           Float?
+  babyTemperature      Float?
+  babyBreathing        String?
+  cordHealingStatus    String?
+  jaundicePresent      Boolean          @default(false)
+  immunizationsGiven   String?
+  vitaminKGiven        Boolean          @default(false)
+  vaccinesGiven        String?
+  clinicianNotes       String?
+  nextVisitDate        DateTime?
+  createdAt            DateTime         @default(now())
+  maternityProfile     MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+
+  @@map("postnatal_visits")
+}
+
+model GynaecologyConsultation {
+  id                    String    @id @default(uuid())
+  patientId             String
+  consultDate           DateTime  @default(now())
+  clinicianId           String
+  consultationType      String
+  chiefComplaint        String?
+  menstrualHistory      String?
+  obstetricHistory      String?
+  contraceptiveHistory  String?
+  clinicalFindings      String?
+  investigationsOrdered String?
+  diagnosis             String?
+  icdCode               String?
+  managementPlan        String?
+  proceduresPlanned     String?
+  referralRequired      Boolean   @default(false)
+  referralTo            String?
+  followUpDate          DateTime?
+  createdAt             DateTime  @default(now())
+  clinician             Staff     @relation("GynaecologyClinician", fields: [clinicianId], references: [id])
+  patient               Patient   @relation("GynaecologyConsultations", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("gynaecology_consultations")
+}
+
+model GynaecologyProcedure {
+  id               String    @id @default(uuid())
+  consultationId   String?
+  patientId        String
+  procedureType    String
+  scheduledDate    DateTime?
+  performedDate    DateTime?
+  theatreId        String?
+  surgeonId        String?
+  anaesthesiaType  String?
+  indication       String?
+  procedureNotes   String?
+  findings         String?
+  complications    String?
+  specimenSent     Boolean   @default(false)
+  specimenRef      String?
+  histologyResult  String?
+  followUpRequired Boolean   @default(false)
+  status           String    @default("PLANNED")
+  createdAt        DateTime  @default(now())
+  patient          Patient   @relation("GynaecologyProcedures", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("gynaecology_procedures")
+}
+
+model CervicalCancerScreening {
+  id                    String    @id @default(uuid())
+  patientId             String
+  screeningDate         DateTime  @default(now())
+  screeningMethod       String
+  screeningResult       String
+  via_result            String?
+  pap_result            String?
+  hpv_genotype          String?
+  referralForColposcopy Boolean   @default(false)
+  colposcopyDate        DateTime?
+  treatmentGiven        String?
+  treatmentDate         DateTime?
+  followUpDate          DateTime?
+  screenedBy            String?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  patient               Patient   @relation("CervicalScreenings", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("cervical_cancer_screenings")
+}
+
+model FamilyPlanningEnrollment {
+  id                  String           @id @default(uuid())
+  maternityProfileId  String
+  patientId           String
+  enrollmentDate      DateTime         @default(now())
+  counsellorId        String?
+  methodChosen        String
+  methodStartDate     DateTime?
+  methodEndDate       DateTime?
+  reasonForMethod     String?
+  sideEffectsReported String?
+  switchReason        String?
+  previousMethod      String?
+  isPostpartum        Boolean          @default(false)
+  status              String           @default("ACTIVE")
+  nextAppointment     DateTime?
+  createdAt           DateTime         @default(now())
+  maternityProfile    MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+  patient             Patient          @relation("FamilyPlanningEnrollments", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("family_planning_enrollments")
+}
+
+model PmtctFollowUp {
+  id                       String           @id @default(uuid())
+  maternityProfileId       String
+  followUpDate             DateTime         @default(now())
+  infantAge                String?
+  infantArvProphylaxis     String?
+  infantEidTest            Boolean          @default(false)
+  infantEidResult          String?
+  infantEidDate            DateTime?
+  breastfeedingStatus      String?
+  motherArvAdherence       String?
+  motherVlMonitoring       Boolean          @default(false)
+  motherVlResult           Float?
+  motherVlDate             DateTime?
+  cotrimoxazoleProphylaxis Boolean          @default(false)
+  openMrsEncounterUuid     String?
+  clinicianNotes           String?
+  nextFollowUp             DateTime?
+  createdAt                DateTime         @default(now())
+  maternityProfile         MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
+
+  @@map("pmtct_follow_ups")
+}
+
+model NeonatalCareEntry {
+  id                  String         @id @default(uuid())
+  neonatalRecordId    String
+  admissionReason     String
+  admissionDate       DateTime       @default(now())
+  gestationalAgeWeeks Float?
+  birthWeightKg       Float?
+  phototherapy        Boolean        @default(false)
+  oxygen              Boolean        @default(false)
+  ivFluids            Boolean        @default(false)
+  antibiotics         Boolean        @default(false)
+  surfactant          Boolean        @default(false)
+  kangarooCare        Boolean        @default(false)
+  enteral_feeding     Boolean        @default(false)
+  totalParenteral     Boolean        @default(false)
+  dayOfDischarge      DateTime?
+  dischargeWeight     Float?
+  dischargeCondition  String?
+  deathDate           DateTime?
+  causeOfDeath        String?
+  neonatalRecord      NeonatalRecord @relation(fields: [neonatalRecordId], references: [id], onDelete: Cascade)
+
+  @@map("neonatal_care_entries")
+}
+
+model MaternalDeathReview {
+  id              String    @id @default(uuid())
+  patientId       String
+  deathDate       DateTime
+  deathLocation   String
+  deathCause      String
+  isMDDR          Boolean   @default(false)
+  avoidability    String?
+  delay1          Boolean   @default(false)
+  delay2          Boolean   @default(false)
+  delay3          Boolean   @default(false)
+  reviewDate      DateTime?
+  reviewCommittee String?
+  findingsSummary String?
+  recommendations String?
+  reportSubmitted Boolean   @default(false)
+  nhmisRef        String?
+  createdAt       DateTime  @default(now())
+  patient         Patient   @relation("MaternalDeaths", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("maternal_death_reviews")
+}
+
+model FertilityAssessment {
+  id                   String   @id @default(uuid())
+  patientId            String
+  partnerId            String?
+  assessmentDate       DateTime @default(now())
+  clinicianId          String?
+  durationInfertility  String?
+  infertilityType      String?
+  femaleInvestigations String?
+  maleInvestigations   String?
+  diagnosisFemal       String?
+  diagnosisMale        String?
+  treatmentPlan        String?
+  artRecommended       Boolean  @default(false)
+  artType              String?
+  referralFacility     String?
+  notes                String?
+  createdAt            DateTime @default(now())
+  patient              Patient  @relation("FertilityAssessments", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("fertility_assessments")
+}
+
+model SyncQueue {
+  id        String    @id @default(uuid())
+  tableName String    @map("table_name")
+  recordId  String    @map("record_id")
+  action    String
+  payload   Json
+  status    String    @default("PENDING")
+  error     String?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  syncedAt  DateTime? @map("synced_at")
+
+  @@index([status, createdAt])
+  @@map("sync_queue")
+}
+
+model AttendanceRecord {
+  id             String    @id @default(uuid())
+  staffId        String    @map("staff_id")
+  clockIn        DateTime  @map("clock_in")
+  clockOut       DateTime? @map("clock_out")
+  shiftDate      DateTime  @map("shift_date") @db.Date
+  captureMode    String    @default("ONLINE") @map("capture_mode")
+  deviceId       String?   @map("device_id")
+  deviceType     String?   @map("device_type")
+  gpsLat         Float?    @map("gps_lat")
+  gpsLng         Float?    @map("gps_lng")
+  geofenceStatus String?   @map("geofence_status")
+  photoUrl       String?   @map("photo_url")
+  biometricScore Float?    @map("biometric_score")
+  verifiedBy     String?   @map("verified_by")
+  syncStatus     String    @default("SYNCED") @map("sync_status")
+  syncedAt       DateTime? @map("synced_at")
+  conflictNote   String?   @map("conflict_note")
+  isManualEntry  Boolean   @default(false) @map("is_manual_entry")
+  supervisorId   String?   @map("supervisor_id")
+  supervisorNote String?   @map("supervisor_note")
+  approvedAt     DateTime? @map("approved_at")
+  cloudFallback  Boolean   @default(false) @map("cloud_fallback")
+  exceptionFlag  Boolean   @default(false) @map("exception_flag")
+  auditNote      String?   @map("audit_note")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([staffId, shiftDate])
+  @@index([syncStatus])
+  @@index([captureMode])
+  @@map("attendance_records")
+}
+
+model SystemEvent {
+  id          String   @id @default(uuid())
+  eventType   String   @map("event_type")
+  fromLayer   String?  @map("from_layer")
+  toLayer     String?  @map("to_layer")
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([eventType, createdAt])
+  @@map("system_events")
+}
+
+model Bank {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("banks")
+}
+
+model PharmacyWarehouse {
+  id            String                    @id @default(uuid())
+  name          String
+  code          String                    @unique
+  location      String?
+  capacity      Int                       @default(0)
+  status        String                    @default("ACTIVE")
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  transfersTo   PharmacyTransfer[]        @relation("TransferDestination")
+  transfersFrom PharmacyTransfer[]        @relation("TransferSource")
+  adjustments   PharmacyStockAdjustment[]
+  batches       PharmacyStockBatch[]
+  devices       PharmacyIoTDevice[]
+}
+
+model PharmacyIoTDevice {
+  id              String            @id @default(uuid())
+  deviceId        String            @unique
+  deviceSerial    String
+  deviceType      String            @default("WIFI_IOT_PROBE")
+  warehouseId     String
+  storageUnit     String
+  minTemp         Decimal           @default(2.00) @db.Decimal(5, 2)
+  maxTemp         Decimal           @default(8.00) @db.Decimal(5, 2)
+  isConnected     Boolean           @default(true)
+  lastTemperature Decimal?          @db.Decimal(5, 2)
+  lastHumidity    Decimal?          @db.Decimal(5, 2)
+  lastPingAt      DateTime?         @default(now())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  warehouse       PharmacyWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+}
+
+model PharmacyRequisition {
+  id            String   @id @default(uuid())
+  requisitionNo String   @unique
+  department    String
+  priority      String   @default("ROUTINE")
+  status        String   @default("PENDING")
+  notes         String?
+  requesterId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  requester     Staff    @relation("RequisitionRequester", fields: [requesterId], references: [id])
+}
+
+model PharmacyTransfer {
+  id            String                @id @default(uuid())
+  transferNo    String                @unique
+  sourceId      String
+  destinationId String
+  medicationId  String
+  batchNo       String?
+  quantity      Int
+  status        String                @default("IN_TRANSIT")
+  dispatchedBy  String
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  destination   PharmacyWarehouse     @relation("TransferDestination", fields: [destinationId], references: [id])
+  medication    PharmacyInventoryItem @relation("TransferMedication", fields: [medicationId], references: [id])
+  source        PharmacyWarehouse     @relation("TransferSource", fields: [sourceId], references: [id])
+}
+
+model PharmacyColdChainLog {
+  id          String             @id @default(uuid())
+  deviceId    String
+  batchId     String
+  temperature Decimal            @db.Decimal(5, 2)
+  humidity    Decimal            @db.Decimal(5, 2)
+  status      String             @default("NORMAL")
+  recordedAt  DateTime           @default(now())
+  batch       PharmacyStockBatch @relation(fields: [batchId], references: [id])
+}
+
+model PharmacySCMRisk {
+  id          String   @id @default(uuid())
+  riskId      String   @unique
+  category    String
+  description String
+  impact      String   @default("LOW")
+  mitigation  String?
+  status      String   @default("IDENTIFIED")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PharmacyFraudAlert {
+  id                String   @id @default(uuid())
+  alertId           String   @unique
+  type              String
+  description       String
+  severity          String   @default("LOW")
+  status            String   @default("OPEN")
+  value             Float    @default(0)
+  entityRef         String?
+  investigatorNotes String?
+  capaAction        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model HospitalConfig {
+  id          String   @id @default(uuid())
+  moduleKey   String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+
+  @@map("hospital_config")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  DOCTOR
+  NURSE
+  PHARMACIST
+  LAB_TECHNICIAN
+  RECEPTIONIST
+  PATIENT
+  STAFF
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+  SEPARATED
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+enum TelecomSystem {
+  phone
+  fax
+  email
+  pager
+  url
+  sms
+  other
+}
+
+enum TelecomUse {
+  home
+  work
+  temp
+  old
+  mobile
+}
+
+enum AddressUse {
+  home
+  work
+  temp
+  old
+  billing
+}
+
+enum AddressType {
+  postal
+  physical
+  both
+}
+
+enum AppointmentStatus {
+  BOOKED
+  FULFILLED
+  CANCELLED
+  NOSHOW
+  ENTERED_IN_ERROR
+  PENDING
+  WAITLIST
+}
+
+enum EncounterStatus {
+  PLANNED
+  ARRIVED
+  TRIAGED
+  IN_PROGRESS
+  ONLEAVE
+  FINISHED
+  CANCELLED
+  ENTERED_IN_ERROR
+  UNKNOWN
+}
+
+enum EncounterClass {
+  AMBULATORY
+  EMERGENCY
+  FIELD
+  INPATIENT
+  VIRTUAL
+}
+
+enum ObservationStatus {
+  REGISTERED
+  PRELIMINARY
+  FINAL
+  AMENDED
+  CORRECTED
+  CANCELLED
+  ENTERED_IN_ERROR
+  UNKNOWN
+}
+
+enum ClinicalStatus {
+  ACTIVE
+  RECURRENCE
+  RELAPSE
+  INACTIVE
+  RESOLVED
+  REMISSION
+}
+
+enum VerificationStatus {
+  UNCONFIRMED
+  PROVISIONAL
+  DIFFERENTIAL
+  CONFIRMED
+  REFUTED
+  ENTERED_IN_ERROR
+}
+
+enum MedicationRequestStatus {
+  ACTIVE
+  ON_HOLD
+  CANCELLED
+  COMPLETED
+  ENTERED_IN_ERROR
+  STOPPED
+  DRAFT
+  UNKNOWN
+}
+
+enum MedicationRequestIntent {
+  PROPOSAL
+  PLAN
+  ORDER
+  ORIGINAL_ORDER
+  REFLEX_ORDER
+  FILLER_ORDER
+  INSTANCE_ORDER
+  OPTION
+}
+
+// ── Global Interoperability & Terminology Data Dictionary ───────────────────
+model TerminologyConcept {
+  id          String        @id @default(uuid())
+  system      String        // "LOINC" | "ICD10" | "SNOMED" | "RXNORM" | "CPT" | "ISBT128"
+  code        String
+  display     String
+  description String?
+  category    String?       // "LAB", "DIAGNOSIS", "PHARMACY", "BILLING", "BLOOD_BANK", "VITAL"
+  systemUri   String?       // e.g. "http://loinc.org", "http://hl7.org/fhir/sid/icd-10"
+  isActive    Boolean       @default(true)
+  mappings    CodeMapping[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([system, code])
+  @@index([system, code])
+  @@index([category])
+  @@map("terminology_concepts")
+}
+
+model CodeMapping {
+  id            String             @id @default(uuid())
+  localItemType String             // "LAB_TEST", "PHARMACY_ITEM", "SERVICE_TARIFF", "DIAGNOSIS"
+  localItemId   String
+  conceptId     String
+  concept       TerminologyConcept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  isPrimary     Boolean            @default(true)
+  notes         String?
+  createdAt     DateTime           @default(now())
+
+  @@map("code_mappings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OpenMed Agentic RAG — Institutional Memory (Persistent Chat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AiChatConversation {
+  id        String       @id @default(uuid())
+  userId    String
+  userRole  String
+  title     String?
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turns     AiChatTurn[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("ai_chat_conversations")
+}
+
+model AiChatTurn {
+  id             String             @id @default(uuid())
+  conversationId String
+  sender         String             // "user" | "agent"
+  text           String             @db.Text
+  intent         String?
+  toolsExecuted  String[]
+  cardPayload    Json?
+  patientContext Json?
+  createdAt      DateTime           @default(now())
+  conversation   AiChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_chat_turns")
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("system_config")
+}

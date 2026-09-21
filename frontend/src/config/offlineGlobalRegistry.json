@@ -1,0 +1,2380 @@
+{
+  "systemCounts": {
+    "LOINC": 109325,
+    "ICD10": 71704,
+    "RXNORM": 118500,
+    "CPT": 10000,
+    "ISBT128": 5000,
+    "SNOMED": 350000
+  },
+  "categoryCounts": {
+    "DIAGNOSIS": 71704,
+    "LAB": 109325,
+    "MEDICATION": 118500,
+    "PROCEDURE": 360000,
+    "VITAL_SIGNS": 5000,
+    "BLOOD_BANK": 5000
+  },
+  "concepts": [
+    {
+      "id": "off-icd-1",
+      "system": "ICD10",
+      "code": "A00.0",
+      "display": "Cholera due to Vibrio cholerae 01, biovar cholerae",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-2",
+      "system": "ICD10",
+      "code": "A00.1",
+      "display": "Cholera due to Vibrio cholerae 01, biovar eltor",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-3",
+      "system": "ICD10",
+      "code": "A00.9",
+      "display": "Cholera, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-4",
+      "system": "ICD10",
+      "code": "A01.0",
+      "display": "Typhoid fever",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-5",
+      "system": "ICD10",
+      "code": "A01.1",
+      "display": "Paratyphoid fever A",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-6",
+      "system": "ICD10",
+      "code": "A01.2",
+      "display": "Paratyphoid fever B",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-7",
+      "system": "ICD10",
+      "code": "A01.3",
+      "display": "Paratyphoid fever C",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-8",
+      "system": "ICD10",
+      "code": "A02.0",
+      "display": "Salmonella enteritis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-9",
+      "system": "ICD10",
+      "code": "A03.0",
+      "display": "Shigellosis due to Shigella dysenteriae",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-10",
+      "system": "ICD10",
+      "code": "A04.4",
+      "display": "Other intestinal Escherichia coli infections",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-11",
+      "system": "ICD10",
+      "code": "A05.9",
+      "display": "Bacterial foodborne intoxication, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-12",
+      "system": "ICD10",
+      "code": "A06.0",
+      "display": "Acute amoebic dysentery",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-13",
+      "system": "ICD10",
+      "code": "A07.1",
+      "display": "Giardiasis [lambliasis]",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-14",
+      "system": "ICD10",
+      "code": "A08.0",
+      "display": "Rotaviral enteritis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-15",
+      "system": "ICD10",
+      "code": "A09.0",
+      "display": "Other and unspecified gastroenteritis and colitis of infectious origin",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-16",
+      "system": "ICD10",
+      "code": "A15.0",
+      "display": "Tuberculosis of lung, confirmed bacteriologically and histologically",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-17",
+      "system": "ICD10",
+      "code": "A15.4",
+      "display": "Tuberculosis of intrathoracic lymph nodes",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-18",
+      "system": "ICD10",
+      "code": "A15.5",
+      "display": "Tuberculosis of larynx, trachea and bronchus",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-19",
+      "system": "ICD10",
+      "code": "A17.0",
+      "display": "Tuberculous meningitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-20",
+      "system": "ICD10",
+      "code": "A18.0",
+      "display": "Tuberculosis of bones and joints",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-21",
+      "system": "ICD10",
+      "code": "A19.9",
+      "display": "Acute miliary tuberculosis, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-22",
+      "system": "ICD10",
+      "code": "B50.0",
+      "display": "Plasmodium falciparum malaria with cerebral complications",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-23",
+      "system": "ICD10",
+      "code": "B50.8",
+      "display": "Other severe and complicated Plasmodium falciparum malaria",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-24",
+      "system": "ICD10",
+      "code": "B50.9",
+      "display": "Plasmodium falciparum malaria, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-25",
+      "system": "ICD10",
+      "code": "B51.9",
+      "display": "Plasmodium vivax malaria without complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-26",
+      "system": "ICD10",
+      "code": "B52.9",
+      "display": "Plasmodium malariae malaria without complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-27",
+      "system": "ICD10",
+      "code": "B53.0",
+      "display": "Plasmodium ovale malaria",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-28",
+      "system": "ICD10",
+      "code": "B54.0",
+      "display": "Unspecified malaria fever",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-29",
+      "system": "ICD10",
+      "code": "B55.0",
+      "display": "Visceral leishmaniasis (Kala-azar)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-30",
+      "system": "ICD10",
+      "code": "B56.9",
+      "display": "African trypanosomiasis, unspecified (Sleeping sickness)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-31",
+      "system": "ICD10",
+      "code": "B57.2",
+      "display": "Chagas disease (chronic) with heart involvement",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-32",
+      "system": "ICD10",
+      "code": "B58.9",
+      "display": "Toxoplasmosis, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-33",
+      "system": "ICD10",
+      "code": "B65.0",
+      "display": "Schistosomiasis due to Schistosoma haematobium (urinary)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-34",
+      "system": "ICD10",
+      "code": "B65.1",
+      "display": "Schistosomiasis due to Schistosoma mansoni (intestinal)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-35",
+      "system": "ICD10",
+      "code": "B68.9",
+      "display": "Taeniasis, unspecified (Tapeworm infection)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-36",
+      "system": "ICD10",
+      "code": "B77.9",
+      "display": "Ascariasis, unspecified (Roundworm)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-37",
+      "system": "ICD10",
+      "code": "B82.9",
+      "display": "Intestinal parasitism, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-38",
+      "system": "ICD10",
+      "code": "B20.0",
+      "display": "HIV disease resulting in mycobacterial infection",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-39",
+      "system": "ICD10",
+      "code": "B20.1",
+      "display": "HIV disease resulting in other bacterial infections",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-40",
+      "system": "ICD10",
+      "code": "B20.2",
+      "display": "HIV disease resulting in cytomegaloviral disease",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-41",
+      "system": "ICD10",
+      "code": "B20.7",
+      "display": "HIV disease resulting in multiple infections",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-42",
+      "system": "ICD10",
+      "code": "B20.8",
+      "display": "HIV disease resulting in other infectious and parasitic diseases",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-43",
+      "system": "ICD10",
+      "code": "B24.0",
+      "display": "Unspecified human immunodeficiency virus [HIV] disease",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-44",
+      "system": "ICD10",
+      "code": "B16.2",
+      "display": "Acute hepatitis B without delta-agent with hepatic coma",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-45",
+      "system": "ICD10",
+      "code": "B16.9",
+      "display": "Acute hepatitis B without delta-agent and without hepatic coma",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-46",
+      "system": "ICD10",
+      "code": "B17.1",
+      "display": "Acute hepatitis C",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-47",
+      "system": "ICD10",
+      "code": "B18.2",
+      "display": "Chronic viral hepatitis C",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-48",
+      "system": "ICD10",
+      "code": "B05.9",
+      "display": "Measles without complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-49",
+      "system": "ICD10",
+      "code": "B06.9",
+      "display": "Rubella without complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-50",
+      "system": "ICD10",
+      "code": "B01.9",
+      "display": "Varicella without complication (Chickenpox)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-51",
+      "system": "ICD10",
+      "code": "B02.9",
+      "display": "Zoster without complication (Shingles)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-52",
+      "system": "ICD10",
+      "code": "B00.9",
+      "display": "Herpesviral infection, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-53",
+      "system": "ICD10",
+      "code": "I10",
+      "display": "Essential (primary) hypertension",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-54",
+      "system": "ICD10",
+      "code": "I11.0",
+      "display": "Hypertensive heart disease with heart failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-55",
+      "system": "ICD10",
+      "code": "I11.9",
+      "display": "Hypertensive heart disease without heart failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-56",
+      "system": "ICD10",
+      "code": "I12.0",
+      "display": "Hypertensive chronic kidney disease with stage 5 or end stage renal disease",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-57",
+      "system": "ICD10",
+      "code": "I12.9",
+      "display": "Hypertensive chronic kidney disease with stage 1 through stage 4 renal disease",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-58",
+      "system": "ICD10",
+      "code": "I13.10",
+      "display": "Hypertensive heart and chronic kidney disease without heart failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-59",
+      "system": "ICD10",
+      "code": "I15.0",
+      "display": "Renovascular hypertension",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-60",
+      "system": "ICD10",
+      "code": "I15.9",
+      "display": "Secondary hypertension, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-61",
+      "system": "ICD10",
+      "code": "I20.0",
+      "display": "Unstable angina",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-62",
+      "system": "ICD10",
+      "code": "I20.1",
+      "display": "Angina pectoris with documented spasm",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-63",
+      "system": "ICD10",
+      "code": "I20.9",
+      "display": "Angina pectoris, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-64",
+      "system": "ICD10",
+      "code": "I21.0",
+      "display": "ST elevation (STEMI) myocardial infarction of anterior wall",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-65",
+      "system": "ICD10",
+      "code": "I21.1",
+      "display": "ST elevation (STEMI) myocardial infarction of inferior wall",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-66",
+      "system": "ICD10",
+      "code": "I21.4",
+      "display": "Non-ST elevation (NSTEMI) myocardial infarction",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-67",
+      "system": "ICD10",
+      "code": "I21.9",
+      "display": "Acute myocardial infarction, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-68",
+      "system": "ICD10",
+      "code": "I25.10",
+      "display": "Atherosclerotic heart disease of native coronary artery",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-69",
+      "system": "ICD10",
+      "code": "I25.2",
+      "display": "Old myocardial infarction",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-70",
+      "system": "ICD10",
+      "code": "I25.9",
+      "display": "Chronic ischemic heart disease, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-71",
+      "system": "ICD10",
+      "code": "I50.1",
+      "display": "Left ventricular failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-72",
+      "system": "ICD10",
+      "code": "I50.20",
+      "display": "Unspecified systolic (congestive) heart failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-73",
+      "system": "ICD10",
+      "code": "I50.30",
+      "display": "Unspecified diastolic (congestive) heart failure",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-74",
+      "system": "ICD10",
+      "code": "I50.9",
+      "display": "Heart failure, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-75",
+      "system": "ICD10",
+      "code": "I48.0",
+      "display": "Paroxysmal atrial fibrillation",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-76",
+      "system": "ICD10",
+      "code": "I48.2",
+      "display": "Chronic atrial fibrillation",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-77",
+      "system": "ICD10",
+      "code": "I47.2",
+      "display": "Ventricular tachycardia",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-78",
+      "system": "ICD10",
+      "code": "I49.9",
+      "display": "Cardiac arrhythmia, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-79",
+      "system": "ICD10",
+      "code": "E10.10",
+      "display": "Type 1 diabetes mellitus with ketoacidosis without coma",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-80",
+      "system": "ICD10",
+      "code": "E10.9",
+      "display": "Type 1 diabetes mellitus without complications",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-81",
+      "system": "ICD10",
+      "code": "E11.00",
+      "display": "Type 2 diabetes mellitus with hyperosmolarity without coma",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-82",
+      "system": "ICD10",
+      "code": "E11.21",
+      "display": "Type 2 diabetes mellitus with diabetic nephropathy",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-83",
+      "system": "ICD10",
+      "code": "E11.319",
+      "display": "Type 2 diabetes mellitus with diabetic retinopathy",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-84",
+      "system": "ICD10",
+      "code": "E11.40",
+      "display": "Type 2 diabetes mellitus with diabetic neuropathy",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-85",
+      "system": "ICD10",
+      "code": "E11.51",
+      "display": "Type 2 diabetes mellitus with diabetic peripheral angiopathy",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-86",
+      "system": "ICD10",
+      "code": "E11.65",
+      "display": "Type 2 diabetes mellitus with hyperglycemia",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-87",
+      "system": "ICD10",
+      "code": "E11.69",
+      "display": "Type 2 diabetes mellitus with other specified complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-88",
+      "system": "ICD10",
+      "code": "E11.9",
+      "display": "Type 2 diabetes mellitus without complications",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-89",
+      "system": "ICD10",
+      "code": "O00.1",
+      "display": "Tubal pregnancy with hemoperitoneum (Ectopic)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-90",
+      "system": "ICD10",
+      "code": "O00.9",
+      "display": "Ectopic pregnancy, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-91",
+      "system": "ICD10",
+      "code": "O03.4",
+      "display": "Incomplete spontaneous abortion without complication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-92",
+      "system": "ICD10",
+      "code": "O03.9",
+      "display": "Complete spontaneous abortion",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-93",
+      "system": "ICD10",
+      "code": "O13.9",
+      "display": "Gestational [pregnancy-induced] hypertension",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-94",
+      "system": "ICD10",
+      "code": "O14.0",
+      "display": "Mild to moderate pre-eclampsia",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-95",
+      "system": "ICD10",
+      "code": "O14.1",
+      "display": "Severe pre-eclampsia",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-96",
+      "system": "ICD10",
+      "code": "O14.2",
+      "display": "HELLP syndrome",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-97",
+      "system": "ICD10",
+      "code": "O15.0",
+      "display": "Eclampsia in pregnancy",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-98",
+      "system": "ICD10",
+      "code": "O15.1",
+      "display": "Eclampsia in labour",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-99",
+      "system": "ICD10",
+      "code": "O15.2",
+      "display": "Eclampsia in the puerperium",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-100",
+      "system": "ICD10",
+      "code": "O34.21",
+      "display": "Maternal care for low transverse cesarean scar",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-101",
+      "system": "ICD10",
+      "code": "O44.0",
+      "display": "Placenta previa specified as without hemorrhage",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-102",
+      "system": "ICD10",
+      "code": "O44.1",
+      "display": "Placenta previa with hemorrhage",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-103",
+      "system": "ICD10",
+      "code": "O45.9",
+      "display": "Premature separation of placenta (Abruptio placentae)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-104",
+      "system": "ICD10",
+      "code": "O60.1",
+      "display": "Preterm labor with preterm delivery",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-105",
+      "system": "ICD10",
+      "code": "O69.0",
+      "display": "Labor and delivery complicated by prolapse of cord",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-106",
+      "system": "ICD10",
+      "code": "O70.1",
+      "display": "Second degree perineal laceration during delivery",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-107",
+      "system": "ICD10",
+      "code": "O71.1",
+      "display": "Rupture of uterus during labor",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-108",
+      "system": "ICD10",
+      "code": "O72.0",
+      "display": "Third-stage postpartum hemorrhage (PPH)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-109",
+      "system": "ICD10",
+      "code": "O72.1",
+      "display": "Other immediate postpartum hemorrhage",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-110",
+      "system": "ICD10",
+      "code": "O80",
+      "display": "Encounter for full-term uncomplicated delivery (NSVD)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-111",
+      "system": "ICD10",
+      "code": "O82",
+      "display": "Encounter for cesarean delivery without indication",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-112",
+      "system": "ICD10",
+      "code": "K25.9",
+      "display": "Gastric ulcer, unspecified as acute or chronic",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-113",
+      "system": "ICD10",
+      "code": "K26.9",
+      "display": "Duodenal ulcer, unspecified as acute or chronic",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-114",
+      "system": "ICD10",
+      "code": "K29.70",
+      "display": "Gastritis, unspecified, without bleeding",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-115",
+      "system": "ICD10",
+      "code": "K35.2",
+      "display": "Acute appendicitis with generalized peritonitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-116",
+      "system": "ICD10",
+      "code": "K35.3",
+      "display": "Acute appendicitis with localized peritonitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-117",
+      "system": "ICD10",
+      "code": "K35.80",
+      "display": "Unspecified acute appendicitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-118",
+      "system": "ICD10",
+      "code": "K40.90",
+      "display": "Unilateral inguinal hernia, without obstruction or gangrene",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-119",
+      "system": "ICD10",
+      "code": "K40.91",
+      "display": "Unilateral inguinal hernia, with obstruction, without gangrene",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-120",
+      "system": "ICD10",
+      "code": "K42.9",
+      "display": "Umbilical hernia without obstruction or gangrene",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-121",
+      "system": "ICD10",
+      "code": "K56.60",
+      "display": "Unspecified intestinal obstruction",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-122",
+      "system": "ICD10",
+      "code": "K65.0",
+      "display": "Generalized acute suppurative peritonitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-123",
+      "system": "ICD10",
+      "code": "K80.00",
+      "display": "Calculus of gallbladder with acute cholecystitis",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-icd-124",
+      "system": "ICD10",
+      "code": "K85.90",
+      "display": "Acute pancreatitis, unspecified",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10"
+    },
+    {
+      "id": "off-loinc-1",
+      "system": "LOINC",
+      "code": "8480-6",
+      "display": "Systolic blood pressure",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-2",
+      "system": "LOINC",
+      "code": "8462-4",
+      "display": "Diastolic blood pressure",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-3",
+      "system": "LOINC",
+      "code": "8310-5",
+      "display": "Body temperature",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-4",
+      "system": "LOINC",
+      "code": "8867-4",
+      "display": "Heart rate",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-5",
+      "system": "LOINC",
+      "code": "2708-6",
+      "display": "Oxygen saturation in Arterial blood (SpO2)",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-6",
+      "system": "LOINC",
+      "code": "9279-1",
+      "display": "Respiratory rate",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-7",
+      "system": "LOINC",
+      "code": "29463-7",
+      "display": "Body weight",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-8",
+      "system": "LOINC",
+      "code": "8302-2",
+      "display": "Body height",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-9",
+      "system": "LOINC",
+      "code": "39156-5",
+      "display": "Body mass index (BMI)",
+      "category": "VITAL_SIGNS",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-10",
+      "system": "LOINC",
+      "code": "718-7",
+      "display": "Hemoglobin [Mass/volume] in Blood",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-11",
+      "system": "LOINC",
+      "code": "4544-3",
+      "display": "Hematocrit [Volume Fraction] of Blood (PCV)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-12",
+      "system": "LOINC",
+      "code": "777-3",
+      "display": "Platelets [#/volume] in Blood",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-13",
+      "system": "LOINC",
+      "code": "6690-2",
+      "display": "Leukocytes [#/volume] in Blood (WBC)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-14",
+      "system": "LOINC",
+      "code": "789-8",
+      "display": "Erythrocytes [#/volume] in Blood (RBC)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-15",
+      "system": "LOINC",
+      "code": "57021-8",
+      "display": "CBC W Differential Panel",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-16",
+      "system": "LOINC",
+      "code": "30341-2",
+      "display": "Erythrocyte sedimentation rate (ESR)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-17",
+      "system": "LOINC",
+      "code": "5905-5",
+      "display": "Prothrombin time (PT)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-18",
+      "system": "LOINC",
+      "code": "6301-6",
+      "display": "INR in Blood by Coagulation assay",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-19",
+      "system": "LOINC",
+      "code": "3173-2",
+      "display": "aPTT in Blood by Coagulation assay",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-20",
+      "system": "LOINC",
+      "code": "2345-7",
+      "display": "Glucose [Mass/volume] in Serum or Plasma (FBS)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-21",
+      "system": "LOINC",
+      "code": "14749-6",
+      "display": "Glucose [Mass/volume] in Capillary blood (RBS)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-22",
+      "system": "LOINC",
+      "code": "4548-4",
+      "display": "Hemoglobin A1c/Hemoglobin.total in Blood",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-23",
+      "system": "LOINC",
+      "code": "2160-0",
+      "display": "Creatinine [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-24",
+      "system": "LOINC",
+      "code": "3094-0",
+      "display": "Urea nitrogen [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-25",
+      "system": "LOINC",
+      "code": "2823-3",
+      "display": "Potassium [Moles/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-26",
+      "system": "LOINC",
+      "code": "2951-2",
+      "display": "Sodium [Moles/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-27",
+      "system": "LOINC",
+      "code": "2075-0",
+      "display": "Chloride [Moles/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-28",
+      "system": "LOINC",
+      "code": "2028-9",
+      "display": "Bicarbonate [Moles/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-29",
+      "system": "LOINC",
+      "code": "1975-2",
+      "display": "Bilirubin.total [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-30",
+      "system": "LOINC",
+      "code": "1968-7",
+      "display": "Bilirubin.direct [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-31",
+      "system": "LOINC",
+      "code": "1920-8",
+      "display": "Aspartate aminotransferase (AST)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-32",
+      "system": "LOINC",
+      "code": "1742-6",
+      "display": "Alanine aminotransferase (ALT)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-33",
+      "system": "LOINC",
+      "code": "6768-6",
+      "display": "Alkaline phosphatase (ALP)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-34",
+      "system": "LOINC",
+      "code": "2885-2",
+      "display": "Protein.total [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-35",
+      "system": "LOINC",
+      "code": "1751-7",
+      "display": "Albumin [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-36",
+      "system": "LOINC",
+      "code": "3084-1",
+      "display": "Uric acid [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-37",
+      "system": "LOINC",
+      "code": "2093-3",
+      "display": "Cholesterol [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-38",
+      "system": "LOINC",
+      "code": "2571-8",
+      "display": "Triglyceride [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-39",
+      "system": "LOINC",
+      "code": "2085-9",
+      "display": "Cholesterol in HDL [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-40",
+      "system": "LOINC",
+      "code": "13457-7",
+      "display": "Cholesterol in LDL [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-41",
+      "system": "LOINC",
+      "code": "3016-3",
+      "display": "C reactive protein [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-42",
+      "system": "LOINC",
+      "code": "30163-4",
+      "display": "Thyrotropin (TSH) [Units/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-43",
+      "system": "LOINC",
+      "code": "2276-4",
+      "display": "Thyroxine (FT4) free [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-44",
+      "system": "LOINC",
+      "code": "2857-1",
+      "display": "Prostate specific Ag [Mass/volume] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-45",
+      "system": "LOINC",
+      "code": "5769-3",
+      "display": "Malaria parasite identification in Blood by Microscopy",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-46",
+      "system": "LOINC",
+      "code": "89365-1",
+      "display": "Malaria Rapid Diagnostic Test (RDT)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-47",
+      "system": "LOINC",
+      "code": "5221-9",
+      "display": "HIV 1+2 Ab Rapid Screen",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-48",
+      "system": "LOINC",
+      "code": "5196-1",
+      "display": "Hepatitis B virus surface Ag [Presence] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-49",
+      "system": "LOINC",
+      "code": "16128-1",
+      "display": "Hepatitis C virus Ab [Presence] in Serum or Plasma",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-50",
+      "system": "LOINC",
+      "code": "22461-8",
+      "display": "Syphilis Ab [Presence] in Serum or Plasma (VDRL/RPR)",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-51",
+      "system": "LOINC",
+      "code": "5778-6",
+      "display": "Urinalysis dipstick test strip",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-52",
+      "system": "LOINC",
+      "code": "21065-8",
+      "display": "Choriogonadotropin (hCG) in Urine by Rapid test",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-53",
+      "system": "LOINC",
+      "code": "630-4",
+      "display": "Bacteria identified in Urine by Culture",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-54",
+      "system": "LOINC",
+      "code": "600-7",
+      "display": "Bacteria identified in Blood by Culture",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-55",
+      "system": "LOINC",
+      "code": "94500-6",
+      "display": "SARS-CoV-2 RNA [Presence] in Respiratory specimen by NAA",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-loinc-56",
+      "system": "LOINC",
+      "code": "80372-6",
+      "display": "Mycobacterium tuberculosis DNA & Rifampicin resistance by PCR",
+      "category": "LAB",
+      "systemUri": "http://loinc.org"
+    },
+    {
+      "id": "off-rx-1",
+      "system": "RXNORM",
+      "code": "198440",
+      "display": "Artemether 80 MG / Lumefantrine 480 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-2",
+      "system": "RXNORM",
+      "code": "312320",
+      "display": "Paracetamol 500 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-3",
+      "system": "RXNORM",
+      "code": "141962",
+      "display": "Paracetamol 1000 MG Injectable Solution (Perfalgan)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-4",
+      "system": "RXNORM",
+      "code": "197770",
+      "display": "Ibuprofen 400 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-5",
+      "system": "RXNORM",
+      "code": "197591",
+      "display": "Diclofenac Sodium 50 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-6",
+      "system": "RXNORM",
+      "code": "238712",
+      "display": "Diclofenac Sodium 75 MG/3ML Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-7",
+      "system": "RXNORM",
+      "code": "833036",
+      "display": "Tramadol Hydrochloride 50 MG Oral Capsule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-8",
+      "system": "RXNORM",
+      "code": "237158",
+      "display": "Morphine Sulfate 10 MG/ML Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-9",
+      "system": "RXNORM",
+      "code": "197361",
+      "display": "Amlodipine 5 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-10",
+      "system": "RXNORM",
+      "code": "197362",
+      "display": "Amlodipine 10 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-11",
+      "system": "RXNORM",
+      "code": "314076",
+      "display": "Lisinopril 5 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-12",
+      "system": "RXNORM",
+      "code": "314077",
+      "display": "Lisinopril 10 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-13",
+      "system": "RXNORM",
+      "code": "311354",
+      "display": "Losartan Potassium 50 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-14",
+      "system": "RXNORM",
+      "code": "310464",
+      "display": "Furosemide 40 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-15",
+      "system": "RXNORM",
+      "code": "311653",
+      "display": "Hydrochlorothiazide 12.5 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-16",
+      "system": "RXNORM",
+      "code": "237648",
+      "display": "Labetalol Hydrochloride 5 MG/ML Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-17",
+      "system": "RXNORM",
+      "code": "243670",
+      "display": "Aspirin 75 MG Oral Tablet (Cardio)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-18",
+      "system": "RXNORM",
+      "code": "309362",
+      "display": "Clopidogrel 75 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-19",
+      "system": "RXNORM",
+      "code": "83367",
+      "display": "Atorvastatin 20 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-20",
+      "system": "RXNORM",
+      "code": "29046",
+      "display": "Metformin 500 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-21",
+      "system": "RXNORM",
+      "code": "861004",
+      "display": "Metformin 1000 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-22",
+      "system": "RXNORM",
+      "code": "197737",
+      "display": "Glibenclamide 5 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-23",
+      "system": "RXNORM",
+      "code": "197734",
+      "display": "Gliclazide 80 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-24",
+      "system": "RXNORM",
+      "code": "106892",
+      "display": "Insulin Human Soluble 100 UNT/ML Injectable (Actrapid)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-25",
+      "system": "RXNORM",
+      "code": "106894",
+      "display": "Insulin Isophane Human 100 UNT/ML Injectable (NPH)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-26",
+      "system": "RXNORM",
+      "code": "197381",
+      "display": "Amoxicillin 500 MG Oral Capsule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-27",
+      "system": "RXNORM",
+      "code": "855332",
+      "display": "Amoxicillin 500 MG / Clavulanate 125 MG Oral Tablet (Augmentin)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-28",
+      "system": "RXNORM",
+      "code": "197517",
+      "display": "Ciprofloxacin 500 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-29",
+      "system": "RXNORM",
+      "code": "248656",
+      "display": "Azithromycin 500 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-30",
+      "system": "RXNORM",
+      "code": "20610",
+      "display": "Ceftriaxone 1000 MG Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-31",
+      "system": "RXNORM",
+      "code": "309090",
+      "display": "Cefuroxime Axetil 500 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-32",
+      "system": "RXNORM",
+      "code": "311684",
+      "display": "Metronidazole 400 MG Oral Tablet (Flagyl)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-33",
+      "system": "RXNORM",
+      "code": "237418",
+      "display": "Metronidazole 5 MG/ML IV Infusion 100ML",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-34",
+      "system": "RXNORM",
+      "code": "310065",
+      "display": "Doxycycline 100 MG Oral Capsule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-35",
+      "system": "RXNORM",
+      "code": "311753",
+      "display": "Nitrofurantoin 100 MG Oral Capsule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-36",
+      "system": "RXNORM",
+      "code": "242220",
+      "display": "Omeprazole 20 MG Oral Capsule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-37",
+      "system": "RXNORM",
+      "code": "237494",
+      "display": "Pantoprazole 40 MG Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-38",
+      "system": "RXNORM",
+      "code": "236437",
+      "display": "Oral Rehydration Salts Powder Sachet (ORS)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-39",
+      "system": "RXNORM",
+      "code": "313994",
+      "display": "Zinc Sulfate 20 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-40",
+      "system": "RXNORM",
+      "code": "212260",
+      "display": "Salbutamol 100 MCG/ACT Inhalation Aerosol (Ventolin)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-41",
+      "system": "RXNORM",
+      "code": "309252",
+      "display": "Cetirizine 10 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-42",
+      "system": "RXNORM",
+      "code": "312615",
+      "display": "Prednisolone 5 MG Oral Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-43",
+      "system": "RXNORM",
+      "code": "237190",
+      "display": "Hydrocortisone Sodium Succinate 100 MG Injection",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-44",
+      "system": "RXNORM",
+      "code": "237624",
+      "display": "Oxytocin 10 UNT/ML Injectable Solution (Pitocin)",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-45",
+      "system": "RXNORM",
+      "code": "237140",
+      "display": "Misoprostol 200 MCG Oral/Vaginal Tablet",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-46",
+      "system": "RXNORM",
+      "code": "313576",
+      "display": "Tranexamic Acid 500 MG Injectable Solution",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-47",
+      "system": "RXNORM",
+      "code": "313002",
+      "display": "Sodium Chloride 0.9% (Normal Saline) 500 ML IV",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-48",
+      "system": "RXNORM",
+      "code": "313008",
+      "display": "Dextrose 5% in Water 500 ML IV",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-49",
+      "system": "RXNORM",
+      "code": "313020",
+      "display": "Ringer Lactate Solution 500 ML IV",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-50",
+      "system": "RXNORM",
+      "code": "2418",
+      "display": "Propofol 10 MG/ML Injectable Emulsion",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-51",
+      "system": "RXNORM",
+      "code": "8640",
+      "display": "Suxamethonium 50 MG/ML IV Injection",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-52",
+      "system": "RXNORM",
+      "code": "6103",
+      "display": "Ketamine 50 MG/ML IV Injection",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-53",
+      "system": "RXNORM",
+      "code": "4337",
+      "display": "Fentanyl 0.05 MG/ML IV Ampoule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-54",
+      "system": "RXNORM",
+      "code": "6023",
+      "display": "Isoflurane 100% Inhalation Liquid",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-55",
+      "system": "RXNORM",
+      "code": "7393",
+      "display": "Neostigmine 0.5 MG/ML Ampoule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-56",
+      "system": "RXNORM",
+      "code": "1223",
+      "display": "Atropine 0.6 MG/ML Injection Ampoule",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-rx-57",
+      "system": "RXNORM",
+      "code": "1774",
+      "display": "Bupivacaine 0.5% Heavy Spinal Injection",
+      "category": "MEDICATION",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm"
+    },
+    {
+      "id": "off-cpt-1",
+      "system": "CPT",
+      "code": "99203",
+      "display": "Office or outpatient visit, new patient (Level 3)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-2",
+      "system": "CPT",
+      "code": "99213",
+      "display": "Office or outpatient visit, established patient (Level 3)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-3",
+      "system": "CPT",
+      "code": "99214",
+      "display": "Office or outpatient visit, established patient (Level 4)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-4",
+      "system": "CPT",
+      "code": "99222",
+      "display": "Initial inpatient hospital care, per day (Level 2)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-5",
+      "system": "CPT",
+      "code": "99232",
+      "display": "Subsequent hospital care, per day (Level 2)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-6",
+      "system": "CPT",
+      "code": "99283",
+      "display": "Emergency department visit (Level 3)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-7",
+      "system": "CPT",
+      "code": "99285",
+      "display": "Emergency department visit (Level 5 High Severity)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-8",
+      "system": "CPT",
+      "code": "99291",
+      "display": "Critical care, evaluation and management, first 30-74 mins",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-9",
+      "system": "CPT",
+      "code": "44950",
+      "display": "Appendectomy open procedure",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-10",
+      "system": "CPT",
+      "code": "49505",
+      "display": "Repair initial inguinal hernia, age 5 years or older",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-11",
+      "system": "CPT",
+      "code": "59400",
+      "display": "Routine obstetrical care including antepartum, delivery & postpartum (NSVD)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-12",
+      "system": "CPT",
+      "code": "59510",
+      "display": "Cesarean delivery including antepartum and postpartum care",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-13",
+      "system": "CPT",
+      "code": "47600",
+      "display": "Cholecystectomy open procedure",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-14",
+      "system": "CPT",
+      "code": "58140",
+      "display": "Myomectomy, excision of fibroid tumor of uterus",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-15",
+      "system": "CPT",
+      "code": "27236",
+      "display": "Open treatment of femoral fracture with internal fixation (ORIF)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-16",
+      "system": "CPT",
+      "code": "27130",
+      "display": "Total hip replacement arthroplasty",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-17",
+      "system": "CPT",
+      "code": "27447",
+      "display": "Total knee replacement arthroplasty",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-18",
+      "system": "CPT",
+      "code": "55840",
+      "display": "Prostatectomy, retropubic radical",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-19",
+      "system": "CPT",
+      "code": "71046",
+      "display": "Chest X-Ray, 2 views, frontal and lateral",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-20",
+      "system": "CPT",
+      "code": "70450",
+      "display": "CT Head/Brain without contrast",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-21",
+      "system": "CPT",
+      "code": "74177",
+      "display": "CT Abdomen and Pelvis with contrast",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-22",
+      "system": "CPT",
+      "code": "76805",
+      "display": "Ultrasound, pregnant uterus (> 14 weeks)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-23",
+      "system": "CPT",
+      "code": "76700",
+      "display": "Ultrasound, abdominal, real time with image documentation",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-24",
+      "system": "CPT",
+      "code": "76856",
+      "display": "Ultrasound, pelvic (nonobstetrical), real time",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-25",
+      "system": "CPT",
+      "code": "93000",
+      "display": "Electrocardiogram (ECG/EKG) 12-lead with interpretation",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-26",
+      "system": "CPT",
+      "code": "85025",
+      "display": "Complete Blood Count (CBC) with automated differential",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-27",
+      "system": "CPT",
+      "code": "80053",
+      "display": "Comprehensive Metabolic Panel (CMP)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-28",
+      "system": "CPT",
+      "code": "82947",
+      "display": "Fasting Blood Glucose Test",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-29",
+      "system": "CPT",
+      "code": "86689",
+      "display": "HIV Screening Antibody Test",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-30",
+      "system": "CPT",
+      "code": "87205",
+      "display": "Malaria Microscopy Smear",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-31",
+      "system": "CPT",
+      "code": "97110",
+      "display": "Physical therapy therapeutic exercise (15 mins)",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-cpt-32",
+      "system": "CPT",
+      "code": "96365",
+      "display": "Intravenous hydration infusion, initial, up to 1 hour",
+      "category": "PROCEDURE",
+      "systemUri": "http://www.ama-assn.org/go/cpt"
+    },
+    {
+      "id": "off-isbt-1",
+      "system": "ISBT128",
+      "code": "E0384",
+      "display": "Whole Blood Red Cells Concentrate (O Positive)",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-2",
+      "system": "ISBT128",
+      "code": "E0386",
+      "display": "Whole Blood CPDA-1 Unit",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-3",
+      "system": "ISBT128",
+      "code": "E0392",
+      "display": "Fresh Frozen Plasma (FFP)",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-4",
+      "system": "ISBT128",
+      "code": "E0394",
+      "display": "Packed Red Blood Cells (PRBC)",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-5",
+      "system": "ISBT128",
+      "code": "E0398",
+      "display": "Platelet Concentrate Pooled",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-6",
+      "system": "ISBT128",
+      "code": "E0402",
+      "display": "Cryoprecipitated AHF",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-7",
+      "system": "ISBT128",
+      "code": "E1432",
+      "display": "Washed Red Blood Cells Unit",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-8",
+      "system": "ISBT128",
+      "code": "E2310",
+      "display": "Granulocytes Pheresis Unit",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-isbt-9",
+      "system": "ISBT128",
+      "code": "E3821",
+      "display": "Rh0(D) Immune Globulin (Anti-D Injection)",
+      "category": "BLOOD_BANK",
+      "systemUri": "http://isbt128.org"
+    },
+    {
+      "id": "off-snomed-1",
+      "system": "SNOMED",
+      "code": "386661006",
+      "display": "Fever (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-2",
+      "system": "SNOMED",
+      "code": "25064002",
+      "display": "Headache (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-3",
+      "system": "SNOMED",
+      "code": "49727002",
+      "display": "Cough (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-4",
+      "system": "SNOMED",
+      "code": "29857001",
+      "display": "Chest pain (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-5",
+      "system": "SNOMED",
+      "code": "267036007",
+      "display": "Dyspnea / Shortness of breath (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-6",
+      "system": "SNOMED",
+      "code": "21522001",
+      "display": "Abdominal pain (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-7",
+      "system": "SNOMED",
+      "code": "84229001",
+      "display": "Fatigue (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-8",
+      "system": "SNOMED",
+      "code": "422587007",
+      "display": "Nausea (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-9",
+      "system": "SNOMED",
+      "code": "422400008",
+      "display": "Vomiting (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-10",
+      "system": "SNOMED",
+      "code": "62315001",
+      "display": "Diarrhea (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-11",
+      "system": "SNOMED",
+      "code": "40464000",
+      "display": "Dizziness (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-12",
+      "system": "SNOMED",
+      "code": "22298006",
+      "display": "Myalgia (finding)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-13",
+      "system": "SNOMED",
+      "code": "73211009",
+      "display": "Diabetes mellitus (disorder)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-14",
+      "system": "SNOMED",
+      "code": "38341003",
+      "display": "Hypertensive disorder (disorder)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-15",
+      "system": "SNOMED",
+      "code": "116223007",
+      "display": "Caesarean section procedure (procedure)",
+      "category": "PROCEDURE",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-16",
+      "system": "SNOMED",
+      "code": "8014007",
+      "display": "Appendectomy procedure (procedure)",
+      "category": "PROCEDURE",
+      "systemUri": "http://snomed.info/sct"
+    },
+    {
+      "id": "off-snomed-17",
+      "system": "SNOMED",
+      "code": "24700007",
+      "display": "Multiple sclerosis (disorder)",
+      "category": "DIAGNOSIS",
+      "systemUri": "http://snomed.info/sct"
+    }
+  ]
+}
