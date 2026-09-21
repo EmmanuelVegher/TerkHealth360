@@ -4270,11 +4270,11 @@ async function initSignatureTable() {
         signature_data TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_user_id ON user_digital_signatures(user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_username ON user_digital_signatures(username);
-      CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_email ON user_digital_signatures(email);
+      )
     `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_user_id ON user_digital_signatures(user_id)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_username ON user_digital_signatures(username)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_user_digital_signatures_email ON user_digital_signatures(email)`);
   } catch (err) {
     console.error('[DB] Note on user_digital_signatures table init:', err);
   }

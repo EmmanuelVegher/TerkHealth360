@@ -1977,10 +1977,10 @@ async function initGrantTrancheTables() {
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_gtc_grant_id ON grant_tranche_categories(grant_id);
-      CREATE INDEX IF NOT EXISTS idx_gtc_is_active ON grant_tranche_categories(is_active);
+      )
     `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_gtc_grant_id ON grant_tranche_categories(grant_id)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_gtc_is_active ON grant_tranche_categories(is_active)`);
 
     const existing: any[] = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int as count FROM grant_tranche_categories`);
     if (existing && existing[0]?.count === 0) {
@@ -2058,11 +2058,11 @@ async function initTaxFilingsTable() {
         filed_by VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_tax_type ON tax_filings(tax_type);
-      CREATE INDEX IF NOT EXISTS idx_tax_status ON tax_filings(status);
-      CREATE INDEX IF NOT EXISTS idx_tax_period ON tax_filings(period);
+      )
     `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_tax_type ON tax_filings(tax_type)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_tax_status ON tax_filings(status)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_tax_period ON tax_filings(period)`);
 
     const existing: any[] = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int as count FROM tax_filings`);
     if (existing && existing[0]?.count === 0) {
