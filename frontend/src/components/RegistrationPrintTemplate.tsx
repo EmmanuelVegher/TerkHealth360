@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import { Box, Typography, Grid, Paper, Divider, Avatar } from '@mui/material';
 import { api } from '../services/api';
 import { QRCodeSVG } from 'qrcode.react';
@@ -25,14 +26,14 @@ const RegistrationHeader = ({ title, theme, logoLeft, logoRight }: { title: stri
       borderRadius: isMinimalist ? 0 : 2,
       borderBottom: isMinimalist ? '2px solid #eee' : 'none'
     }}>
-      <Box component="img" src={logoLeft || "/hospital-logo.png"} sx={{ height: 60, width: 'auto', objectFit: 'contain' }} />
+      <Box component="img" src={assetUrl(logoLeft || "/hospital-logo.png")} sx={{ height: 60, width: 'auto', objectFit: 'contain' }} />
       <Box sx={{ textAlign: 'center', flexGrow: 1, px: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase' }}>
           {title}
         </Typography>
         <Typography variant="body2" sx={{ opacity: 0.8 }}>Faith Foundation Mission Hospital,Nsukka</Typography>
       </Box>
-      <Box component="img" src={logoRight || "/hospital-logo.png"} sx={{ height: 60, width: 'auto', objectFit: 'contain' }} />
+      <Box component="img" src={assetUrl(logoRight || "/hospital-logo.png")} sx={{ height: 60, width: 'auto', objectFit: 'contain' }} />
     </Box>
   );
 };

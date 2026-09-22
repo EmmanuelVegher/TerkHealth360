@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import { api } from '../services/api';
 import {
   Box, List, ListItemButton, ListItemIcon, ListItemText,
@@ -887,7 +888,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             component="img"
-            src="/hospital-logo.webp"
+            src={assetUrl('/hospital-logo.webp')}
             sx={{
               width: 38,
               height: 38,

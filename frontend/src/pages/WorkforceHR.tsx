@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, Grid, Card, CardContent, Typography, Tabs, Tab, Button, TextField,
@@ -3602,7 +3603,7 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
             <Box id="job-advert-flyer" sx={{ p: 4, bgcolor: '#fff', border: '1px solid #e2e8f0', borderRadius: 2, m: 2, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
               {/* Logo & Header */}
               <Stack direction="row" spacing={2} alignItems="center" sx={{ borderBottom: '3px double #1e3a8a', pb: 2, mb: 3 }}>
-                <Avatar src="/hospital-logo.webp" sx={{ width: 50, height: 50, borderRadius: 2, bgcolor: PRIMARY }} variant="square" />
+                <Avatar src={assetUrl('/hospital-logo.webp')} sx={{ width: 50, height: 50, borderRadius: 2, bgcolor: PRIMARY }} variant="square" />
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 900, color: PRIMARY, lineHeight: 1.1, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Faith Foundation</Typography>
                   <Typography variant="caption" sx={{ color: SECONDARY, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mission Hospital · Caring with Love & Integrity</Typography>
@@ -3781,7 +3782,7 @@ Please forward your credentials to careers@faithfoundation.org quoting Reference
                           <div style="max-width: 750px; margin: 0 auto;">
                             <!-- Header -->
                             <div style="display: flex; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 20px;">
-                              <img src="/hospital-logo.webp" style="width: 55px; height: 55px; object-fit: contain; margin-right: 15px;" />
+                              <img src={assetUrl('/hospital-logo.webp')} style="width: 55px; height: 55px; object-fit: contain; margin-right: 15px;" />
                               <div>
                                 <h1 style="font-size: 20px; color: #1e3a8a; font-weight: 800;">Faith Foundation</h1>
                                 <p style="font-size: 11px; color: #2563eb; font-weight: 700; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.5px;">Mission Hospital · Caring with Love & Integrity</p>
@@ -5768,7 +5769,7 @@ Please forward your credentials to careers@faithfoundation.org quoting Reference
               <Box sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Box
                   component="img"
-                  src="/hospital-logo.webp"
+                  src={assetUrl('/hospital-logo.webp')}
                   alt="Faith Foundation Logo"
                   sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: 'contain', mb: 0.5 }}
                 />
@@ -6277,7 +6278,7 @@ Please forward your credentials to careers@faithfoundation.org quoting Reference
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 2, borderBottom: '2px solid #1e3a8a', mb: 3 }}>
                 <Box
                   component="img"
-                  src="/hospital-logo.webp"
+                  src={assetUrl('/hospital-logo.webp')}
                   alt="Hospital Logo"
                   sx={{
                     width: 60,
@@ -6307,7 +6308,7 @@ Please forward your credentials to careers@faithfoundation.org quoting Reference
                 </Box>
                 <Box
                   component="img"
-                  src="/hospital-logo.webp"
+                  src={assetUrl('/hospital-logo.webp')}
                   alt="Hospital Logo"
                   sx={{
                     width: 60,

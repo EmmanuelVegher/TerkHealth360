@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { TreatmentChartPrintTemplate } from '../components/TreatmentChartPrintTemplate';
@@ -735,7 +736,7 @@ const PatientDetail = () => {
               }}
             >
               <Stack direction="row" spacing={1} alignItems="center">
-                <Box component="img" src="/hospital-logo.png" sx={{ width: 22, height: 22, objectFit: 'contain', borderRadius: '4px', bgcolor: '#fff', p: 0.2 }} />
+                <Box component="img" src={assetUrl('/hospital-logo.png')} sx={{ width: 22, height: 22, objectFit: 'contain', borderRadius: '4px', bgcolor: '#fff', p: 0.2 }} />
                 <Typography variant="caption" sx={{ letterSpacing: '0.05em', fontWeight: 'bold', color: '#fff' }}>
                   FAITH FOUNDATION MISSION HOSPITAL
                 </Typography>

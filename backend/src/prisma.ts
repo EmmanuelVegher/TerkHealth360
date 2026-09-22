@@ -10,7 +10,7 @@ function addConnectionLimit(url: string, limit = 5): string {
   return `${url}${separator}connection_limit=${limit}`;
 }
 
-const rawNeonUrl = process.env.NEON_DATABASE_URL || '';
+const rawNeonUrl = (process.env.NEON_DATABASE_URL || '').replace(/&?channel_binding=[^&]*/, '');
 const neonUrl = rawNeonUrl
   ? (rawNeonUrl.includes('connect_timeout')
       ? rawNeonUrl
@@ -54,6 +54,8 @@ async function runWithRetry(fn: (client: PrismaClient) => Promise<any>, attempt 
         error.code?.startsWith('P10') || // Prisma P1001, P1002, P1008 etc.
         errorMessage.includes('connect ECONNREFUSED') ||
         errorMessage.includes('Can\'t reach database server') ||
+        errorMessage.includes('exceeded the quota') ||
+        errorMessage.includes('quota') ||
         errorMessage.includes('connection timeout') ||
         errorMessage.includes('timeout expired') ||
         errorMessage.includes('Server closed connection') ||

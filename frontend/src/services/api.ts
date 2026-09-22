@@ -1,10 +1,16 @@
 import axios from 'axios';
 
-// Single source of truth for the API base URL
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// Detect Electron environment
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI?.isElectron;
+
+// Single source of truth for the API base URL (local backend in Electron, VITE_API_URL in web)
+export const API_BASE_URL = isElectron
+  ? 'http://localhost:3000/api'
+  : (import.meta.env.VITE_API_URL || '/api');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 12000,
   headers: {
     'Content-Type': 'application/json',
   },

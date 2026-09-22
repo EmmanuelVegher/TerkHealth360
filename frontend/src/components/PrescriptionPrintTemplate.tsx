@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import { Box, Typography, Divider, Grid } from '@mui/material';
 import { api } from '../services/api';
 
@@ -44,7 +45,7 @@ const PharmacyHeader = ({ title, theme, logoLeft, logoRight }: { title: string, 
   
   return (
     <Box display="flex" justifyContent="center" alignItems="center" mb={2} sx={{ borderBottom: theme === 'rx_modern_minimalist' ? 'none' : `2px solid ${color}`, pb: 1, position: 'relative' }}>
-      <img src={logoLeft || "/anglican-logo.png"} alt="Logo Left" style={{ position: 'absolute', left: 0, height: 50, objectFit: 'contain' }} />
+      <img src={assetUrl(logoLeft || "/anglican-logo.png")} alt="Logo Left" style={{ position: 'absolute', left: 0, height: 50, objectFit: 'contain' }} />
       <Box textAlign="center">
         <Typography variant="h5" fontWeight={900} sx={{ color, letterSpacing: 1 }}>
           {theme === 'rx_pediatric_theme' ? `🧸 ${hospitalInfo.name} CHILDREN'S` : hospitalInfo.name}
@@ -61,7 +62,7 @@ const PharmacyHeader = ({ title, theme, logoLeft, logoRight }: { title: string, 
           {title}
         </Typography>
       </Box>
-      <img src={logoRight || "/hospital-logo.png"} alt="Logo Right" style={{ position: 'absolute', right: 0, height: 50, borderRadius: '50%', objectFit: 'contain' }} />
+      <img src={assetUrl(logoRight || "/hospital-logo.png")} alt="Logo Right" style={{ position: 'absolute', right: 0, height: 50, borderRadius: '50%', objectFit: 'contain' }} />
     </Box>
   );
 };

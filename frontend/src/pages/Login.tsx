@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { assetUrl } from '@/utils/assetUrl';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
   InputAdornment, IconButton, CircularProgress, Alert, Link,
@@ -21,6 +23,7 @@ const pulseAnimation = keyframes`
 const Login = () => {
   const { login, verify2FA } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
 
   // Navigation steps: 'login' | 'mfa' | 'reset_temp' | 'forgot'
   const [step, setStep] = useState<'login' | 'mfa' | 'reset_temp' | 'forgot'>('login');
@@ -93,6 +96,8 @@ const Login = () => {
           setUsernameOrEmail(res.username);
         }
         setStep('reset_temp');
+      } else {
+        navigate('/');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid credentials. Please try again.');
@@ -176,7 +181,7 @@ const Login = () => {
         sx={{
           display: { xs: 'none', md: 'flex' },
           width: '55%',
-          backgroundImage: 'url("/login_bg.webp")',
+          backgroundImage: `url(${assetUrl('/login_bg.webp')})`,  
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           position: 'relative',
@@ -206,7 +211,7 @@ const Login = () => {
           {/* Anglican Logo Watermark in Background */}
           <Box
             component="img"
-            src="/anglican-logo.webp"
+            src={assetUrl('/anglican-logo.webp')}
             sx={{
               position: 'absolute',
               top: { xs: '10px', md: '15px', lg: '20px' },
@@ -226,7 +231,7 @@ const Login = () => {
             {/* Hospital Logo */}
             <Box
               component="img"
-              src="/hospital-logo.webp"
+              src={assetUrl('/hospital-logo.webp')}
               decoding="async"
               sx={{
                 width: { xs: '180px', md: '240px', lg: '300px', xl: '350px' },
@@ -984,7 +989,7 @@ const Login = () => {
                 mb: 4,
               }}
             >
-              <Box component="img" src="/anglican-logo.png" sx={{ width: 18, height: 18, objectFit: 'contain' }} />
+              <Box component="img" src={assetUrl('/anglican-logo.png')} sx={{ width: 18, height: 18, objectFit: 'contain' }} />
               <Typography
                 variant="caption"
                 sx={{

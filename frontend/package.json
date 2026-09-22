@@ -8,27 +8,67 @@
   "main": "electron-main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win --x64",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dev": "node --require ./polyfill-crypto.cjs ./node_modules/vite/bin/vite.js",
+    "build": "tsc && node --require ./polyfill-crypto.cjs ./node_modules/vite/bin/vite.js build",
+    "build-backend": "cd ../backend && npm run build",
+    "build-all": "npm run build-backend && npm run build",
+    "preview": "node --require ./polyfill-crypto.cjs ./node_modules/vite/bin/vite.js preview",
+    "electron": "electron ../electron-main.cjs",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron ../electron-main.cjs\"",
+    "dist": "npm run build-all && electron-builder",
+    "dist:win": "npm run build-all && electron-builder --win --x64",
+    "dist:mac": "npm run build-all && electron-builder --mac",
+    "dist:linux": "npm run build-all && electron-builder --linux"
   },
   "build": {
     "appId": "com.terkage.faithfoundationhospital",
     "productName": "Faith Foundation Hospital Management System",
     "copyright": "Copyright © 2026 Terk-Age LTD. All rights reserved.",
+    "icon": "public/app-icon.ico",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron-main.cjs",
-      "electron-preload.cjs"
+      "electron-preload.cjs",
+      "polyfill-crypto.cjs",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "public/app-icon.ico",
+        "to": "app-icon.ico"
+      },
+      {
+        "from": "../backend/dist",
+        "to": "backend/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/prisma",
+        "to": "backend/prisma",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/.env",
+        "to": "backend/.env"
+      },
+      {
+        "from": "../backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../backend/uploads",
+        "to": "backend/uploads",
+        "filter": ["**/*"]
+      }
     ],
     "nsis": {
       "oneClick": false,
@@ -98,6 +138,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.1.0",
+    "electron-builder": "^24.13.3",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "wait-on": "^7.2.0"

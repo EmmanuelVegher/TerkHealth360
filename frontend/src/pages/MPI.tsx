@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import {
   Typography, Box, Card, CardContent, TextField, Button, Grid, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Chip, IconButton, InputAdornment,
@@ -487,7 +488,7 @@ const MPI = () => {
                 className="printable-patient-id-card"
               >
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Box component="img" src="/hospital-logo.png" sx={{ width: 22, height: 22, objectFit: 'contain', borderRadius: '4px', bgcolor: '#fff', p: 0.2 }} />
+                  <Box component="img" src={assetUrl('/hospital-logo.png')} sx={{ width: 22, height: 22, objectFit: 'contain', borderRadius: '4px', bgcolor: '#fff', p: 0.2 }} />
                   <Typography variant="caption" sx={{ letterSpacing: '0.05em', fontWeight: 'bold' }}>
                     FAITH FOUNDATION MISSION HOSPITAL
                   </Typography>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, nativeImage } = require('electron');
 const path = require('path');
 const http = require('http');
 const { fork } = require('child_process');
@@ -11,6 +11,43 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const APP_TITLE = 'Faith Foundation Hospital Management System';
 const BACKEND_PORT = process.env.PORT || 3000;
 const FRONTEND_DEV_URL = 'http://localhost:5173';
+const FRONTEND_DEV_URL_FALLBACK = 'http://127.0.0.1:5173';
+
+/**
+ * Poll the Vite dev server until it responds (up to maxTries * delayMs ms).
+ * Returns the first URL that responds, or null if both fail.
+ */
+function waitForViteServer(maxTries = 40, delayMs = 500) {
+  return new Promise((resolve) => {
+    let attempts = 0;
+    function tryUrl(url) {
+      const req = http.get(url, (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 500) {
+          resolve(url);
+        } else {
+          scheduleRetry();
+        }
+      });
+      req.on('error', scheduleRetry);
+      req.setTimeout(800, () => { req.destroy(); scheduleRetry(); });
+    }
+    function scheduleRetry() {
+      attempts++;
+      if (attempts >= maxTries) {
+        console.warn('[Electron] Vite dev server not reachable after ' + maxTries + ' attempts. Trying fallback URL.');
+        // Try 127.0.0.1 as one final attempt
+        const fallbackReq = http.get(FRONTEND_DEV_URL_FALLBACK, (res) => {
+          resolve(res.statusCode >= 200 && res.statusCode < 500 ? FRONTEND_DEV_URL_FALLBACK : null);
+        });
+        fallbackReq.on('error', () => resolve(null));
+        fallbackReq.setTimeout(1500, () => { fallbackReq.destroy(); resolve(null); });
+        return;
+      }
+      setTimeout(() => tryUrl(FRONTEND_DEV_URL), delayMs);
+    }
+    tryUrl(FRONTEND_DEV_URL);
+  });
+}
 
 /**
  * Check if the backend server is already reachable on the expected port
@@ -39,16 +76,23 @@ async function ensureBackendRunning() {
   }
 
   console.log('[Electron] Starting internal backend server...');
-  const backendEntryPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'backend', 'dist', 'index.js')
-    : path.join(__dirname, 'backend', 'dist', 'index.js');
+  const backendDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'backend')
+    : path.join(__dirname, 'backend');
+  const backendEntryPath = path.join(backendDir, 'dist', 'server.js');
+
+  if (!require('fs').existsSync(backendEntryPath)) {
+    console.error('[Electron] Backend entry not found at:', backendEntryPath);
+    return;
+  }
 
   try {
     backendProcess = fork(backendEntryPath, [], {
+      cwd: backendDir,
       env: {
         ...process.env,
         PORT: String(BACKEND_PORT),
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
       },
       stdio: 'inherit'
     });
@@ -69,12 +113,48 @@ async function ensureBackendRunning() {
  * Create the main desktop application window
  */
 function createMainWindow() {
+  const fs = require('fs');
+
+  // Resolve icon paths — prefer .ico on Windows, fall back to .png
+  const iconBaseDev = path.join(__dirname, 'frontend', 'public');
+  const iconBaseProd = process.resourcesPath;
+
+  const icoPaths = app.isPackaged
+    ? [path.join(iconBaseProd, 'app-icon.ico')]
+    : [path.join(iconBaseDev, 'app-icon.ico')];
+
+  const pngPaths = app.isPackaged
+    ? [path.join(iconBaseProd, 'app-icon.png')]
+    : [path.join(iconBaseDev, 'app-icon.png')];
+
+  const iconFile = [...icoPaths, ...pngPaths].find(p => {
+    try { return fs.existsSync(p); } catch { return false; }
+  });
+
+  let appIcon;
+  if (iconFile) {
+    try {
+      appIcon = nativeImage.createFromPath(iconFile);
+      if (appIcon.isEmpty()) {
+        console.warn('[Electron] nativeImage loaded but is empty for:', iconFile);
+        appIcon = undefined;
+      } else {
+        console.log('[Electron] Loaded icon from:', iconFile);
+      }
+    } catch (e) {
+      console.warn('[Electron] Failed to load icon via nativeImage:', e.message);
+    }
+  } else {
+    console.warn('[Electron] No icon file found in expected locations.');
+  }
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 720,
     title: APP_TITLE,
+    icon: appIcon,
     backgroundColor: '#0f172a',
     show: false, // Don't show until ready-to-show to avoid blank white flash
     webPreferences: {
@@ -108,29 +188,66 @@ function createMainWindow() {
 
   // Load the application
   if (isDev) {
-    mainWindow.loadURL(FRONTEND_DEV_URL).catch(() => {
-      console.log('[Electron] Dev server not ready, loading local build file...');
-      loadDistFile();
+    // Wait for Vite dev server then load
+    waitForViteServer().then((devUrl) => {
+      if (devUrl) {
+        console.log('[Electron] Loading dev server from:', devUrl);
+        mainWindow.loadURL(devUrl).catch(() => {
+          console.log('[Electron] loadURL failed, loading local build file...');
+          loadDistFile();
+        });
+      } else {
+        console.log('[Electron] Dev server not available, loading local build file...');
+        loadDistFile();
+      }
     });
   } else {
+    // In production: load the frontend immediately, backend starts concurrently
+    // (API calls will naturally fail/retry until backend is ready)
     loadDistFile();
+  }
+
+  function waitForBackendThenLoad(maxWaitMs = 30000) {
+    const start = Date.now();
+    function poll() {
+      checkBackendHealth(BACKEND_PORT).then((ok) => {
+        if (ok) {
+          console.log('[Electron] Backend ready. Loading frontend...');
+          loadDistFile();
+        } else if (Date.now() - start < maxWaitMs) {
+          setTimeout(poll, 500);
+        } else {
+          console.warn('[Electron] Backend did not start in time. Loading frontend anyway...');
+          loadDistFile();
+        }
+      });
+    }
+    poll();
   }
 
   function loadDistFile() {
     const fs = require('fs');
+    // In a packaged asar, app.getAppPath() points inside the asar — check there first
     const possiblePaths = [
+      path.join(app.getAppPath(), 'dist', 'index.html'),
+      path.join(app.getAppPath(), 'index.html'),
       path.join(__dirname, 'dist', 'index.html'),
       path.join(__dirname, 'frontend', 'dist', 'index.html'),
       path.join(__dirname, 'index.html'),
-      path.join(app.getAppPath(), 'dist', 'index.html'),
-      path.join(app.getAppPath(), 'index.html')
     ];
+
+    console.log('[Electron] Searching for index.html in:');
+    possiblePaths.forEach(p => {
+      const exists = (() => { try { return fs.existsSync(p); } catch { return false; } })();
+      console.log(`  [${exists ? 'FOUND' : '    '}] ${p}`);
+    });
 
     const validPath = possiblePaths.find((p) => {
       try { return fs.existsSync(p); } catch (e) { return false; }
     });
 
-    const target = validPath || path.join(__dirname, 'frontend', 'dist', 'index.html');
+    const target = validPath || path.join(app.getAppPath(), 'dist', 'index.html');
+    console.log('[Electron] Loading:', target);
     mainWindow.loadFile(target).catch((err) => {
       console.error('[Electron] Failed to load index.html from ' + target, err);
     });
@@ -223,6 +340,11 @@ function killBackend() {
 }
 
 // App lifecycle
+// IMPORTANT: Must be set before app is ready on Windows for taskbar icon to work
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.terkage.faithfoundationhospital');
+}
+
 app.whenReady().then(async () => {
   if (app.setAboutPanelOptions) {
     app.setAboutPanelOptions({

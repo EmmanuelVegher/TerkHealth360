@@ -1,6 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { HashRouter, BrowserRouter } from 'react-router-dom';
+
+// Use HashRouter in Electron (file:// protocol) and BrowserRouter in web
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI?.isElectron;
+const Router = isElectron ? HashRouter : BrowserRouter;
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -212,7 +216,7 @@ const theme = createTheme({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider theme={theme}>
           <CssBaseline />
@@ -226,6 +230,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           </SnackbarProvider>
         </ThemeProvider>
       </QueryClientProvider>
-    </BrowserRouter>
+    </Router>
   </React.StrictMode>
 );

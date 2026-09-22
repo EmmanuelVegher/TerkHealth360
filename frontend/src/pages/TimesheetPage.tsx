@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { assetUrl } from '../utils/assetUrl';
 import {
   Box, Typography, Button, IconButton, Chip, Card, CardContent,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
@@ -2132,7 +2133,7 @@ export default function TimesheetPage() {
       <div class="cap">Staff Roster Attendance, Duty Shifts &amp; Project Activity Verification</div>
     </div>
     <div class="hdr-right">
-      <img src="/hospital-logo.webp" alt="Hospital Logo" />
+      <img src={assetUrl('/hospital-logo.webp')} alt="Hospital Logo" />
     </div>
   </div>
 
@@ -5374,7 +5375,7 @@ export default function TimesheetPage() {
                   <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box
                       component="img"
-                      src="/hospital-logo.webp"
+                      src={assetUrl('/hospital-logo.webp')}
                       alt="Faith Foundation Mission Hospital Logo"
                       sx={{
                         width: 56,
