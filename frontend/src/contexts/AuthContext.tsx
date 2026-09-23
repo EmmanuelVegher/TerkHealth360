@@ -135,9 +135,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (token) {
       api.post('/auth/logout', {}).catch(err => console.error(err));
     }
+    // Clear all auth state from localStorage first
+    localStorage.removeItem('token');
+    localStorage.removeItem('cached_user');
+    localStorage.removeItem('read_notification_ids');
+    // Clear React state
     setToken(null);
     setUser(null);
-    localStorage.removeItem('token');
+    // In Electron HashRouter, ensure hash is reset to #/login immediately
+    try {
+      window.location.hash = '#/login';
+    } catch (_) {}
   };
 
   const refreshUser = async () => {

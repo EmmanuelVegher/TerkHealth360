@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, nativeImage } = require('electron');
 const path = require('path');
 const http = require('http');
-const { fork } = require('child_process');
+const { spawn } = require('child_process');
+const fs = require('fs');
 
 let mainWindow = null;
 let backendProcess = null;
@@ -66,6 +67,37 @@ function checkBackendHealth(port) {
 }
 
 /**
+ * Find the system Node.js executable.
+ * process.execPath in a packaged Electron app is the ELECTRON binary, not node.
+ * We search multiple well-known locations so the backend starts reliably.
+ */
+function findNodeBin() {
+  const candidates = [
+    // 1. Bundled node.exe shipped inside resources/ (ideal for air-gapped machines)
+    app.isPackaged ? path.join(process.resourcesPath, 'node.exe') : null,
+    // 2. Standard Windows install paths
+    'C:\\Program Files\\nodejs\\node.exe',
+    'C:\\Program Files (x86)\\nodejs\\node.exe',
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
+    path.join(process.env.APPDATA || '', '..', 'Local', 'Programs', 'nodejs', 'node.exe'),
+    // 3. nvm-windows
+    path.join(process.env.APPDATA || '', 'nvm', 'current', 'node.exe'),
+    // 4. Scan every directory on PATH
+    ...(process.env.PATH || '').split(';').map(p => path.join(p.trim(), 'node.exe')),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        console.log('[Electron] Found node.exe at:', candidate);
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
  * Launch backend process in background if not already running
  */
 async function ensureBackendRunning() {
@@ -81,16 +113,47 @@ async function ensureBackendRunning() {
     : path.join(__dirname, 'backend');
   const backendEntryPath = path.join(backendDir, 'dist', 'server.js');
 
-  if (!require('fs').existsSync(backendEntryPath)) {
+  if (!fs.existsSync(backendEntryPath)) {
     console.error('[Electron] Backend entry not found at:', backendEntryPath);
     return;
   }
 
+  // Read .env from the backend dir and inject into the child process environment
+  const envFromFile = {};
+  const envFilePath = path.join(backendDir, '.env');
+  if (fs.existsSync(envFilePath)) {
+    const envContent = fs.readFileSync(envFilePath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      envFromFile[key] = val;
+    }
+    console.log('[Electron] Loaded .env from:', envFilePath);
+  } else {
+    console.warn('[Electron] No .env file found at:', envFilePath);
+  }
+
+  // Find node.exe — process.execPath is the Electron binary, NOT node
+  const nodeBin = findNodeBin();
+  if (!nodeBin) {
+    console.error('[Electron] Could not find node.exe. Backend will not start.');
+    console.error('[Electron] Please install Node.js v18+ from https://nodejs.org/');
+    return;
+  }
+
   try {
-    backendProcess = fork(backendEntryPath, [], {
+    backendProcess = spawn(nodeBin, [backendEntryPath], {
       cwd: backendDir,
       env: {
         ...process.env,
+        ...envFromFile,
         PORT: String(BACKEND_PORT),
         NODE_ENV: 'production',
       },
@@ -103,9 +166,12 @@ async function ensureBackendRunning() {
 
     backendProcess.on('exit', (code, signal) => {
       console.log(`[Electron] Backend process exited with code ${code}, signal ${signal}`);
+      backendProcess = null;
     });
+
+    console.log('[Electron] Backend spawned — PID:', backendProcess.pid, '| node:', nodeBin);
   } catch (err) {
-    console.warn('[Electron] Could not fork backend dist (will rely on external server):', err.message);
+    console.warn('[Electron] Could not spawn backend:', err.message);
   }
 }
 
@@ -113,8 +179,6 @@ async function ensureBackendRunning() {
  * Create the main desktop application window
  */
 function createMainWindow() {
-  const fs = require('fs');
-
   // Resolve icon paths — prefer .ico on Windows, fall back to .png
   const iconBaseDev = path.join(__dirname, 'frontend', 'public');
   const iconBaseProd = process.resourcesPath;
@@ -226,7 +290,6 @@ function createMainWindow() {
   }
 
   function loadDistFile() {
-    const fs = require('fs');
     // In a packaged asar, app.getAppPath() points inside the asar — check there first
     const possiblePaths = [
       path.join(app.getAppPath(), 'dist', 'index.html'),

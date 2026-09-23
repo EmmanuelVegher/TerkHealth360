@@ -42,6 +42,10 @@
         "to": "app-icon.ico"
       },
       {
+        "from": "resources/node.exe",
+        "to": "node.exe"
+      },
+      {
         "from": "../backend/dist",
         "to": "backend/dist",
         "filter": ["**/*"]
@@ -83,6 +87,7 @@
         "portable"
       ]
     },
+    "compression": "normal",
     "mac": {
       "category": "public.app-category.medical",
       "target": [

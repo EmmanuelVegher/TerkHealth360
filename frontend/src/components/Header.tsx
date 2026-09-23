@@ -278,7 +278,7 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
             </MenuItem>
           )}
           <Divider />
-          <MenuItem onClick={logout} sx={{ gap: 1.5, py: 1.2, color: 'error.main' }}>
+          <MenuItem onClick={() => { setAnchorEl(null); logout(); navigate('/login'); }} sx={{ gap: 1.5, py: 1.2, color: 'error.main' }}>
             <Logout fontSize="small" />
             <Typography variant="body2" fontWeight={600}>Sign Out</Typography>
           </MenuItem>
