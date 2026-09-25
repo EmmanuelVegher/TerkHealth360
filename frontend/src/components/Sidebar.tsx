@@ -21,6 +21,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendanceStatus } from '../hooks/useAttendanceStatus';
+import ActiveDutySessionCard from './ActiveDutySessionCard';
 import {
   isUserLabStaff, LAB_DESIGNATIONS,
   isUserPharmacyStaff, PHARMACY_DESIGNATIONS,
@@ -65,14 +66,15 @@ interface NavSection {
 }
 type NavGroup = NavSection;
 
-export const SIDEBAR_W = 260;
+export const SIDEBAR_W = 275;
 
 export interface SidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  collapsed?: boolean;
 }
 
-export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
+export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }: SidebarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { pathname } = useLocation();
@@ -555,10 +557,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           permission: 'finance:read',
           allowedDesignations: [...INSURANCE_DESIGNATIONS, 'Accountant', 'Admin', 'Super Admin'],
           children: [
-            { text: 'HMO Pre-Auth Claims', icon: <Receipt />, path: '/insurance-portal/claims' },
-            { text: 'Benefit Caps Audit', icon: <Assessment />, path: '/insurance-portal/caps' },
+            { text: 'Schemes & Client Registry', icon: <Policy />, path: '/insurance-portal' },
+            { text: 'Schemes Configuration & Setup', icon: <Settings />, path: '/insurance-portal/schemes-config' },
+            // { text: 'Coverage Verification & HMO Desk', icon: <ContactPhone />, path: '/insurance-portal/coverage-verification' },
+            // { text: 'Monthly Enrollee Register', icon: <DateRange />, path: '/insurance-portal/monthly-register' }, // Merged into /insurance-portal
+            { text: 'Monthly Capitation', icon: <LocalAtm />, path: '/insurance-portal/capitation' },
+            { text: 'Monthly Fee-For-Service (FFS)', icon: <Receipt />, path: '/insurance-portal/fee-for-service' },
+            { text: 'Authorization Codes & Bill Chart', icon: <Assignment />, path: '/insurance-portal/authorizations' },
+            { text: 'Accredited Hospital Units', icon: <Business />, path: '/insurance-portal/accredited-units' },
+            { text: 'Insurance Audit & Receipts', icon: <Assessment />, path: '/insurance-portal/audit' },
             { text: 'Tariffs & Code Master', icon: <Description />, path: '/insurance-portal/tariffs' },
-            { text: 'HMO Reconciliation', icon: <BarChart />, path: '/insurance-portal/reconciliation' },
           ],
         },
         // { text: 'Financial Audit', icon: <Assessment />,       path: '/financial-audit', allowedDesignations: ['Auditor', 'Admin'] },
@@ -718,7 +726,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           icon: <Work />,
           path: '/staff',
           permission: 'user:read',
-          allowedDesignations: ['Secretary', 'Admin', 'Supervisor', 'Director', 'Lead', 'Head', 'Matron', 'Bishop', 'Super Admin'],
+          allowedDesignations: ['Admin', 'Super Admin', 'Bishop'],
           children: [
             {
               text: 'Employee Records & Credentialing',
@@ -762,15 +770,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                 { text: 'Approval Tiers Matrix', path: '/staff/hierarchy/rules' },
               ],
             },
-            {
-              text: 'Governance & HR Risk BI',
-              icon: <Shield />,
-              path: '/staff/governance-bi',
-              children: [
-                { text: 'Workforce BI Analytics', path: '/staff/governance-bi/analytics' },
-                { text: 'HR Risks & Succession', path: '/staff/governance-bi/risks' },
-              ],
-            },
+            // {
+            //   text: 'Governance & HR Risk BI',
+            //   icon: <Shield />,
+            //   path: '/staff/governance-bi',
+            //   children: [
+            //     { text: 'Workforce BI Analytics', path: '/staff/governance-bi/analytics' },
+            //     { text: 'HR Risks & Succession', path: '/staff/governance-bi/risks' },
+            //   ],
+            // },
           ],
         },
         { text: 'Internal Requests', icon: <Assessment />,     path: '/internal-requests', permission: 'user:read', allowedDesignations: ['Secretary', 'Admin'] },
@@ -818,6 +826,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     {
       label: 'Admin',
       items: [
+        /* Reports module commented out in favor of executive dashboard metrics
         {
           text: 'Reports',
           icon: <Assessment />,
@@ -831,6 +840,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             { text: 'Executive Summaries', icon: <BarChart />, path: '/reports/executive' },
           ],
         },
+        */
         {
           text: 'Enterprise Analytics',
           icon: <Assessment />,
@@ -884,15 +894,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       }}
     >
       {/* Logo */}
-      <Box sx={{ px: 2.5, py: 2.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
           <Box
             component="img"
             src={assetUrl('/hospital-logo.webp')}
             sx={{
-              width: 38,
-              height: 38,
-              borderRadius: '8px',
+              width: 32,
+              height: 32,
+              borderRadius: '6px',
               objectFit: 'contain',
               flexShrink: 0,
             }}
@@ -902,188 +912,21 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800, lineHeight: 1.1, fontSize: '0.88rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Faith Foundation
             </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.66rem', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.68rem', fontWeight: 600 }}>
               Mission Hospital
             </Typography>
           </Box>
         </Box>
         {isMobile && (
-          <IconButton onClick={onMobileClose} sx={{ color: 'rgba(255,255,255,0.85)' }}>
-            <Close />
+          <IconButton onClick={onMobileClose} sx={{ color: 'rgba(255,255,255,0.85)', p: 0.5 }}>
+            <Close sx={{ fontSize: 18 }} />
           </IconButton>
         )}
       </Box>
 
-      {/* ── Real-time Persistent Sidebar Duty Timer ── */}
-      <Box sx={{ px: 1.5, pb: 1.2 }}>
-        <Box
-          onClick={() => {
-            navigate('/staff/attendance-roster/clock-logs');
-            if (isMobile && onMobileClose) onMobileClose();
-          }}
-          sx={{
-            p: 1.25,
-            borderRadius: '12px',
-            cursor: 'pointer',
-            background: attendance.isClockedIn
-              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.42) 100%)'
-              : attendance.isOnApprovedLeave
-              ? 'linear-gradient(135deg, rgba(217, 119, 6, 0.28) 0%, rgba(180, 83, 9, 0.45) 100%)'
-              : 'linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: attendance.isClockedIn
-              ? '1.2px solid rgba(52, 211, 153, 0.45)'
-              : attendance.isOnApprovedLeave
-              ? '1.2px solid rgba(245, 158, 11, 0.55)'
-              : '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: attendance.isClockedIn
-              ? '0 4px 16px rgba(16, 185, 129, 0.22)'
-              : attendance.isOnApprovedLeave
-              ? '0 4px 16px rgba(217, 119, 6, 0.25)'
-              : 'none',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              transform: 'translateY(-1.5px)',
-              borderColor: attendance.isClockedIn ? '#34d399' : attendance.isOnApprovedLeave ? '#fbbf24' : 'rgba(255,255,255,0.22)',
-              background: attendance.isClockedIn
-                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(6, 95, 70, 0.55) 100%)'
-                : attendance.isOnApprovedLeave
-                ? 'linear-gradient(135deg, rgba(217, 119, 6, 0.35) 0%, rgba(180, 83, 9, 0.55) 100%)'
-                : 'rgba(255, 255, 255, 0.09)',
-            },
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.6 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  bgcolor: attendance.isClockedIn ? '#10b981' : attendance.isOnApprovedLeave ? '#f59e0b' : 'rgba(255,255,255,0.3)',
-                  boxShadow: attendance.isClockedIn ? '0 0 8px #10b981' : attendance.isOnApprovedLeave ? '0 0 8px #f59e0b' : 'none',
-                }}
-              />
-              <Typography
-                sx={{
-                  fontSize: '0.66rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: attendance.isClockedIn ? '#6ee7b7' : attendance.isOnApprovedLeave ? '#fde68a' : 'rgba(255,255,255,0.5)',
-                }}
-              >
-                {attendance.isClockedIn ? 'On Duty · Active' : attendance.isOnApprovedLeave ? '🏖️ On Approved Leave' : 'Off Duty'}
-              </Typography>
-            </Box>
-            <Typography sx={{ fontSize: '0.62rem', color: attendance.isOnApprovedLeave ? '#fde68a' : 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
-              {attendance.isClockedIn ? (
-                attendance.clockInTime ? (
-                  attendance.isMultiDay && attendance.clockInDateFormatted ? (
-                    `In: ${attendance.clockInDateFormatted.slice(0, 6)}, ${attendance.clockInTime}`
-                  ) : (
-                    `In: ${attendance.clockInTime}`
-                  )
-                ) : 'Active'
-              ) : attendance.isOnApprovedLeave ? 'Duty Locked' : 'Punch In'}
-            </Typography>
-          </Box>
-
-          {attendance.isClockedIn ? (
-            <>
-              <Typography
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '1.05rem',
-                  fontWeight: 900,
-                  color: '#ffffff',
-                  letterSpacing: '0.04em',
-                  lineHeight: 1.15,
-                  textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                }}
-              >
-                {attendance.elapsedStr}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography sx={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {attendance.shiftName.split('(')[0].trim()}
-                </Typography>
-                <Typography sx={{ fontSize: '0.62rem', color: '#34d399', fontWeight: 800 }}>
-                  {attendance.percent}%
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  mt: 0.5,
-                  height: 3.5,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.12)',
-                  overflow: 'hidden',
-                }}
-              >
-                <Box
-                  sx={{
-                    height: '100%',
-                    width: `${attendance.percent}%`,
-                    background: 'linear-gradient(90deg, #10b981, #34d399)',
-                    borderRadius: 2,
-                    transition: 'width 0.4s ease',
-                  }}
-                />
-              </Box>
-            </>
-          ) : attendance.isOnApprovedLeave ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3, pt: 0.2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography sx={{ fontSize: '0.74rem', color: '#fef3c7', fontWeight: 800, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {attendance.approvedLeave?.type || 'Annual'} Leave
-                </Typography>
-                <Box
-                  sx={{
-                    fontSize: '0.62rem',
-                    fontWeight: 800,
-                    bgcolor: '#d97706',
-                    color: '#fff',
-                    px: 1,
-                    py: 0.35,
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 6px rgba(217, 119, 6, 0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.4,
-                  }}
-                >
-                  <span>🔒</span> Locked
-                </Box>
-              </Box>
-              <Typography sx={{ fontSize: '0.62rem', color: '#fde68a', fontWeight: 600 }}>
-                {attendance.approvedLeave?.startDate} – {attendance.approvedLeave?.endDate || attendance.approvedLeave?.startDate}
-              </Typography>
-              <Typography sx={{ fontSize: '0.58rem', color: 'rgba(254, 243, 199, 0.75)', lineHeight: 1.1 }}>
-                Clock-in disabled (Relief: {attendance.approvedLeave?.reliefOfficer || 'Reliever'})
-              </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 0.2 }}>
-              <Typography sx={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
-                Not Clocked In
-              </Typography>
-              <Box
-                sx={{
-                  fontSize: '0.62rem',
-                  fontWeight: 800,
-                  bgcolor: '#10b981',
-                  color: '#fff',
-                  px: 1,
-                  py: 0.35,
-                  borderRadius: '6px',
-                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.4)',
-                }}
-              >
-                Clock In →
-              </Box>
-            </Box>
-          )}
-        </Box>
+      {/* ── Active Duty & Biometric Clock-In Session Widget (Top of Sidebar) ── */}
+      <Box sx={{ px: 1.5, pb: 1.0, flexShrink: 0 }}>
+        <ActiveDutySessionCard variant="sidebar" />
       </Box>
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mx: 2, mb: 0.5 }} />
@@ -1528,15 +1371,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           if (visibleItems.length === 0) return null;
 
           return (
-            <Box key={group.label} sx={{ mb: 0.25 }}>
-              <ListItemButton onClick={() => toggle(group.label)} sx={{ borderRadius: 2, py: 0.4, px: 1.5, '&:hover': { background: 'transparent' } }}>
+            <Box key={group.label} sx={{ mb: 0.2 }}>
+              <ListItemButton onClick={() => toggle(group.label)} sx={{ borderRadius: 1.5, py: 0.3, px: 1.2, '&:hover': { background: 'transparent' } }}>
                 <ListItemText
                   primary={group.label.toUpperCase()}
-                  primaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.35)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em' } }}
+                  primaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontSize: '0.66rem', fontWeight: 800, letterSpacing: '0.08em' } }}
                 />
                 {open[group.label]
-                   ? <ExpandLess sx={{ color: 'rgba(255,255,255,0.3)', fontSize: 15 }} />
-                   : <ExpandMore sx={{ color: 'rgba(255,255,255,0.3)', fontSize: 15 }} />}
+                   ? <ExpandLess sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }} />
+                   : <ExpandMore sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }} />}
               </ListItemButton>
               <Collapse in={open[group.label]}>
                 <List disablePadding>
@@ -1559,31 +1402,31 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                             }
                           }}
                           sx={{
-                            borderRadius: '10px', mb: 0.2, py: 0.75, px: 1.5,
-                            color: active ? '#fff' : 'rgba(255,255,255,0.75)',
+                            borderRadius: '8px', mb: 0.15, py: 0.45, px: 1.2,
+                            color: active ? '#fff' : 'rgba(255,255,255,0.85)',
                             background: active
                               ? `linear-gradient(90deg, ${alpha(PRIMARY, 0.9)} 0%, ${alpha('#4c6ef5', 0.8)} 100%)`
                               : 'transparent',
-                            boxShadow: active ? '0 4px 12px rgba(59,91,219,0.35)' : 'none',
-                            transition: 'all 0.18s ease',
+                            boxShadow: active ? '0 2px 8px rgba(59,91,219,0.3)' : 'none',
+                            transition: 'all 0.15s ease',
                             '&:hover': {
                               background: active ? undefined : 'rgba(255,255,255,0.07)',
                               color: '#fff',
                             },
                           }}
                         >
-                          <ListItemIcon sx={{ color: 'inherit', minWidth: 34, '& svg': { fontSize: 18 } }}>
+                          <ListItemIcon sx={{ color: 'inherit', minWidth: 28, '& svg': { fontSize: 17 } }}>
                             {item.icon}
                           </ListItemIcon>
                           <ListItemText
                             primary={item.text}
-                            primaryTypographyProps={{ sx: { fontSize: '0.83rem', fontWeight: active ? 700 : 500 } }}
+                            primaryTypographyProps={{ sx: { fontSize: '0.84rem', fontWeight: active ? 750 : 600, lineHeight: 1.25 } }}
                           />
                           {item.children ? (
                             isSubOpen ? (
-                              <ExpandLess sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }} />
+                              <ExpandLess sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 15 }} />
                             ) : (
-                              <ExpandMore sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }} />
+                              <ExpandMore sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 15 }} />
                             )
                           ) : active ? (
                             <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#748ffc', ml: 0.5 }} />
@@ -1593,7 +1436,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                         {/* Sub-category items (Level 2) */}
                         {item.children && (
                           <Collapse in={isSubOpen} timeout="auto" unmountOnExit>
-                            <List disablePadding sx={{ ml: 2, pl: 1.2, borderLeft: '1.5px solid rgba(255, 255, 255, 0.15)' }}>
+                            <List disablePadding sx={{ ml: 1.0, pl: 0.8, borderLeft: '1.5px solid rgba(255, 255, 255, 0.15)' }}>
                               {(item.text === 'Pharmacy Dispensary' && !isPharmacist && !isSuperAdmin
                                 ? item.children.filter((sub: SubNavItem) => sub.path === '/pharmacy/queue')
                                 : item.text === 'Laboratory' && !isLabStaff && !isSuperAdmin
@@ -1643,14 +1486,14 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                                         }
                                       }}
                                       sx={{
-                                        borderRadius: '8px',
-                                        mb: 0.2,
-                                        py: 0.5,
-                                        px: 1.2,
+                                        borderRadius: '6px',
+                                        mb: 0.1,
+                                        py: 0.35,
+                                        px: 0.8,
                                         position: 'relative',
-                                        color: isChildActive ? '#60a5fa' : 'rgba(255,255,255,0.7)',
+                                        color: isChildActive ? '#60a5fa' : 'rgba(255,255,255,0.85)',
                                         background: isChildActive ? 'rgba(96, 165, 250, 0.12)' : 'transparent',
-                                        borderLeft: isChildActive ? '3px solid #60a5fa' : '3px solid transparent',
+                                        borderLeft: isChildActive ? '2.5px solid #60a5fa' : '2.5px solid transparent',
                                         transition: 'all 0.15s ease',
                                         '&:hover': {
                                           background: 'rgba(255,255,255,0.06)',
@@ -1662,33 +1505,32 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                                       <Box
                                         sx={{
                                           position: 'absolute',
-                                          left: -10,
+                                          left: -8,
                                           top: '50%',
-                                          width: 7,
+                                          width: 6,
                                           height: '1.5px',
                                           bgcolor: isChildActive ? '#60a5fa' : 'rgba(255, 255, 255, 0.2)',
                                         }}
                                       />
-                                      <ListItemIcon sx={{ color: 'inherit', minWidth: 24, '& svg': { fontSize: 15 } }}>
+                                      <ListItemIcon sx={{ color: 'inherit', minWidth: 20, '& svg': { fontSize: 14 } }}>
                                         {sub.icon}
                                       </ListItemIcon>
                                       <ListItemText
                                         primary={sub.text}
+                                        title={sub.text}
                                         primaryTypographyProps={{
                                           sx: {
-                                            fontSize: '0.76rem',
-                                            fontWeight: isChildActive ? 700 : 500,
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
+                                            fontSize: '0.78rem',
+                                            fontWeight: isChildActive ? 750 : 550,
+                                            lineHeight: 1.25,
                                           },
                                         }}
                                       />
                                       {sub.children ? (
                                         isSubSubOpen ? (
-                                          <ExpandLess sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }} />
+                                          <ExpandLess sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }} />
                                         ) : (
-                                          <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }} />
+                                          <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }} />
                                         )
                                       ) : null}
                                     </ListItemButton>
@@ -1696,7 +1538,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                                     {/* Level 3 Sub-sub-category items */}
                                     {sub.children && (
                                       <Collapse in={isSubSubOpen} timeout="auto" unmountOnExit>
-                                        <List disablePadding sx={{ ml: 1.5, pl: 1.2, borderLeft: '1.5px solid rgba(96, 165, 250, 0.35)' }}>
+                                        <List disablePadding sx={{ ml: 0.8, pl: 0.8, borderLeft: '1.5px solid rgba(96, 165, 250, 0.35)' }}>
                                           {sub.children.map((leaf: SubSubNavItem) => {
                                             const isLeafActive =
                                               location.pathname === leaf.path ||
@@ -1722,12 +1564,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                                                   }
                                                 }}
                                                 sx={{
-                                                  borderRadius: '6px',
+                                                  borderRadius: '4px',
                                                   mb: 0.1,
-                                                  py: 0.35,
-                                                  px: 1.2,
+                                                  py: 0.25,
+                                                  px: 0.6,
                                                   position: 'relative',
-                                                  color: isLeafActive ? '#93c5fd' : 'rgba(255,255,255,0.65)',
+                                                  color: isLeafActive ? '#93c5fd' : 'rgba(255,255,255,0.8)',
                                                   background: isLeafActive ? 'rgba(147, 197, 253, 0.15)' : 'transparent',
                                                   transition: 'all 0.15s ease',
                                                   '&:hover': {
@@ -1740,32 +1582,31 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                                                 <Box
                                                   sx={{
                                                     position: 'absolute',
-                                                    left: -10,
+                                                    left: -8,
                                                     top: '50%',
-                                                    width: 7,
+                                                    width: 6,
                                                     height: '1.5px',
                                                     bgcolor: isLeafActive ? '#60a5fa' : 'rgba(96, 165, 250, 0.35)',
                                                   }}
                                                 />
                                                 <Box
                                                   sx={{
-                                                    width: 5,
-                                                    height: 5,
+                                                    width: 4,
+                                                    height: 4,
                                                     borderRadius: '50%',
                                                     bgcolor: isLeafActive ? '#60a5fa' : 'rgba(255,255,255,0.4)',
-                                                    mr: 1.2,
+                                                    mr: 0.8,
                                                     flexShrink: 0,
                                                   }}
                                                 />
                                                 <ListItemText
                                                   primary={leaf.text}
+                                                  title={leaf.text}
                                                   primaryTypographyProps={{
                                                     sx: {
-                                                      fontSize: '0.71rem',
-                                                      fontWeight: isLeafActive ? 700 : 400,
-                                                      whiteSpace: 'nowrap',
-                                                      overflow: 'hidden',
-                                                      textOverflow: 'ellipsis',
+                                                      fontSize: '0.74rem',
+                                                      fontWeight: isLeafActive ? 750 : 500,
+                                                      lineHeight: 1.25,
                                                     },
                                                   }}
                                                 />
@@ -1790,21 +1631,21 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           );
         })}
       </Box>
-      
+
       {/* Bottom user */}
-      <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box sx={{ px: 2, py: 1.0, borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
           <Avatar 
             src={user?.profilePicture || undefined} 
-            sx={{ width: 32, height: 32, bgcolor: alpha(PRIMARY, 0.8), fontSize: '0.8rem' }}
+            sx={{ width: 30, height: 30, bgcolor: alpha(PRIMARY, 0.8), fontSize: '0.76rem', fontWeight: 700 }}
           >
             {initials}
           </Avatar>
-          <Box>
-            <Typography sx={{ color: '#fff', fontSize: '0.78rem', fontWeight: 600, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ color: '#fff', fontSize: '0.80rem', fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user ? `${user.firstName} ${user.lastName}` : 'Guest User'}
             </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.68rem', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.70rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user ? (userDesignation || user.roles?.[0] || user.role) : 'Visitor'}
             </Typography>
           </Box>
@@ -1845,6 +1686,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         left: 0, top: 0, bottom: 0,
         flexDirection: 'column',
         zIndex: 1200,
+        transform: collapsed ? 'translateX(-100%)' : 'translateX(0)',
+        transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {sidebarContent}

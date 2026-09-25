@@ -68,6 +68,7 @@ const Layout = () => {
     }
   }, [isPharmacyStaff, isMorticianStaff, isRadiologyStaff, isPhysioStaff, location.pathname, navigate]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [offlineCount, setOfflineCount] = useState(() => {
     try {
       const queue = JSON.parse(localStorage.getItem('offline_sync_queue') || '[]');
@@ -79,6 +80,10 @@ const Layout = () => {
 
   const handleDrawerToggle = () => {
     setMobileOpen(prev => !prev);
+  };
+
+  const handleDesktopToggle = () => {
+    setSidebarCollapsed(prev => !prev);
   };
 
   useEffect(() => {
@@ -95,26 +100,27 @@ const Layout = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default', pb: offlineCount > 0 ? 8 : 0 }}>
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} collapsed={sidebarCollapsed} />
       <Box
         sx={{
           flex: 1,
-          ml: { xs: 0, md: `${SIDEBAR_W}px` },
+          ml: { xs: 0, md: sidebarCollapsed ? 0 : `${SIDEBAR_W}px` },
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
-          width: { xs: '100%', md: `calc(100% - ${SIDEBAR_W}px)` },
-          maxWidth: { xs: '100%', md: `calc(100% - ${SIDEBAR_W}px)` },
+          width: { xs: '100%', md: sidebarCollapsed ? '100%' : `calc(100% - ${SIDEBAR_W}px)` },
+          maxWidth: { xs: '100%', md: sidebarCollapsed ? '100%' : `calc(100% - ${SIDEBAR_W}px)` },
+          transition: 'margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        <Header onMobileToggle={handleDrawerToggle} />
+        <Header onMobileToggle={handleDrawerToggle} onToggleCollapse={handleDesktopToggle} sidebarCollapsed={sidebarCollapsed} />
         <Box
           component="main"
           sx={{
             flex: 1,
-            p: { xs: 1, sm: 2, md: 3 },
-            mt: '64px',
-            minHeight: 'calc(100vh - 64px)',
+            p: { xs: 1, sm: 1.25, md: 1.5 },
+            mt: '48px',
+            minHeight: 'calc(100vh - 48px)',
             minWidth: 0,
             width: '100%',
             overflowX: 'hidden',
@@ -131,7 +137,7 @@ const Layout = () => {
           sx={{
             position: 'fixed',
             bottom: 24,
-            left: { xs: 16, md: `${SIDEBAR_W + 24}px` },
+            left: { xs: 16, md: `${(sidebarCollapsed ? 0 : SIDEBAR_W) + 24}px` },
             right: { xs: 16, md: 24 },
             p: '14px 24px',
             background: 'linear-gradient(135deg, #fd7e14 0%, #e8590c 100%)',
@@ -143,6 +149,7 @@ const Layout = () => {
             boxShadow: '0 10px 30px rgba(232, 89, 12, 0.3)',
             zIndex: 1400,
             animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '@keyframes slideUp': {
               from: { transform: 'translateY(100px) scale(0.95)', opacity: 0 },
               to: { transform: 'translateY(0) scale(1)', opacity: 1 },
@@ -183,8 +190,8 @@ const Layout = () => {
         </Paper>
       )}
 
-      {/* Global OpenMed Agentic RAG Floating Chat Widget */}
-      <OpenMedFloatingChatWidget />
+      {/* Global OpenMed Agentic RAG Floating Chat Widget (Commented out per user request) */}
+      {/* <OpenMedFloatingChatWidget /> */}
     </Box>
   );
 };

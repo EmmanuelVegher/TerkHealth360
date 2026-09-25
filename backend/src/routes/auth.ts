@@ -889,12 +889,16 @@ router.post('/reset-password', async (req, res, next) => {
 // Me endpoint (Check current details)
 router.get('/me', authMiddleware, async (req: any, res, next) => {
   try {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
+      where: { id: userId },
       include: {
         patient: true,
         staff: true,
-        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
         departments: { include: { department: true } },
       },
     });
@@ -903,25 +907,7 @@ router.get('/me', authMiddleware, async (req: any, res, next) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const roles = user.roles.map(ur => ur.role.name);
-    const permissions = Array.from(new Set(
-      user.roles.flatMap(ur => ur.role.permissions.map(rp => rp.permission.code))
-    ));
-
-    if (user.role && !roles.includes(user.role)) {
-      roles.push(user.role);
-      const fallbackRole = await prisma.role.findFirst({
-        where: { name: user.role },
-        include: { permissions: { include: { permission: true } } },
-      });
-      if (fallbackRole) {
-        fallbackRole.permissions.forEach(rp => {
-          if (!permissions.includes(rp.permission.code)) {
-            permissions.push(rp.permission.code);
-          }
-        });
-      }
-    }
+    const { roles, permissions } = await getSafeUserRolesAndPermissions(user.id, user.role);
 
     const departments = user.departments.map(ud => ({
       id: ud.department.id,
@@ -1083,20 +1069,23 @@ router.post('/refresh', async (req, res, next) => {
 // Logout
 router.post('/logout', authMiddleware, async (req: any, res, next) => {
   try {
+    const userId = req.user?.userId || req.user?.id;
     const { refreshToken } = req.body;
-    if (refreshToken) {
+    if (refreshToken && userId) {
       await prisma.refreshToken.deleteMany({
-        where: { token: refreshToken, userId: req.user.userId },
+        where: { token: refreshToken, userId },
       });
     }
 
-    await logAudit({
-      userId: req.user.userId,
-      action: 'auth.logout',
-      resourceType: 'User',
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-    });
+    if (userId) {
+      await logAudit({
+        userId,
+        action: 'auth.logout',
+        resourceType: 'User',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+    }
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {

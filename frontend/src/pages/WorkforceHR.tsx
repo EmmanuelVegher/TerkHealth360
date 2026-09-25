@@ -55,17 +55,17 @@ function TabPanel({ children, value, index }: any) {
 const KPICard = ({ title, value, sub, icon, color }: any) => (
   <Card sx={{
     background: `linear-gradient(135deg, ${color}ee, ${color}aa)`,
-    color: '#fff', borderRadius: 2, boxShadow: `0 4px 16px ${color}33`,
+    color: '#fff', borderRadius: 1.5, boxShadow: `0 2px 8px ${color}25`,
     position: 'relative', overflow: 'hidden',
   }}>
-    <CardContent sx={{ pb: '12px !important', pt: '12px !important', px: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.05em' }}>{title}</Typography>
-          <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25, lineHeight: 1.2 }}>{value}</Typography>
-          {sub && <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.25, fontSize: '0.65rem' }}>{sub}</Typography>}
+    <CardContent sx={{ pb: '8px !important', pt: '8px !important', px: 1.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
+          <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.62rem', letterSpacing: '0.04em', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</Typography>
+          <Typography sx={{ fontWeight: 800, mt: 0.15, lineHeight: 1.15, fontSize: '1.05rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{value}</Typography>
+          {sub && <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.15, fontSize: '0.62rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</Typography>}
         </Box>
-        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 36, height: 36 }}>{icon}</Avatar>
+        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 28, height: 28, '& svg': { fontSize: 16 } }}>{icon}</Avatar>
       </Box>
     </CardContent>
   </Card>
@@ -523,27 +523,27 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
     if (path === '/staff/governance-bi/analytics' || path === '/staff/governance-bi') {
       return {
         title: 'Human Resources BI & Executive Headcount Analytics',
-        subtitle: 'Headcount Distribution · Turnover Ratios · Staff Cost Ratios · Clinical vs Admin Balance',
+        subtitle: 'Headcount Distribution · Clinical vs Support Ratios · Licensure Compliance · Departmental Strength',
         category: 'Governance & HR Risk BI',
         kpis: [
-          { title: 'Total Staff Headcount', value: employees.length || 48, sub: 'Personnel Master Index', icon: <People />, color: PRIMARY },
-          { title: 'Operational Attendance', value: `${analytics.activeCount || 42} Active`, sub: 'Rostered Duty Staff', icon: <CheckCircle />, color: SUCCESS },
-          { title: 'Retention Score', value: '98.4%', sub: 'Annual Staff Retention', icon: <Timeline />, color: TEAL },
-          { title: 'Payroll Revenue Ratio', value: '24.2%', sub: 'HR Cost vs Hospital Revenue', icon: <PointOfSale />, color: SECONDARY },
+          { title: 'Total Staff Headcount', value: analytics.totalHeadcount ?? employees.length ?? 0, sub: 'Registered Personnel Index', icon: <People />, color: PRIMARY },
+          { title: 'Operational Attendance', value: `${analytics.presentTodayCount ?? analytics.activeCount ?? 0} Active`, sub: 'Clocked & On Duty Today', icon: <CheckCircle />, color: SUCCESS },
+          { title: 'Clinical vs Support', value: `${analytics.clinicalPercent ?? 75}% Clinical`, sub: `${analytics.adminPercent ?? 25}% Admin & Support`, icon: <Timeline />, color: TEAL },
+          { title: 'Licensing Compliance', value: analytics.licenseComplianceRate || '100%', sub: 'Active Clinical Registrations', icon: <Security />, color: SECONDARY },
         ],
       };
     }
 
     // 13. HR Risks & Succession
     if (path === '/staff/governance-bi/risks') {
-      const highCount = risks.filter(r => r.impact === 'HIGH').length;
+      const highCount = risks.filter(r => r.impact === 'HIGH' || r.impact === 'CRITICAL').length;
       return {
         title: 'HR Risk Mitigation & Succession Planning',
-        subtitle: 'Key Personnel Retention · Succession Bench Strength · Single Point of Failure Risks',
+        subtitle: 'Key Personnel Retention · Succession Bench Strength · Single Point of Failure Safeguards',
         category: 'Governance & HR Risk BI',
         kpis: [
-          { title: 'Monitored HR Risks', value: risks.length || 4, sub: 'Active Governance Risks', icon: <Shield />, color: PRIMARY },
-          { title: 'High Impact Turnover', value: `${highCount || 1} Critical`, sub: 'Mitigation Plan Active', icon: <Warning />, color: WARNING },
+          { title: 'Monitored HR Risks', value: risks.length || 0, sub: 'Active Governance Risks', icon: <Shield />, color: PRIMARY },
+          { title: 'Critical / High Risks', value: `${highCount} Identified`, sub: 'Active Mitigation Controls', icon: <Warning />, color: WARNING },
           { title: 'Succession Coverage', value: '94.0%', sub: 'Key Position Bench Ready', icon: <CheckCircle />, color: SUCCESS },
           { title: 'Audit Compliance', value: '100% Pass', sub: 'Labor & Medical Regulatory', icon: <Security />, color: TEAL },
         ],
@@ -2235,18 +2235,20 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
       {/* ── 19.3.3 Learning & Continuing Professional Development (CPD) ── */}
       <TabPanel value={subTab2} index={2}>
         {/* Top Control Strip */}
-        <Box sx={{ mb: 3 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+        <Box sx={{ mb: 1.5 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
             {/* View Switcher Tabs */}
-            <Stack direction="row" spacing={1} sx={{ bgcolor: '#f1f5f9', p: 0.5, borderRadius: 2 }}>
+            <Stack direction="row" spacing={0.5} sx={{ bgcolor: '#f1f5f9', p: 0.3, borderRadius: 1.5 }}>
               <Button
                 variant={cpdActiveView === 'COURSES' ? 'contained' : 'text'}
                 size="small"
                 onClick={() => setCpdActiveView('COURSES')}
-                startIcon={<School />}
+                startIcon={<School sx={{ fontSize: 15 }} />}
                 sx={{
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.74rem',
+                  py: 0.3,
+                  px: 1,
                   textTransform: 'none',
                   bgcolor: cpdActiveView === 'COURSES' ? PRIMARY : 'transparent',
                   color: cpdActiveView === 'COURSES' ? '#fff' : '#64748b',
@@ -2259,10 +2261,12 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
                 variant={cpdActiveView === 'RECORDS' ? 'contained' : 'text'}
                 size="small"
                 onClick={() => setCpdActiveView('RECORDS')}
-                startIcon={<Verified />}
+                startIcon={<Verified sx={{ fontSize: 15 }} />}
                 sx={{
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.74rem',
+                  py: 0.3,
+                  px: 1,
                   textTransform: 'none',
                   bgcolor: cpdActiveView === 'RECORDS' ? PRIMARY : 'transparent',
                   color: cpdActiveView === 'RECORDS' ? '#fff' : '#64748b',
@@ -2275,10 +2279,12 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
                 variant={cpdActiveView === 'COMPLIANCE' ? 'contained' : 'text'}
                 size="small"
                 onClick={() => setCpdActiveView('COMPLIANCE')}
-                startIcon={<Security />}
+                startIcon={<Security sx={{ fontSize: 15 }} />}
                 sx={{
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.74rem',
+                  py: 0.3,
+                  px: 1,
                   textTransform: 'none',
                   bgcolor: cpdActiveView === 'COMPLIANCE' ? PRIMARY : 'transparent',
                   color: cpdActiveView === 'COMPLIANCE' ? '#fff' : '#64748b',
@@ -2290,32 +2296,35 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
             </Stack>
 
             {/* Action Buttons */}
-            <Stack direction="row" spacing={1.5}>
+            <Stack direction="row" spacing={1}>
               <Button
                 variant="outlined"
-                startIcon={<FileDownload />}
+                size="small"
+                startIcon={<FileDownload sx={{ fontSize: 15 }} />}
                 onClick={handleExportCpdReport}
-                sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#334155', textTransform: 'none' }}
+                sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#334155', textTransform: 'none', fontSize: '0.74rem', py: 0.3, px: 1 }}
               >
                 Export Ledger
               </Button>
               <Button
                 variant="contained"
-                startIcon={<Add />}
+                size="small"
+                startIcon={<Add sx={{ fontSize: 15 }} />}
                 onClick={() => setAddCourseDialogOpen(true)}
-                sx={{ bgcolor: PRIMARY, fontWeight: 700, textTransform: 'none' }}
+                sx={{ bgcolor: PRIMARY, fontWeight: 700, textTransform: 'none', fontSize: '0.74rem', py: 0.3, px: 1 }}
               >
                 + Add CPD Course
               </Button>
               <Button
                 variant="contained"
-                startIcon={<Verified />}
+                size="small"
+                startIcon={<Verified sx={{ fontSize: 15 }} />}
                 onClick={() => {
                   setRecordStaffId(employees[0]?.id || '');
                   setRecordCourseId(cpdCourses[0]?.id || '');
                   setLogStaffCpdDialogOpen(true);
                 }}
-                sx={{ bgcolor: SECONDARY, fontWeight: 700, textTransform: 'none' }}
+                sx={{ bgcolor: SECONDARY, fontWeight: 700, textTransform: 'none', fontSize: '0.74rem', py: 0.3, px: 1 }}
               >
                 + Record Certification
               </Button>
@@ -2323,17 +2332,17 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
           </Stack>
 
           {/* Search & Category Filter Bar */}
-          <Paper sx={{ p: 1.5, mt: 2, borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+          <Paper sx={{ p: 1, mt: 1.2, borderRadius: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1.2, alignItems: 'center' }}>
             <TextField
               placeholder="Search course title, provider, staff name, or certificate #..."
               size="small"
               value={cpdSearchQuery}
               onChange={e => setCpdSearchQuery(e.target.value)}
-              sx={{ flexGrow: 1, minWidth: 260 }}
+              sx={{ flexGrow: 1, minWidth: 220 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search sx={{ color: 'text.secondary' }} />
+                    <Search sx={{ color: 'text.secondary', fontSize: 18 }} />
                   </InputAdornment>
                 )
               }}
@@ -2344,7 +2353,7 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
               size="small"
               value={cpdFilterCategory}
               onChange={e => setCpdFilterCategory(e.target.value)}
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: 180 }}
             >
               <MenuItem value="ALL">All Training Categories</MenuItem>
               <MenuItem value="MANDATORY">Mandatory Regulatory (BLS/IPC/NRP)</MenuItem>
@@ -2665,69 +2674,188 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
   // ══════════════════════════════════════════════════════════════════════════
   const renderTab4 = () => (
     <Box>
-      {/* ── 19.4.1 Headcount BI ── */}
+      <Tabs
+        value={subTab3}
+        onChange={(_, val) => {
+          setSubTab3(val);
+          navigate(val === 1 ? '/staff/governance-bi/risks' : '/staff/governance-bi/analytics');
+        }}
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}
+      >
+        <Tab label="Workforce BI Analytics" sx={{ textTransform: 'none', fontWeight: 700 }} />
+        <Tab label={`HR Risks & Succession (${risks.length})`} sx={{ textTransform: 'none', fontWeight: 700 }} />
+      </Tabs>
 
       {/* ── 19.4.1 Headcount BI ── */}
       <TabPanel value={subTab3} index={0}>
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={6} md={3}><KPICard title="Total Headcount" value={analytics.totalHeadcount || 0} sub="Registered personnel master" icon={<People />} color={PRIMARY} /></Grid>
-          <Grid item xs={6} md={3}><KPICard title="Active Staff Present" value={analytics.activeCount || 0} sub="Clocked/Rostered today" icon={<CheckCircle />} color={SUCCESS} /></Grid>
-          <Grid item xs={6} md={3}><KPICard title="Pending Vacancies" value={analytics.vacantCount || 0} sub="Approved vacancy posts" icon={<EventNote />} color={WARNING} /></Grid>
-          <Grid item xs={6} md={3}><KPICard title="HR Governance Risks" value={risks.length || 0} sub="Active mitigation controls" icon={<Shield />} color={DANGER} /></Grid>
-        </Grid>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ borderRadius: 2, p: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 2, color: PRIMARY }}>Workforce Staff Category Mix (BI Headcount)</Typography>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={analytics.headcountByRole || []} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
-                    {COLORS.map((c, i) => <Cell key={i} fill={c} />)}
-                  </Pie>
-                  <RechartsTooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ borderRadius: 2, p: 2, borderLeft: `4px solid ${TEAL}` }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: TEAL, mb: 1 }}>Strategic Workforce Projections</Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                The HR governance engine matches employee master registries with expected patient volumes (OPD/IPD) to project safe staffing metrics.
-              </Typography>
-              <Stack spacing={1.5}>
-                <Stack direction="row" justifyContent="space-between"><Typography variant="caption">Minimum Safe Clinical Ratio Compliance:</Typography><Typography variant="body2" sx={{ fontWeight: 800, color: SUCCESS }}>96.5%</Typography></Stack>
-                <Stack direction="row" justifyContent="space-between"><Typography variant="caption">Time-to-Hire average timeline:</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>18.5 Days</Typography></Stack>
-                <Stack direction="row" justifyContent="space-between"><Typography variant="caption">Donor Staff Dependency (CDC/WHO):</Typography><Typography variant="body2" sx={{ fontWeight: 800, color: WARNING }}>20%</Typography></Stack>
+        <Grid container spacing={2.5}>
+          {/* Staff Category Distribution (Donut & Details) */}
+          <Grid item xs={12} lg={5}>
+            <Card sx={{ borderRadius: 2, p: 2, height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: PRIMARY, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <People sx={{ fontSize: 18, color: SECONDARY }} /> Workforce Staff Category Mix
+                </Typography>
+                <Chip label={`${analytics.totalHeadcount ?? employees.length ?? 0} Total Staff`} size="small" sx={{ fontWeight: 800, bgcolor: alpha(PRIMARY, 0.08), color: PRIMARY }} />
+              </Box>
+
+              <Box sx={{ height: 220, position: 'relative', mb: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics.headcountByRole || []}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {(analytics.headcountByRole || []).map((_: any, i: number) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(val: any, name: any) => [`${val} personnel (${Math.round((val / (analytics.totalHeadcount || 1)) * 100)}%)`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+
+              <Stack spacing={1} sx={{ mt: 'auto', pt: 1, borderTop: '1px solid #f1f5f9' }}>
+                {(analytics.headcountByRole || []).map((cat: any, idx: number) => {
+                  const pct = Math.round((cat.value / (analytics.totalHeadcount || 1)) * 100);
+                  const color = COLORS[idx % COLORS.length];
+                  return (
+                    <Box key={cat.name} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
+                          {cat.name}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{pct}%</Typography>
+                        <Chip label={`${cat.value}`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 800, bgcolor: alpha(color, 0.12), color: color }} />
+                      </Box>
+                    </Box>
+                  );
+                })}
               </Stack>
             </Card>
+          </Grid>
+
+          {/* Departmental Allocation & Strategic Projections */}
+          <Grid item xs={12} lg={7}>
+            <Stack spacing={2.5} sx={{ height: '100%' }}>
+              {/* Departmental Staff Allocation */}
+              <Card sx={{ borderRadius: 2, p: 2, border: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: PRIMARY, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Business sx={{ fontSize: 18, color: TEAL }} /> Departmental Staff Allocation
+                </Typography>
+                <Grid container spacing={1.5}>
+                  {(analytics.headcountByDept || []).map((dept: any) => {
+                    const pct = Math.round((dept.count / (analytics.totalHeadcount || 1)) * 100);
+                    return (
+                      <Grid item xs={12} sm={6} key={dept.name}>
+                        <Paper variant="outlined" sx={{ p: 1.2, borderRadius: 1.5, bgcolor: '#f8fafc' }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                              {dept.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: PRIMARY }}>
+                              {dept.count} <span style={{ opacity: 0.65, fontWeight: 500 }}>({pct}%)</span>
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={pct}
+                            sx={{ height: 6, borderRadius: 3, bgcolor: '#e2e8f0', '& .MuiLinearProgress-bar': { bgcolor: TEAL } }}
+                          />
+                        </Paper>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              </Card>
+
+              {/* Strategic Workforce Projections */}
+              <Card sx={{ borderRadius: 2, p: 2, borderLeft: `4px solid ${PRIMARY}`, borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: PRIMARY, mb: 0.5 }}>
+                  Strategic Workforce Indicators & Governance
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                  Matches employee master registries with expected patient volumes (OPD/IPD) to ensure clinical safety.
+                </Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6} sm={3}>
+                    <Paper variant="outlined" sx={{ p: 1.2, textAlign: 'center', borderRadius: 1.5, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                      <Typography variant="caption" sx={{ color: '#166534', fontWeight: 700, display: 'block', fontSize: '0.68rem' }}>SAFE CLINICAL RATIO</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 900, color: SUCCESS, mt: 0.25 }}>{analytics.safeClinicalCompliance || '98.5%'}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Paper variant="outlined" sx={{ p: 1.2, textAlign: 'center', borderRadius: 1.5, bgcolor: '#eff6ff', borderColor: '#bfdbfe' }}>
+                      <Typography variant="caption" sx={{ color: '#1e40af', fontWeight: 700, display: 'block', fontSize: '0.68rem' }}>TIME-TO-HIRE</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 900, color: SECONDARY, mt: 0.25 }}>{analytics.timeToHireDays || '18.5 Days'}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Paper variant="outlined" sx={{ p: 1.2, textAlign: 'center', borderRadius: 1.5, bgcolor: '#fdf4ff', borderColor: '#f5d0fe' }}>
+                      <Typography variant="caption" sx={{ color: '#86198f', fontWeight: 700, display: 'block', fontSize: '0.68rem' }}>RETENTION SCORE</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 900, color: PURPLE, mt: 0.25 }}>{analytics.retentionRate || '98.4%'}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Paper variant="outlined" sx={{ p: 1.2, textAlign: 'center', borderRadius: 1.5, bgcolor: '#fffbeb', borderColor: '#fde68a' }}>
+                      <Typography variant="caption" sx={{ color: '#92400e', fontWeight: 700, display: 'block', fontSize: '0.68rem' }}>PAYROLL / REVENUE</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 900, color: GOLD, mt: 0.25 }}>{analytics.payrollRevenueRatio || '24.2%'}</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Card>
+            </Stack>
           </Grid>
         </Grid>
       </TabPanel>
 
       {/* ── 19.4.2 Risks ── */}
       <TabPanel value={subTab3} index={1}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, color: PRIMARY }}>Workforce Governance Risk Register (FR-HRG-011–015)</Typography>
-          <Button variant="contained" startIcon={<Shield />} onClick={() => setRiskDialogOpen(true)} sx={{ bgcolor: PURPLE }}>Log Workforce Risk</Button>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: PRIMARY }}>Workforce Governance Risk Register</Typography>
+            <Typography variant="caption" color="text.secondary">Active mitigation controls, key personnel dependency, and compliance safeguards</Typography>
+          </Box>
+          <Button variant="contained" startIcon={<Shield />} onClick={() => setRiskDialogOpen(true)} sx={{ bgcolor: PURPLE, fontWeight: 700, textTransform: 'none' }}>
+            Log Workforce Risk
+          </Button>
         </Box>
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
           <Table size="small">
-            <TableHead sx={{ bgcolor: PURPLE }}>
-              <TableRow>{['Risk ID', 'Risk Title', 'Impact', 'Likelihood', 'Mitigation Action Plan', 'Status'].map(h => <TableCell key={h} sx={{ color: '#ffffff !important', fontWeight: 700, fontSize: '0.75rem' }}>{h}</TableCell>)}</TableRow>
+            <TableHead sx={{ bgcolor: '#f8fafc' }}>
+              <TableRow>
+                {['Risk ID', 'Risk Title', 'Impact', 'Likelihood', 'Mitigation Action Plan', 'Status'].map(h => (
+                  <TableCell key={h} sx={{ fontWeight: 800, fontSize: '0.75rem', color: '#475569' }}>{h}</TableCell>
+                ))}
+              </TableRow>
             </TableHead>
             <TableBody>
-              {risks.map(r => (
-                <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{r.id}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.title}</TableCell>
-                  <TableCell><StatusChip label={r.impact} /></TableCell>
-                  <TableCell><StatusChip label={r.likelihood} /></TableCell>
-                  <TableCell sx={{ fontSize: '0.8rem' }}>{r.mitigation}</TableCell>
-                  <TableCell><StatusChip label={r.status} /></TableCell>
+              {risks.length > 0 ? (
+                risks.map(r => (
+                  <TableRow key={r.id} hover>
+                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 800, color: PRIMARY }}>{r.id}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{r.title}</TableCell>
+                    <TableCell><StatusChip label={r.impact} /></TableCell>
+                    <TableCell><StatusChip label={r.likelihood} /></TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem', color: '#334155' }}>{r.mitigation}</TableCell>
+                    <TableCell><StatusChip label={r.status} /></TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    No workforce risks logged.
+                  </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -3213,33 +3341,33 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
   const pageDetails = getPageDetails();
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', pb: 4, display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', pb: 2, display: 'flex', flexDirection: 'column' }}>
       {/* Custom Header Banner Tailored to Page */}
-      <Box sx={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${SECONDARY} 50%, ${TEAL} 100%)`, color: '#fff', px: 3, py: 2, borderRadius: '0 0 20px 20px', mb: 2, flexShrink: 0 }}>
+      <Box sx={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${SECONDARY} 50%, ${TEAL} 100%)`, color: '#fff', px: 2, py: 1.2, borderRadius: '0 0 12px 12px', mb: 1.2, flexShrink: 0 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.8, fontWeight: 700 }}>
+          <Box sx={{ minWidth: 0, flex: 1, pr: 1.5 }}>
+            <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.8, fontWeight: 700, fontSize: '0.62rem' }}>
               Staff Management &gt; {pageDetails.category}
             </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: "'Plus Jakarta Sans', sans-serif", mt: 0.2 }}>
+            <Typography sx={{ fontWeight: 800, fontFamily: "'Plus Jakarta Sans', sans-serif", mt: 0.1, fontSize: '1.05rem', lineHeight: 1.2 }}>
               👥 {pageDetails.title}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.88, fontWeight: 500, mt: 0.2 }}>
+            <Typography variant="body2" sx={{ opacity: 0.85, fontWeight: 500, mt: 0.1, fontSize: '0.72rem', lineHeight: 1.25 }}>
               {pageDetails.subtitle}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            {loading && <LinearProgress sx={{ width: 80, borderRadius: 2 }} />}
+          <Stack direction="row" spacing={1} alignItems="center">
+            {loading && <LinearProgress sx={{ width: 60, borderRadius: 2 }} />}
             <Tooltip title="Refresh HR Logs">
-              <IconButton onClick={fetchData} size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.15)' }}>
-                <Refresh fontSize="small" />
+              <IconButton onClick={fetchData} size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', p: 0.6 }}>
+                <Refresh sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
             <Button
               variant="outlined"
               size="small"
-              startIcon={<FileDownload />}
-              sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)', textTransform: 'none', fontWeight: 700 }}
+              startIcon={<FileDownload sx={{ fontSize: 15 }} />}
+              sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)', textTransform: 'none', fontWeight: 700, fontSize: '0.72rem', py: 0.3, px: 1 }}
               onClick={() => {
                 if (location.pathname === '/staff/payroll-performance/appraisals') {
                   const csvRows = [
@@ -3309,8 +3437,8 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
       </Box>
 
       {/* Tailored 4-Card KPI Strip */}
-      <Box sx={{ px: 2, mb: 2, flexShrink: 0 }}>
-        <Grid container spacing={1.5}>
+      <Box sx={{ px: 1.5, mb: 1.2, flexShrink: 0 }}>
+        <Grid container spacing={1}>
           {pageDetails.kpis.map((kpi, idx) => (
             <Grid item xs={12} sm={6} md={3} key={idx}>
               <KPICard
@@ -3326,8 +3454,8 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
       </Box>
 
       {/* Standalone Workspace Card */}
-      <Box sx={{ px: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Card sx={{ borderRadius: 2, p: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.06)', flex: 1 }}>
+      <Box sx={{ px: 1.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ borderRadius: 1.5, p: 1.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)', flex: 1 }}>
           {activeTab === 0 && renderTab1()}
           {activeTab === 1 && renderTab2()}
           {activeTab === 2 && renderTab3()}
@@ -3581,6 +3709,55 @@ const WorkforceHR = ({ defaultTab = 0, viewType = 'hr' }: { defaultTab?: number;
           </DialogActions>
         </form>
       </Dialog>
+      {/* Risk Dialog */}
+      <Dialog open={riskDialogOpen} onClose={() => setRiskDialogOpen(false)} maxWidth="xs" fullWidth>
+        <form onSubmit={handleAddRisk}>
+          <DialogTitle sx={{ fontWeight: 800, color: PRIMARY }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Shield sx={{ color: PURPLE }} />
+              <span>Log Workforce Governance Risk</span>
+            </Stack>
+          </DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Risk Title / Vulnerability Description"
+                name="title"
+                size="small"
+                fullWidth
+                required
+                placeholder="e.g. Critical specialist dependency in Radiology"
+              />
+              <TextField select label="Impact Level" name="impact" size="small" fullWidth defaultValue="MEDIUM">
+                <MenuItem value="LOW">LOW</MenuItem>
+                <MenuItem value="MEDIUM">MEDIUM</MenuItem>
+                <MenuItem value="HIGH">HIGH</MenuItem>
+                <MenuItem value="CRITICAL">CRITICAL</MenuItem>
+              </TextField>
+              <TextField select label="Likelihood" name="likelihood" size="small" fullWidth defaultValue="MEDIUM">
+                <MenuItem value="LOW">LOW</MenuItem>
+                <MenuItem value="MEDIUM">MEDIUM</MenuItem>
+                <MenuItem value="HIGH">HIGH</MenuItem>
+              </TextField>
+              <TextField
+                label="Mitigation Action Plan"
+                name="mitigation"
+                size="small"
+                fullWidth
+                required
+                multiline
+                rows={3}
+                placeholder="Detail succession plan, cross-training, or locum backup coverage..."
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setRiskDialogOpen(false)} sx={{ fontWeight: 700 }}>Cancel</Button>
+            <Button type="submit" variant="contained" sx={{ bgcolor: PURPLE, fontWeight: 700 }}>Save Risk</Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
       {/* Job Advert Dialog */}
       <Dialog open={advertDialogOpen} onClose={() => { setAdvertDialogOpen(false); setSelectedAdvertVacancy(null); }} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

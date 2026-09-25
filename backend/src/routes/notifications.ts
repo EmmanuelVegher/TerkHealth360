@@ -85,7 +85,7 @@ let announcements: any[] = [
 // §23.1 - NOTIFICATION ENGINE, EVENT PROCESSING & TEMPLATES
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get('/notifications', (req: Request, res: Response) => {
+router.get(['/', '/notifications'], (req: Request, res: Response) => {
   res.json({ success: true, data: notificationLogs });
 });
 
@@ -181,7 +181,7 @@ router.get('/live', async (req: Request, res: Response) => {
   res.json({ success: true, data: topNotifications });
 });
 
-router.post('/notifications', async (req: Request, res: Response) => {
+router.post(['/', '/notifications'], async (req: Request, res: Response) => {
   try {
     const item = {
       id: `NTF-${String(notificationLogs.length + 1).padStart(3, '0')}`,

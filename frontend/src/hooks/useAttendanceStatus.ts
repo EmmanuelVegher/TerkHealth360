@@ -345,13 +345,48 @@ export function useAttendanceStatus(): AttendanceStatusData {
 
   const shiftName = useMemo(() => {
     const s = serverState.activeShift || serverState.scheduledShift || serverState.activeLog || serverState.todayLog;
-    return s?.shiftType || s?.shift || localClock?.shiftName || 'Standard Day Shift (07:00 – 15:00)';
-  }, [serverState, localClock]);
+    if (s?.shiftType || s?.shift || localClock?.shiftName) {
+      return s?.shiftType || s?.shift || localClock?.shiftName;
+    }
+    const desig = (user?.designation || user?.role || '').toLowerCase();
+    if (desig.includes('physician') || desig.includes('doctor') || desig.includes('consultant') || desig.includes('surgeon')) {
+      return 'Consultant Clinical Duty & Ward Rounds (08:00 – 16:00)';
+    }
+    if (desig.includes('pharmac')) {
+      return 'Pharmacy Dispensary Shift (08:00 – 16:00)';
+    }
+    if (desig.includes('nurse') || desig.includes('matron')) {
+      return 'Nursing Ward Morning Shift (07:00 – 15:00)';
+    }
+    if (desig.includes('lab') || desig.includes('patholog')) {
+      return 'Laboratory & Diagnostics Shift (08:00 – 16:00)';
+    }
+    return 'Standard Day Shift (07:00 – 15:00)';
+  }, [serverState, localClock, user]);
 
   const dutyStation = useMemo(() => {
     const s = serverState.activeShift || serverState.scheduledShift || serverState.activeLog || serverState.todayLog;
-    return s?.location || s?.department || localClock?.location || 'Main Outpatient Cash Desk #01';
-  }, [serverState, localClock]);
+    if (s?.location || s?.department || localClock?.location) {
+      return s?.location || s?.department || localClock?.location;
+    }
+    const desig = (user?.designation || user?.role || '').toLowerCase();
+    if (desig.includes('physician') || desig.includes('doctor') || desig.includes('consultant') || desig.includes('surgeon')) {
+      return 'Consultant Suite & Clinical Wards';
+    }
+    if (desig.includes('pharmac')) {
+      return 'Main Pharmacy Dispensary Unit';
+    }
+    if (desig.includes('nurse') || desig.includes('matron')) {
+      return 'General Inpatient Nursing Station';
+    }
+    if (desig.includes('lab') || desig.includes('patholog')) {
+      return 'Central Laboratory & Diagnostics';
+    }
+    if (desig.includes('cashier') || desig.includes('billing')) {
+      return 'Main Outpatient Cash Desk #01';
+    }
+    return 'Clinical Operations & Consultation';
+  }, [serverState, localClock, user]);
 
   // Live Timing calculations (elapsed, remaining, progress, overtime)
   const timing = useMemo(() => {

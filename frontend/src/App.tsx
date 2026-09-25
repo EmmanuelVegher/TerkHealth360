@@ -246,8 +246,10 @@ function App() {
         <Route path="admin-interactive" element={<AdminDesk />} />
         <Route path="internal-memos" element={<InternalMemos />} />
         {/* Admin */}
+        {/*
         <Route path="reports"      element={<Reports />} />
         <Route path="reports/*"    element={<Reports />} />
+        */}
         <Route path="events"       element={<Events />} />
         <Route path="messages"     element={<Messages />} />
         <Route path="messages/*"   element={<Messages />} />

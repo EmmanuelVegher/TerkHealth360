@@ -2699,10 +2699,10 @@ const Dashboard = () => {
         </Typography>
       </Box>
 
-      {/* ── Real-Time Active On-Duty Session & Countdown Timer ── */}
-      <Box sx={{ mb: 3 }}>
+      {/* ── Real-Time Active On-Duty Session & Countdown Timer (Moved to Sidebar) ── */}
+      {/* <Box sx={{ mb: 3 }}>
         <ActiveDutySessionCard />
-      </Box>
+      </Box> */}
 
       {/* ══════════════ NURSE LAYOUT ══════════════════════════════ */}
       {isNurse && (

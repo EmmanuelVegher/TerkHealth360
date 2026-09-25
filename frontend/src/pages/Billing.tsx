@@ -391,6 +391,35 @@ const Billing = () => {
     patientId: '', patientName: '', fundingSource: 'SELF_PAY', payerId: '', notes: '', discount: 0
   });
   const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  const [patientCoverageInfo, setPatientCoverageInfo] = useState<any | null>(null);
+  const [checkingCoverage, setCheckingCoverage] = useState(false);
+
+  const checkPatientInsuranceCoverage = async (patId: string) => {
+    if (!patId) {
+      setPatientCoverageInfo(null);
+      return;
+    }
+    setCheckingCoverage(true);
+    try {
+      const res = await api.get(`/insurance/coverage-check/${patId}`);
+      if (res.data?.success) {
+        setPatientCoverageInfo(res.data);
+        if (res.data.hasInsurance) {
+          setInvoiceForm(prev => ({
+            ...prev,
+            fundingSource: 'INSURANCE',
+            payerId: res.data.scheme?.id || res.data.scheme?.code || ''
+          }));
+        }
+      } else {
+        setPatientCoverageInfo(null);
+      }
+    } catch {
+      setPatientCoverageInfo(null);
+    } finally {
+      setCheckingCoverage(false);
+    }
+  };
 
   // ─── Payment Form State ───────────────────────────────────────────────────
   const [payMethods, setPayMethods] = useState([{ method: 'CASH', amount: 0 }]);
@@ -1760,7 +1789,22 @@ const Billing = () => {
                         <TableCell sx={{ fontSize: '0.75rem' }}>{new Date(inv.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell><StatusChip label={inv.status} /></TableCell>
                         <TableCell>
-                          <Button size="small" variant="contained" color="success" startIcon={<Payment />} onClick={() => { setSelectedInvoice(inv); setPaymentDialogOpen(true); }} sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: '0.75rem', py: 0.5 }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            startIcon={<Payment />}
+                            onClick={() => {
+                              setSelectedInvoice(inv);
+                              setPatientCoverageInfo(null);
+                              if (inv.patientId) {
+                                checkPatientInsuranceCoverage(inv.patientId);
+                              }
+                              setPayMethods([{ method: (inv.fundingSource === 'INSURANCE' || inv.fundingSource === 'HMO' || inv.fundingSource === 'NHIA') ? 'INSURANCE' : 'CASH', amount: inv.outstanding || 0 }]);
+                              setPaymentDialogOpen(true);
+                            }}
+                            sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: '0.75rem', py: 0.5 }}
+                          >
                             Receive Payment
                           </Button>
                         </TableCell>
@@ -4765,9 +4809,57 @@ const Billing = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2, color: PRIMARY }}>Invoice Details</Typography>
                 <Stack spacing={2}>
                   <TextField select label="Patient" size="small" fullWidth value={invoiceForm.patientId}
-                    onChange={e => { const p = patients.find(pt => pt.id === e.target.value); setInvoiceForm(prev => ({ ...prev, patientId: e.target.value, patientName: p ? `${p.firstName} ${p.lastName}` : '' })); }}>
+                    onChange={e => {
+                      const val = e.target.value;
+                      const p = patients.find(pt => pt.id === val);
+                      setInvoiceForm(prev => ({ ...prev, patientId: val, patientName: p ? `${p.firstName} ${p.lastName}` : '' }));
+                      checkPatientInsuranceCoverage(val);
+                    }}>
                     {patients.map(p => <MenuItem key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.patientNumber})</MenuItem>)}
                   </TextField>
+
+                  {/* Real-time Health Insurance Coverage Badge */}
+                  {checkingCoverage && <LinearProgress sx={{ borderRadius: 1 }} />}
+                  {patientCoverageInfo && (
+                    <Paper variant="outlined" sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: patientCoverageInfo.hasInsurance ? '#f0fdf4' : '#f8fafc',
+                      border: patientCoverageInfo.hasInsurance ? '1.5px solid #86efac' : '1px solid #e2e8f0'
+                    }}>
+                      {patientCoverageInfo.hasInsurance ? (
+                        <Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                            <Chip
+                              label={patientCoverageInfo.scheme?.shortName || patientCoverageInfo.scheme?.name}
+                              size="small"
+                              color="success"
+                              sx={{ fontWeight: 800, fontSize: '0.7rem' }}
+                            />
+                            <Chip
+                              label={`Policy #${patientCoverageInfo.policy?.membershipNumber || 'ACTIVE'}`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: '0.68rem', fontFamily: 'monospace' }}
+                            />
+                          </Box>
+                          <Typography variant="caption" sx={{ color: '#166534', fontWeight: 700, display: 'block' }}>
+                            ✓ Active HMO Coverage: {patientCoverageInfo.policy?.coveragePercentage || 90}% HMO · {patientCoverageInfo.policy?.copayPercentage || 10}% Patient Co-Pay
+                          </Typography>
+                          {patientCoverageInfo.activeAuthorizations?.length > 0 && (
+                            <Typography variant="caption" sx={{ color: '#0f766e', display: 'block', mt: 0.5 }}>
+                              Active PA Codes: {patientCoverageInfo.activeAuthorizations.map((a: any) => a.paCode).join(', ')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>
+                          No active insurance policy found for this patient (Billed as Self-Pay / Out-of-Pocket).
+                        </Typography>
+                      )}
+                    </Paper>
+                  )}
+
                   <TextField select label="Funding Source" size="small" fullWidth value={invoiceForm.fundingSource}
                     onChange={e => setInvoiceForm(prev => ({ ...prev, fundingSource: e.target.value }))}>
                     {FUNDING_SOURCES.map(f => <MenuItem key={f} value={f}>{f.replace('_', ' ')}</MenuItem>)}
@@ -4895,6 +4987,71 @@ const Billing = () => {
                 Invoice: <strong>{selectedInvoice.invoiceNo}</strong> · Patient: <strong>{selectedInvoice.patientName}</strong>
                 <br />Outstanding: <strong>{formatNGN(selectedInvoice.outstanding)}</strong>
               </Alert>
+
+              {/* Real-Time Patient Insurance / HMO Coverage Banner for Cashier */}
+              {checkingCoverage && <LinearProgress sx={{ borderRadius: 1, mb: 1.5 }} />}
+              {patientCoverageInfo && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    mb: 2,
+                    borderRadius: 2,
+                    bgcolor: patientCoverageInfo.hasInsurance ? '#f0fdf4' : '#f8fafc',
+                    border: patientCoverageInfo.hasInsurance ? '1.5px solid #86efac' : '1px solid #e2e8f0'
+                  }}
+                >
+                  {patientCoverageInfo.hasInsurance ? (
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip
+                            label={patientCoverageInfo.scheme?.shortName || patientCoverageInfo.scheme?.name || 'HMO / Scheme'}
+                            size="small"
+                            color="success"
+                            sx={{ fontWeight: 800, fontSize: '0.72rem' }}
+                          />
+                          <Chip
+                            label={`Policy #${patientCoverageInfo.policy?.membershipNumber || 'ACTIVE'}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700 }}
+                          />
+                        </Stack>
+                        <Chip
+                          label={`HMO: ${patientCoverageInfo.policy?.coveragePercentage || 90}% · Patient Co-Pay: ${patientCoverageInfo.policy?.copayPercentage || 10}%`}
+                          size="small"
+                          color="primary"
+                          sx={{ fontWeight: 700, fontSize: '0.68rem' }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: '#166534', fontWeight: 700, display: 'block' }}>
+                        ✓ Active Health Insurance Scheme Coverage (Scope: {patientCoverageInfo.policy?.coverageScope || 'INDIVIDUAL'})
+                      </Typography>
+                      {patientCoverageInfo.activeAuthorizations?.length > 0 && (
+                        <Box sx={{ mt: 0.8, p: 0.8, bgcolor: '#ffffff', borderRadius: 1, border: '1px dashed #86efac' }}>
+                          <Typography variant="caption" sx={{ color: '#0f766e', fontWeight: 700, display: 'block' }}>
+                            Approved HMO Pre-Authorization (PA) Codes:
+                          </Typography>
+                          {patientCoverageInfo.activeAuthorizations.map((a: any) => (
+                            <Chip
+                              key={a.id}
+                              label={`${a.paCode} (${a.serviceName} - Approved: ₦${Number(a.coverageAmount || 0).toLocaleString()})`}
+                              size="small"
+                              color="success"
+                              sx={{ mr: 0.5, mt: 0.3, fontSize: '0.65rem', fontWeight: 700 }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      ℹ Patient is not linked to any active health insurance policy (Self-Pay / Out-of-Pocket Checkout).
+                    </Typography>
+                  )}
+                </Paper>
+              )}
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Payment Methods (FR-CASH-006–007)</Typography>
               {payMethods.map((m, i) => (
                 <Grid container spacing={1} sx={{ mb: 1 }} key={i}>

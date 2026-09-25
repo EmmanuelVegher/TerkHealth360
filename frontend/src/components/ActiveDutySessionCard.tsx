@@ -40,6 +40,7 @@ const WARNING = '#ea580c';
 
 interface ActiveDutySessionCardProps {
   compact?: boolean;
+  variant?: 'default' | 'sidebar';
   onStatusChange?: () => void;
   className?: string;
   sx?: any;
@@ -47,6 +48,7 @@ interface ActiveDutySessionCardProps {
 
 export const ActiveDutySessionCard: React.FC<ActiveDutySessionCardProps> = ({
   compact = false,
+  variant = 'default',
   onStatusChange,
   sx = {},
 }) => {
@@ -164,6 +166,219 @@ export const ActiveDutySessionCard: React.FC<ActiveDutySessionCardProps> = ({
       setActionLoading(false);
     }
   };
+
+  if (variant === 'sidebar') {
+    return (
+      <>
+        <Box
+          sx={{
+            borderRadius: 2.5,
+            border: attendance.isClockedIn ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.09)',
+            background: attendance.isClockedIn
+              ? 'linear-gradient(145deg, rgba(34, 197, 94, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)'
+              : 'linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(15, 23, 42, 0.7) 100%)',
+            backdropFilter: 'blur(10px)',
+            p: 1.5,
+            position: 'relative',
+            overflow: 'hidden',
+            transition: 'all 0.25s ease',
+            boxShadow: attendance.isClockedIn ? '0 4px 18px rgba(34, 197, 94, 0.15)' : '0 2px 8px rgba(0,0,0,0.2)',
+            ...sx,
+          }}
+        >
+          {/* Header Row: Status Chip & Quick Actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Box
+                sx={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  bgcolor: attendance.isClockedIn ? '#22c55e' : attendance.isOnApprovedLeave ? '#f59e0b' : '#94a3b8',
+                  boxShadow: attendance.isClockedIn ? '0 0 8px #22c55e' : 'none',
+                  animation: attendance.isClockedIn ? 'pulse 2s infinite' : 'none',
+                }}
+              />
+              <Typography sx={{ color: '#fff', fontSize: '0.68rem', fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                {attendance.isClockedIn ? 'On Duty' : attendance.isOnApprovedLeave ? 'On Leave' : 'Off Duty'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+              <Tooltip title="Attendance Roster">
+                <IconButton
+                  size="small"
+                  onClick={() => navigate('/staff/attendance-roster/clock-logs')}
+                  sx={{ color: 'rgba(255,255,255,0.6)', p: 0.4, '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
+                >
+                  <Launch sx={{ fontSize: '0.85rem' }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Refresh Status">
+                <IconButton
+                  size="small"
+                  onClick={() => attendance.refreshStatus()}
+                  disabled={attendance.loading}
+                  sx={{ color: 'rgba(255,255,255,0.6)', p: 0.4, '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
+                >
+                  <Refresh sx={{ fontSize: '0.85rem', animation: attendance.loading ? 'spin 1s linear infinite' : 'none' }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+
+          {/* Shift Details */}
+          <Typography sx={{ color: '#f8fafc', fontSize: '0.74rem', fontWeight: 700, lineHeight: 1.25, mb: 0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {attendance.shiftName}
+          </Typography>
+          <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.66rem', mb: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {attendance.dutyStation} · {attendance.clockInTime || '07:00 – 15:00'}
+          </Typography>
+
+          {/* Progress / Countdown if Clocked In */}
+          {attendance.isClockedIn && (
+            <Box sx={{ mb: 1.2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                <Typography sx={{ color: '#86efac', fontSize: '0.68rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                  {attendance.remainingStr}
+                </Typography>
+                <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.64rem' }}>
+                  {attendance.percent}%
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={attendance.percent}
+                sx={{
+                  height: 5,
+                  borderRadius: 3,
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 3,
+                    background: attendance.isOvertime
+                      ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+                      : 'linear-gradient(90deg, #22c55e, #10b981)',
+                  },
+                }}
+              />
+            </Box>
+          )}
+
+          {/* Action Button */}
+          {attendance.isClockedIn ? (
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              fullWidth
+              startIcon={<ExitToApp sx={{ fontSize: '0.9rem !important' }} />}
+              onClick={() => setConfirmModal({ open: true, type: 'OUT' })}
+              sx={{
+                borderRadius: 2,
+                fontWeight: 800,
+                fontSize: '0.72rem',
+                textTransform: 'none',
+                py: 0.6,
+                boxShadow: '0 4px 12px rgba(220, 38, 38, 0.35)',
+              }}
+            >
+              Clock Out
+            </Button>
+          ) : attendance.isOnApprovedLeave ? (
+            <Button
+              variant="contained"
+              size="small"
+              fullWidth
+              disabled
+              startIcon={<Lock sx={{ fontSize: '0.85rem !important', color: '#fde68a !important' }} />}
+              sx={{
+                borderRadius: 2,
+                fontWeight: 800,
+                fontSize: '0.7rem',
+                textTransform: 'none',
+                py: 0.6,
+                bgcolor: 'rgba(217, 119, 6, 0.4) !important',
+                color: '#fde68a !important',
+              }}
+            >
+              Leave Active
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              size="small"
+              fullWidth
+              startIcon={<Fingerprint sx={{ fontSize: '0.95rem !important' }} />}
+              onClick={() => setConfirmModal({ open: true, type: 'IN' })}
+              sx={{
+                borderRadius: 2,
+                fontWeight: 800,
+                fontSize: '0.72rem',
+                textTransform: 'none',
+                py: 0.6,
+                bgcolor: '#16a34a',
+                boxShadow: '0 4px 12px rgba(22, 163, 74, 0.35)',
+                '&:hover': { bgcolor: '#15803d' },
+              }}
+            >
+              Biometric Clock In
+            </Button>
+          )}
+        </Box>
+
+        {/* Modal Dialog */}
+        <Dialog
+          open={confirmModal.open}
+          onClose={() => setConfirmModal({ open: false, type: 'IN' })}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 900, color: PRIMARY, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Fingerprint sx={{ color: confirmModal.type === 'IN' ? SUCCESS : '#dc2626' }} />
+            {confirmModal.type === 'IN' ? 'Confirm Shift Clock-In' : 'Confirm Shift Clock-Out & Handover'}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: confirmModal.type === 'IN' ? '#f0fdf4' : '#fef2f2', border: `1px solid ${confirmModal.type === 'IN' ? '#bbf7d0' : '#fecaca'}` }}>
+              <Typography variant="body2" fontWeight={800} color={confirmModal.type === 'IN' ? '#166534' : '#991b1b'}>
+                {confirmModal.type === 'IN'
+                  ? `Ready to begin duty session for ${attendance.shiftName}?`
+                  : `Closing active duty session for ${loggedInName}?`}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Staff ID: <strong>{loggedInEmpId}</strong> · Role: <strong>{loggedInRole}</strong> · Dept: <strong>{loggedInDept}</strong>
+              </Typography>
+            </Box>
+
+            <TextField
+              label="Handover Notes / Duty Memo (Optional)"
+              placeholder={confirmModal.type === 'IN' ? 'e.g., Resumed OPD desk, till float counted' : 'e.g., Handed over Ward 3 beds to incoming staff'}
+              value={clockNote}
+              onChange={(e) => setClockNote(e.target.value)}
+              multiline
+              rows={2}
+              fullWidth
+              size="small"
+            />
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button onClick={() => setConfirmModal({ open: false, type: 'IN' })} color="inherit" disabled={actionLoading}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color={confirmModal.type === 'IN' ? 'success' : 'error'}
+              onClick={confirmModal.type === 'IN' ? handleClockIn : handleClockOut}
+              disabled={actionLoading}
+              startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : confirmModal.type === 'IN' ? <CheckCircle /> : <ExitToApp />}
+              sx={{ fontWeight: 800, px: 2.5 }}
+            >
+              {actionLoading ? 'Recording...' : confirmModal.type === 'IN' ? 'Clock In Now' : 'Confirm Clock Out'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
+    );
+  }
 
   return (
     <>

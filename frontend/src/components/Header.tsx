@@ -16,9 +16,11 @@ import { api } from '../services/api';
 
 interface HeaderProps {
   onMobileToggle?: () => void;
+  onToggleCollapse?: () => void;
+  sidebarCollapsed?: boolean;
 }
 
-const Header = ({ onMobileToggle }: HeaderProps) => {
+const Header = ({ onMobileToggle, onToggleCollapse, sidebarCollapsed = false }: HeaderProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -86,25 +88,45 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
       position="fixed"
       elevation={0}
       sx={{
-        left: { xs: 0, md: `${SIDEBAR_W}px` },
-        width: { xs: '100%', md: `calc(100% - ${SIDEBAR_W}px)` },
+        left: { xs: 0, md: sidebarCollapsed ? 0 : `${SIDEBAR_W}px` },
+        width: { xs: '100%', md: sidebarCollapsed ? '100%' : `calc(100% - ${SIDEBAR_W}px)` },
+        transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         background: 'rgba(240,242,248,0.85)',
         backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(0,0,0,0.06)',
         zIndex: 1100,
       }}
     >
-      <Toolbar sx={{ gap: { xs: 1, sm: 2 }, minHeight: '64px !important', px: { xs: 1.5, sm: 3 } }}>
-        {/* Mobile Sidebar Hamburger Toggle */}
-        <IconButton
-          color="inherit"
-          aria-label="open drawer"
-          edge="start"
-          onClick={onMobileToggle}
-          sx={{ mr: 0.5, display: { xs: 'inline-flex', md: 'none' }, color: '#0d2560' }}
-        >
-          <MenuIcon />
-        </IconButton>
+      <Toolbar sx={{ gap: { xs: 1, sm: 1.5 }, minHeight: '48px !important', height: 48, px: { xs: 1.5, sm: 2 } }}>
+        {/* Sidebar Hamburger Toggle (Mobile & Desktop Full Screen Toggle) */}
+        <Tooltip title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}>
+          <IconButton
+            color="inherit"
+            aria-label="toggle sidebar"
+            edge="start"
+            onClick={() => {
+              if (onToggleCollapse) onToggleCollapse();
+              if (onMobileToggle) onMobileToggle();
+            }}
+            sx={{
+              mr: 0.5,
+              display: 'inline-flex',
+              color: '#0d2560',
+              bgcolor: '#fff',
+              border: '1.2px solid rgba(0,0,0,0.08)',
+              width: 32,
+              height: 32,
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              '&:hover': {
+                bgcolor: 'rgba(59, 91, 219, 0.08)',
+                color: '#3b5bdb',
+              },
+            }}
+          >
+            <MenuIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
 
         {/* System Status Badge — always visible */}
         <SystemStatusBadge />
@@ -112,27 +134,27 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
         <Box
           sx={{
             flex: 1,
-            maxWidth: 420,
+            maxWidth: 380,
             display: { xs: 'none', sm: 'flex' },
             alignItems: 'center',
-            gap: 1,
+            gap: 0.8,
             bgcolor: '#fff',
-            border: '1.5px solid rgba(0,0,0,0.07)',
-            borderRadius: '10px',
-            px: 1.5,
-            py: 0.5,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            border: '1.2px solid rgba(0,0,0,0.08)',
+            borderRadius: '8px',
+            px: 1.2,
+            py: 0.25,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
             transition: 'all 0.2s',
             '&:focus-within': {
               borderColor: '#3b5bdb',
-              boxShadow: '0 0 0 3px rgba(59,91,219,0.1)',
+              boxShadow: '0 0 0 2px rgba(59,91,219,0.1)',
             },
           }}
         >
-          <Search sx={{ color: 'text.secondary', fontSize: 20 }} />
+          <Search sx={{ color: 'text.secondary', fontSize: 18 }} />
           <InputBase
             placeholder="Search patients, appointments…"
-            sx={{ flex: 1, fontSize: '0.875rem', color: 'text.primary' }}
+            sx={{ flex: 1, fontSize: '0.84rem', fontWeight: 500, color: 'text.primary', py: 0 }}
           />
         </Box>
         <Box sx={{ flex: 1 }} />
@@ -143,11 +165,12 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
           size="small"
           sx={{
             display: { xs: 'none', md: 'inline-flex' },
-            bgcolor: alpha('#2f9e44', 0.1),
-            color: '#2f9e44',
-            fontWeight: 600,
+            bgcolor: alpha('#2f9e44', 0.12),
+            color: '#2b8a3e',
+            fontWeight: 700,
             fontSize: '0.72rem',
-            '& .MuiChip-icon': { color: '#2f9e44' },
+            height: 24,
+            '& .MuiChip-icon': { color: '#2b8a3e' },
           }}
         />
         {/* Notifications */}
@@ -156,13 +179,13 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
             onClick={e => setNotifAnchor(e.currentTarget)}
             sx={{
               bgcolor: '#fff',
-              border: '1.5px solid rgba(0,0,0,0.07)',
-              width: 38, height: 38,
+              border: '1px solid rgba(0,0,0,0.08)',
+              width: 30, height: 30,
               '&:hover': { bgcolor: alpha('#3b5bdb', 0.06) },
             }}
           >
             <Badge badgeContent={unreadNotifications.length} color="error">
-              <Notifications sx={{ fontSize: 19, color: 'text.secondary' }} />
+              <Notifications sx={{ fontSize: 16, color: 'text.secondary' }} />
             </Badge>
           </IconButton>
         </Tooltip>
@@ -172,12 +195,12 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
           open={Boolean(notifAnchor)}
           onClose={() => setNotifAnchor(null)}
           PaperProps={{
-            sx: { width: 340, mt: 1.5, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' },
+            sx: { width: 320, mt: 1.0, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' },
           }}
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-          <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ px: 2, py: 1.2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="subtitle2" fontWeight={700}>Notifications</Typography>
             {unreadNotifications.length > 0 && (
               <Typography 
@@ -198,27 +221,27 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
           {notifications.map(n => (
             <MenuItem 
               key={n.id} 
-              sx={{ py: 1.5, px: 2, display: 'block' }}
+              sx={{ py: 1.0, px: 2, display: 'block' }}
               onClick={() => markAsRead(n.id)}
             >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.2 }}>
                 <Box
                   sx={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    bgcolor: readIds.includes(n.id) ? 'transparent' : n.color, mt: 0.8, flexShrink: 0,
+                    width: 7, height: 7, borderRadius: '50%',
+                    bgcolor: readIds.includes(n.id) ? 'transparent' : n.color, mt: 0.7, flexShrink: 0,
                   }}
                 />
                 <Box sx={{ opacity: readIds.includes(n.id) ? 0.6 : 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: readIds.includes(n.id) ? 400 : 600, lineHeight: 1.4 }}>
+                  <Typography variant="body2" sx={{ fontWeight: readIds.includes(n.id) ? 400 : 600, lineHeight: 1.3, fontSize: '0.78rem' }}>
                     {n.text}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">{n.time}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.66rem' }}>{n.time}</Typography>
                 </Box>
               </Box>
             </MenuItem>
           ))}
           <Divider />
-          <MenuItem sx={{ justifyContent: 'center', color: 'primary.main', fontWeight: 600, fontSize: '0.82rem' }}>
+          <MenuItem sx={{ justifyContent: 'center', color: 'primary.main', fontWeight: 600, fontSize: '0.76rem' }}>
             View all notifications
           </MenuItem>
         </Menu>
@@ -231,11 +254,11 @@ const Header = ({ onMobileToggle }: HeaderProps) => {
             <Avatar
               src={user?.profilePicture || undefined}
               sx={{
-                width: 38, height: 38,
+                width: 30, height: 30,
                 background: 'linear-gradient(135deg, #3b5bdb, #4c6ef5)',
-                fontSize: '0.85rem', fontWeight: 700,
-                border: '2px solid #fff',
-                boxShadow: '0 2px 8px rgba(59,91,219,0.3)',
+                fontSize: '0.75rem', fontWeight: 700,
+                border: '1.5px solid #fff',
+                boxShadow: '0 2px 6px rgba(59,91,219,0.25)',
               }}
             >
               {initials}

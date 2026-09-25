@@ -47,23 +47,27 @@ const theme = createTheme({
       paper: '#ffffff',
     },
     text: {
-      primary: '#1a1f36',
-      secondary: '#6b7194',
+      primary: '#0f172a',
+      secondary: '#475569',
     },
   },
   typography: {
     fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif",
-    h1: { fontWeight: 800, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    h2: { fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    h3: { fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    h4: { fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    h5: { fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    h6: { fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" },
-    subtitle1: { fontWeight: 500 },
-    subtitle2: { fontWeight: 500 },
-    button: { fontWeight: 600, textTransform: 'none', letterSpacing: 0.3 },
+    fontSize: 14,
+    h1: { fontWeight: 800, fontSize: '1.85rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    h2: { fontWeight: 800, fontSize: '1.55rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    h3: { fontWeight: 750, fontSize: '1.30rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    h4: { fontWeight: 750, fontSize: '1.15rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    h5: { fontWeight: 700, fontSize: '1.00rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    h6: { fontWeight: 700, fontSize: '0.90rem', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    subtitle1: { fontWeight: 600, fontSize: '0.86rem' },
+    subtitle2: { fontWeight: 650, fontSize: '0.82rem' },
+    body1: { fontWeight: 500, fontSize: '0.84rem', lineHeight: 1.45 },
+    body2: { fontWeight: 500, fontSize: '0.78rem', lineHeight: 1.4 },
+    caption: { fontWeight: 500, fontSize: '0.72rem', lineHeight: 1.3 },
+    button: { fontWeight: 650, textTransform: 'none', letterSpacing: 0.2, fontSize: '0.80rem' },
   },
-  shape: { borderRadius: 12 },
+  shape: { borderRadius: 8 },
   shadows: [
     'none',
     '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
@@ -75,12 +79,30 @@ const theme = createTheme({
   ] as any,
   components: {
     MuiButton: {
+      defaultProps: {
+        size: 'small',
+      },
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          padding: '8px 20px',
+          borderRadius: 6,
+          padding: '5px 14px',
+          minHeight: 32,
+          fontSize: '0.80rem',
+          fontWeight: 650,
           boxShadow: 'none',
-          '&:hover': { boxShadow: '0 4px 12px rgba(59,91,219,0.25)' },
+          '&:hover': { boxShadow: '0 2px 8px rgba(59,91,219,0.2)' },
+        },
+        sizeSmall: {
+          padding: '3.5px 11px',
+          minHeight: 28,
+          fontSize: '0.76rem',
+          fontWeight: 600,
+        },
+        sizeMedium: {
+          padding: '6px 16px',
+          minHeight: 34,
+          fontSize: '0.82rem',
+          fontWeight: 650,
         },
         containedPrimary: {
           background: 'linear-gradient(135deg, #3b5bdb 0%, #4c6ef5 100%)',
@@ -90,9 +112,9 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-          border: '1px solid rgba(255,255,255,0.9)',
+          borderRadius: 10,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+          border: '1px solid rgba(0,0,0,0.06)',
           maxWidth: '100%',
         },
       },
@@ -100,14 +122,14 @@ const theme = createTheme({
     MuiCardContent: {
       styleOverrides: {
         root: {
-          padding: 16,
+          padding: '10px 14px',
           '@media (max-width: 600px)': {
-            padding: '12px !important',
+            padding: '8px 10px !important',
           },
           '&:last-child': {
-            paddingBottom: 16,
+            paddingBottom: '10px',
             '@media (max-width: 600px)': {
-              paddingBottom: '12px !important',
+              paddingBottom: '8px !important',
             },
           },
         },
@@ -117,7 +139,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          borderRadius: 16,
+          borderRadius: 10,
         },
       },
     },
@@ -129,7 +151,7 @@ const theme = createTheme({
       },
       styleOverrides: {
         root: {
-          minHeight: 44,
+          minHeight: 34,
           maxWidth: '100%',
         },
         scroller: {
@@ -140,11 +162,12 @@ const theme = createTheme({
     MuiTab: {
       styleOverrides: {
         root: {
-          minHeight: 44,
+          minHeight: 36,
           minWidth: 'auto',
-          padding: '6px 14px',
+          padding: '5px 12px',
           textTransform: 'none',
-          fontSize: '0.85rem',
+          fontSize: '0.82rem',
+          fontWeight: 650,
           whiteSpace: 'nowrap',
         },
       },
@@ -161,11 +184,18 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          padding: '10px 14px',
+          padding: '7px 12px',
+          fontSize: '0.80rem',
+          fontWeight: 500,
           '@media (max-width: 600px)': {
-            padding: '6px 10px',
-            fontSize: '0.78rem',
+            padding: '5px 8px',
+            fontSize: '0.75rem',
           },
+        },
+        head: {
+          padding: '8px 12px',
+          fontSize: '0.78rem',
+          fontWeight: 750,
         },
       },
     },
@@ -175,11 +205,12 @@ const theme = createTheme({
       },
       styleOverrides: {
         paper: {
-          margin: 12,
-          width: 'calc(100% - 24px)',
-          maxWidth: 'calc(100% - 24px) !important',
+          margin: 10,
+          borderRadius: 10,
+          width: 'calc(100% - 20px)',
+          maxWidth: 'calc(100% - 20px) !important',
           '@media (min-width: 600px)': {
-            margin: 32,
+            margin: 24,
             width: 'auto',
             maxWidth: 'none !important',
           },
@@ -190,16 +221,30 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiTableCell-head': {
-            fontWeight: 600,
-            backgroundColor: alpha('#3b5bdb', 0.06),
-            color: '#1a1f36',
+            fontWeight: 750,
+            backgroundColor: alpha('#3b5bdb', 0.07),
+            color: '#0f172a',
           },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: { fontWeight: 500, borderRadius: 8 },
+        root: {
+          fontWeight: 650,
+          borderRadius: 6,
+          height: 24,
+          fontSize: '0.72rem',
+          '& .MuiChip-label': {
+            paddingLeft: 7,
+            paddingRight: 7,
+          },
+        },
+        sizeSmall: {
+          height: 21,
+          fontSize: '0.68rem',
+          fontWeight: 600,
+        },
       },
     },
     MuiTextField: {
@@ -207,7 +252,14 @@ const theme = createTheme({
     },
     MuiInputBase: {
       styleOverrides: {
-        root: { borderRadius: '8px !important' },
+        root: {
+          borderRadius: '6px !important',
+          fontSize: '0.84rem',
+          fontWeight: 500,
+        },
+        input: {
+          padding: '7px 11px !important',
+        },
       },
     },
   },

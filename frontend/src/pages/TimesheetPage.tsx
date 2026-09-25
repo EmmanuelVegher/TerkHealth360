@@ -192,7 +192,7 @@ export const STAFF_ROSTER_SCHEDULES: Record<string, { days: number[]; shiftHours
     shiftHours: 8,
     shiftStart: '08:00',
     shiftEnd: '16:00',
-    shiftName: 'Tracking Assistant & Lab Duty (08:00 – 16:00)'
+    shiftName: 'Consultant Clinical Duty & Ward Rounds (08:00 – 16:00)'
   },
   'lab': {
     days: [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 29, 30],
@@ -5218,7 +5218,7 @@ export default function TimesheetPage() {
                     <MenuItem key="EMP-008" value="EMP-008">Ibrahim Danladi (Cashier / Emergency Desk)</MenuItem>,
                     <MenuItem key="EMP-001" value="EMP-001">Dr. Emeka Okafor (Consultant Physician)</MenuItem>,
                     <MenuItem key="EMP-002" value="EMP-002">Ngozi Adeyemi (Chief Matron / Nursing)</MenuItem>,
-                    <MenuItem key="EMP-013" value="EMP-013">Emmanuel Vegher (Tracking Assistant & Lab Scientist)</MenuItem>
+                    <MenuItem key="EMP-013" value="EMP-013">Dr. Emmanuel Vegher (Chief Consultant Physician)</MenuItem>
                   ]
                 )}
               </Select>

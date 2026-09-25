@@ -57,6 +57,12 @@ export const isUserPharmacyStaff = (user: any): boolean => {
   const email = (user.email || '').toLowerCase();
   const staffId = (user.staffId || user.staff_id || user.id || '').toUpperCase();
 
+  // Guard: Doctors / Physicians / Surgeons are clinical officers and not pharmacy staff
+  const isExplicitDoctor = userRole === 'DOCTOR' || userDesignation.includes('physician') || userDesignation.includes('consultant') || userDesignation.includes('surgeon') || userDesignation.includes('medical officer');
+  if (isExplicitDoctor && !userRole.includes('PHARM') && !userDesignation.includes('pharmac')) {
+    return false;
+  }
+
   // 1. Direct role matches
   const pharmRoles = [
     'PHARMACIST',
