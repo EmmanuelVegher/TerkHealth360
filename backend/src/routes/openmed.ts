@@ -1983,7 +1983,7 @@ async function extractWithQwenVl(imageBase64: string, fileName?: string): Promis
 
   try {
     const aiConfig = await getAIConfig();
-    const modelToUse = aiConfig?.ollamaModel || "llama3.2-vision";
+    const modelToUse = aiConfig?.ollamaModel || "llama3.2-vision:latest";
 
     const prompt = `You are an expert hospital clinical document OCR and medical entity extraction system.
 Analyze this medical document image and extract all patient demographics, vital signs, clinical consultation (SOAP) notes, ICD diagnoses, prescribed medications, and lab orders/results.
@@ -2034,17 +2034,20 @@ You MUST reply with ONLY a strictly valid JSON object matching this schema witho
 }`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 90000); // 90s for 10.7B vision model
 
-    const ollamaResp = await fetch("http://127.0.0.1:11434/api/generate", {
+    const ollamaResp = await fetch("http://127.0.0.1:11434/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: modelToUse,
-        prompt: prompt,
-        images: [cleanBase64],
-        format: "json",
         stream: false,
+        options: { temperature: 0.05, num_predict: 1500 },
+        messages: [{
+          role: "user",
+          content: prompt,
+          images: [cleanBase64],
+        }],
       }),
       signal: controller.signal,
     });
@@ -2053,9 +2056,10 @@ You MUST reply with ONLY a strictly valid JSON object matching this schema witho
 
     if (ollamaResp.ok) {
       const jsonRes = await ollamaResp.json();
-      const rawResponse = jsonRes.response;
+      const rawResponse = jsonRes.message?.content || jsonRes.response;
       if (rawResponse) {
-        const parsed = typeof rawResponse === "string" ? JSON.parse(rawResponse) : rawResponse;
+        const cleaned = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const parsed = typeof cleaned === "string" ? JSON.parse(cleaned) : cleaned;
         return { data: parsed, engine: `ollama-${modelToUse}` };
       }
     }

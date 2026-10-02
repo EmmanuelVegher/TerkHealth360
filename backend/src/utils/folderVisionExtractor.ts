@@ -298,36 +298,45 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
   });
 
 
-  // ── Priority 1: Ollama Local Vision AI (llama3.2-vision — offline-native) ────
+  // ── Priority 1: Ollama Local Vision AI (llama3.2-vision:latest — offline-native) ──
   try {
-    let ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2-vision';
+    // AI_OLLAMA_MODEL is the correct DB key used by saveAIConfig/getAIConfig
+    let ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2-vision:latest';
     try {
-      const ollamaCfg = await prisma.systemConfig.findMany({ where: { key: { in: ['OLLAMA_MODEL'] } } });
+      const ollamaCfg = await prisma.systemConfig.findMany({
+        where: { key: { in: ['AI_OLLAMA_MODEL', 'OLLAMA_MODEL', 'VISION_MODEL'] } }
+      });
       for (const row of ollamaCfg) {
-        if (row.key === 'OLLAMA_MODEL' && row.value?.trim()) ollamaModel = row.value.trim();
+        // AI_OLLAMA_MODEL is the primary key; fall back to others if needed
+        if ((row.key === 'AI_OLLAMA_MODEL' || row.key === 'OLLAMA_MODEL') && row.value?.trim()) {
+          ollamaModel = row.value.trim();
+          break;
+        }
       }
     } catch {}
 
+    // Vision model candidates — exact installed name first
     const visionModels = Array.from(new Set([
       ollamaModel,
-      'llama3.2-vision',
       'llama3.2-vision:latest',
+      'llama3.2-vision',
       'llava',
       'llava:13b',
       'moondream',
       'minicpm-v',
     ].filter(Boolean) as string[]));
 
-    // Ollama /api/chat accepts images as raw base64 strings
+    // Ollama /api/chat accepts images as raw base64 strings (no data URI prefix)
     const base64Images = images.map(img =>
       img.includes('base64,') ? img.split('base64,')[1] : img
     );
 
     for (const model of visionModels) {
       try {
+        console.log(`[FolderVision] Trying Ollama model: ${model}`);
         const controller = new AbortController();
-        // 90s — multi-page vision inference can be slow on local hardware
-        const ollamaTimeout = setTimeout(() => controller.abort(), 90000);
+        // 120s — multi-page 10.7B vision model needs more time on local hardware
+        const ollamaTimeout = setTimeout(() => controller.abort(), 120000);
 
         const ollamaResp = await fetch('http://127.0.0.1:11434/api/chat', {
           method: 'POST',
