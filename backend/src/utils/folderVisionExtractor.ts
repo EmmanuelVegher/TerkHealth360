@@ -297,6 +297,84 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
     };
   });
 
+
+  // ── Priority 1: Ollama Local Vision AI (llama3.2-vision — offline-native) ────
+  try {
+    let ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2-vision';
+    try {
+      const ollamaCfg = await prisma.systemConfig.findMany({ where: { key: { in: ['OLLAMA_MODEL'] } } });
+      for (const row of ollamaCfg) {
+        if (row.key === 'OLLAMA_MODEL' && row.value?.trim()) ollamaModel = row.value.trim();
+      }
+    } catch {}
+
+    const visionModels = Array.from(new Set([
+      ollamaModel,
+      'llama3.2-vision',
+      'llama3.2-vision:latest',
+      'llava',
+      'llava:13b',
+      'moondream',
+      'minicpm-v',
+    ].filter(Boolean) as string[]));
+
+    // Ollama /api/chat accepts images as raw base64 strings
+    const base64Images = images.map(img =>
+      img.includes('base64,') ? img.split('base64,')[1] : img
+    );
+
+    for (const model of visionModels) {
+      try {
+        const controller = new AbortController();
+        // 90s — multi-page vision inference can be slow on local hardware
+        const ollamaTimeout = setTimeout(() => controller.abort(), 90000);
+
+        const ollamaResp = await fetch('http://127.0.0.1:11434/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            stream: false,
+            options: { temperature: 0.05, num_predict: 2000 },
+            messages: [{ role: 'user', content: FOLDER_EXTRACTION_PROMPT, images: base64Images }],
+          }),
+        });
+
+        clearTimeout(ollamaTimeout);
+
+        if (ollamaResp.ok) {
+          const ollamaJson = await ollamaResp.json();
+          const rawText = (ollamaJson.message?.content || ollamaJson.response || '').trim();
+          if (rawText && rawText.length > 50) {
+            const cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            try {
+              const parsed = JSON.parse(cleanedJson);
+              if (parsed && (parsed.patient || (parsed.encounters && parsed.encounters.length > 0))) {
+                console.log(`[FolderVision] Ollama ${model} successfully extracted folder data offline.`);
+                const result = sanitizeAndNormalizeExtractedData(parsed);
+                result.aiNotes = `[OpenMed Local AI - ${model}] ${result.aiNotes}`;
+                return result;
+              }
+            } catch {
+              console.warn(`[FolderVision] Ollama ${model} returned non-JSON. Trying next model.`);
+            }
+          }
+        }
+      } catch (ollamaErr: any) {
+        const code = ollamaErr?.cause?.code || '';
+        if (code === 'ECONNREFUSED' || ollamaErr?.message?.includes('ECONNREFUSED')) {
+          console.log('[FolderVision] Ollama not running. Falling through to Gemini cloud.');
+          break;
+        }
+        console.warn(`[FolderVision] Ollama model ${model} failed:`, ollamaErr?.message || ollamaErr);
+      }
+    }
+  } catch (ollamaOuterErr) {
+    console.warn('[FolderVision] Ollama vision block error:', ollamaOuterErr);
+  }
+
+  // ── Priority 2: Gemini Cloud Vision AI (requires internet) ───────────────────
   if (apiKey) {
     const candidateModels = Array.from(new Set([
       configuredModel,
@@ -321,19 +399,8 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: FOLDER_EXTRACTION_PROMPT },
-                  ...imageParts
-                ]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              topP: 0.95,
-              responseMimeType: 'application/json'
-            }
+            contents: [{ parts: [{ text: FOLDER_EXTRACTION_PROMPT }, ...imageParts] }],
+            generationConfig: { temperature: 0.1, topP: 0.95, responseMimeType: 'application/json' }
           })
         });
         clearTimeout(timeout);
@@ -349,20 +416,22 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
           }
         }
       } catch (geminiErr: any) {
-        console.warn(`[FolderVision] Model ${model} failed:`, geminiErr?.message || geminiErr);
+        console.warn(`[FolderVision] Gemini model ${model} failed:`, geminiErr?.message || geminiErr);
         const errMsg = String(geminiErr?.message || '') + String(geminiErr?.cause?.code || '');
         if (errMsg.includes('ENOTFOUND') || errMsg.includes('EAI_AGAIN') || errMsg.includes('ECONNREFUSED')) {
-          console.log('[FolderVision] Internet unreachable (DNS/Connection failed). Using offline draft fallback immediately.');
+          console.log('[FolderVision] Internet unreachable. Using offline draft fallback immediately.');
           break;
         }
       }
     }
   }
 
+  // ── Priority 3: Offline Draft Template (clerk fills in manually) ─────────────
   return generateOfflineFallbackDraft(images.length);
 }
 
 function sanitizeAndNormalizeExtractedData(raw: any): ExtractedFolderData {
+
   const patientRaw = raw.patient || {};
   const bloodGroupMap: Record<string, string> = {
     'A+': 'A_POSITIVE',

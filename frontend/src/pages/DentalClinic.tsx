@@ -2767,7 +2767,7 @@ export default function DentalClinic() {
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Description fontSize="small" sx={{ color: '#1e3a8a' }} />
-                          Diagnostic Interpretation & Radiologist Findings (PostgreSQL)
+                          Diagnostic Interpretation & Radiologist Findings
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#64748b' }}>
                           Official dental radiographic report saved under Study UID {activeScan.scanNumber}
