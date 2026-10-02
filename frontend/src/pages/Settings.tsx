@@ -533,7 +533,10 @@ const Settings = () => {
   const [pullState, setPullState] = useState<Record<string, { progress: number; status: 'idle'|'pulling'|'done'|'error'; statusText: string }>>({});
 
   const AVAILABLE_MODELS = [
-    { value: 'llama3.2-vision', label: 'Llama 3.2 Vision (11B)', desc: 'Medical Vision & OCR · Drug Packaging Recognition · ~7.9 GB', recommended: true },
+    { value: 'medgemma:4b', label: 'MedGamma / MedGemma 4B ★ (Medical Vision AI)', desc: 'Google Health · Trained on Medical Images (X-Rays, MRI, CT, Derm, Histopath) & Clinical Text · ~3.3 GB', recommended: true },
+    { value: 'medgemma:27b', label: 'MedGamma / MedGemma 27B (Medical AI)', desc: 'Google Health · High-Accuracy Clinical Reasoning & Medical Text Analysis · ~16 GB', recommended: false },
+    { value: 'medgamma', label: 'MedGamma (Community Medical AI)', desc: 'Radiology Report Generation & Diagnostic Reasoning · ~4.2 GB', recommended: false },
+    { value: 'llama3.2-vision:latest', label: 'Llama 3.2 Vision 11B (Latest)', desc: 'Multimodal Vision & Clinical OCR · Drug Package Recognition · ~7.9 GB', recommended: false },
     { value: 'llava', label: 'LLaVA 7B (Vision & OCR)', desc: 'Medical Image & Document OCR · ~4.5 GB', recommended: false },
     { value: 'qwen2.5:7b', label: 'Qwen 2.5 (7B)', desc: 'Advanced Clinical Reasoning & Parsing · ~4.7 GB', recommended: false },
     { value: 'medllama2', label: 'MedLlama2', desc: 'Medical-tuned · 4-bit · ~3.8 GB', recommended: false },
@@ -1673,11 +1676,15 @@ const Settings = () => {
                           '& .MuiSvgIcon-root': { color: '#fff' },
                         }}
                       >
+                        <MenuItem value="medgemma:4b">MedGamma / MedGemma 4B ★ (Google Health Medical Images & Diagnostics)</MenuItem>
+                        <MenuItem value="medgemma:27b">MedGamma / MedGemma 27B (Google Health Medical Clinical Reasoning)</MenuItem>
+                        <MenuItem value="medgamma">MedGamma (Radiology & Diagnostic Vision)</MenuItem>
+                        <MenuItem value="llama3.2-vision:latest">llama3.2-vision:latest (11B Multimodal Vision)</MenuItem>
                         <MenuItem value="llama3.2-vision">llama3.2-vision (11B Medical & Package Vision)</MenuItem>
                         <MenuItem value="llava">llava (7B General OCR & Package Vision)</MenuItem>
                         <MenuItem value="minicpm-v">minicpm-v (8B Lightweight Vision)</MenuItem>
                         <MenuItem value="moondream">moondream (2B Ultralight Fast Vision)</MenuItem>
-                        {ollamaModels.filter(m => !['llama3.2-vision', 'llava', 'minicpm-v', 'moondream'].includes(m.name)).map(m => (
+                        {ollamaModels.filter(m => !['medgemma:4b', 'medgemma:27b', 'medgamma', 'llama3.2-vision:latest', 'llama3.2-vision', 'llava', 'minicpm-v', 'moondream'].includes(m.name)).map(m => (
                           <MenuItem key={m.name} value={m.name}>{m.name} ({m.sizeMB} MB — Installed)</MenuItem>
                         ))}
                       </Select>
@@ -1823,6 +1830,9 @@ const Settings = () => {
                             </Stack>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontSize: 11 }}>
                               • Run <b>OllamaSetup.exe</b>. It automatically starts Ollama in your system tray.
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#fbbf24', display: 'block', fontSize: 11, mt: 0.5 }}>
+                              💡 <b>Note for Medical Vision AI (MedGamma / Llama 3.2 Vision):</b> Ensure Ollama is updated to the latest version via the button above so Windows supports multimodal vision architectures.
                             </Typography>
                           </Box>
                         )}

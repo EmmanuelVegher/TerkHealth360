@@ -298,32 +298,42 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
   });
 
 
-  // ── Priority 1: Ollama Local Vision AI (llama3.2-vision:latest — offline-native) ──
+  // ── Priority 1: Ollama Local Vision AI (MedGamma / MedGemma / Llama 3.2 Vision — offline-native) ──
   try {
-    // AI_OLLAMA_MODEL is the correct DB key used by saveAIConfig/getAIConfig
-    let ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2-vision:latest';
+    let configuredVisionModel = '';
     try {
-      const ollamaCfg = await prisma.systemConfig.findMany({
-        where: { key: { in: ['AI_OLLAMA_MODEL', 'OLLAMA_MODEL', 'VISION_MODEL'] } }
+      const dbCfg = await prisma.systemConfig.findMany({
+        where: { key: { in: ['AI_VISION_MODEL', 'AI_OLLAMA_MODEL', 'OLLAMA_MODEL', 'VISION_MODEL'] } }
       });
-      for (const row of ollamaCfg) {
-        // AI_OLLAMA_MODEL is the primary key; fall back to others if needed
-        if ((row.key === 'AI_OLLAMA_MODEL' || row.key === 'OLLAMA_MODEL') && row.value?.trim()) {
-          ollamaModel = row.value.trim();
-          break;
-        }
+      const visionRow = dbCfg.find(r => r.key === 'AI_VISION_MODEL' && r.value?.trim());
+      const ollamaRow = dbCfg.find(r => (r.key === 'AI_OLLAMA_MODEL' || r.key === 'OLLAMA_MODEL') && r.value?.trim());
+      configuredVisionModel = visionRow?.value?.trim() || ollamaRow?.value?.trim() || '';
+    } catch {}
+
+    // Discover actually installed models from local Ollama tags
+    let installedOllamaModels: string[] = [];
+    try {
+      const tagResp = await fetch('http://127.0.0.1:11434/api/tags');
+      if (tagResp.ok) {
+        const tagJson = await tagResp.json();
+        installedOllamaModels = (tagJson.models || []).map((m: any) => m.name);
       }
     } catch {}
 
-    // Vision model candidates — exact installed name first
+    // Order candidates: configured model -> installed models -> vision standards
     const visionModels = Array.from(new Set([
-      ollamaModel,
+      configuredVisionModel,
+      ...installedOllamaModels.filter(m => m.includes('vision') || m.includes('medgemma') || m.includes('medgamma') || m.includes('llava')),
+      'medgemma:4b',
+      'medgemma:27b',
+      'medgamma',
       'llama3.2-vision:latest',
       'llama3.2-vision',
       'llava',
       'llava:13b',
       'moondream',
       'minicpm-v',
+      ...installedOllamaModels
     ].filter(Boolean) as string[]));
 
     // Ollama /api/chat accepts images as raw base64 strings (no data URI prefix)
@@ -369,8 +379,13 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
               console.warn(`[FolderVision] Ollama ${model} returned non-JSON. Trying next model.`);
             }
           }
+        } else {
+          const errText = await ollamaResp.text();
+          console.warn(`[FolderVision] Ollama model ${model} returned HTTP ${ollamaResp.status}:`, errText);
+          if (errText.includes('mllama') || errText.includes('unknown model architecture')) {
+            console.warn(`[FolderVision] Windows Ollama update recommended: Run OllamaSetup.exe to update Ollama on Windows so it recognizes the '${model}' (mllama) architecture.`);
+          }
         }
-      } catch (ollamaErr: any) {
         const code = ollamaErr?.cause?.code || '';
         if (code === 'ECONNREFUSED' || ollamaErr?.message?.includes('ECONNREFUSED')) {
           console.log('[FolderVision] Ollama not running. Falling through to Gemini cloud.');

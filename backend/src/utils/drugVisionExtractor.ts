@@ -357,6 +357,9 @@ export async function extractDrugFromImage(rawBase64OrUrl: string): Promise<Extr
   // ═══════════════════════════════════════════════════════════════════════════
   const candidateLocalModels = Array.from(new Set([
     visionLocalModel,
+    'medgemma:4b',
+    'medgamma',
+    'llama3.2-vision:latest',
     'llama3.2-vision',
     'llava',
     'minicpm-v',
