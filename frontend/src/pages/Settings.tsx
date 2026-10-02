@@ -4,9 +4,14 @@ import { alpha } from '@mui/material/styles';
 import {
   Card, CardContent, Grid, Typography, TextField, Button, Box, Divider,
   Alert, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent,
-  DialogActions, Stack, MenuItem, Select, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, IconButton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, Tooltip, Paper, Avatar,
+  DialogActions, Stack, MenuItem, Select, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, IconButton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, CircularProgress, Tooltip, Paper, Avatar,
 } from '@mui/material';
-import { Settings as SettingsIcon, Shield, Storage, People, Add, Delete, AccountBalance, Badge as BadgeIcon, Visibility, MedicalServices, Edit, Bed, LocalHospital, SwapHoriz, PersonPin, Psychology, MemoryOutlined, SmartToy, Circle, Biotech, Download, CheckCircle, DeleteOutline, Refresh, CalendarMonth, ArrowForward } from '@mui/icons-material';
+import {
+  Settings as SettingsIcon, Shield, Storage, People, Add, Delete, AccountBalance, Badge as BadgeIcon,
+  Visibility, VisibilityOff, MedicalServices, Edit, Bed, LocalHospital, SwapHoriz, PersonPin, Psychology,
+  MemoryOutlined, SmartToy, Circle, Biotech, Download, CheckCircle, CheckCircleOutline, DeleteOutline,
+  Refresh, CalendarMonth, ArrowForward, AutoAwesome, CloudQueue, CameraAlt, Key
+} from '@mui/icons-material';
 import { NairaCircleIcon } from '../components/NairaIcon';
 import { useSnackbar } from 'notistack';
 import SystemHealthPanel from '../components/SystemHealthPanel';
@@ -515,11 +520,20 @@ const Settings = () => {
   const [selectedOsTab, setSelectedOsTab] = useState<'auto' | 'win32' | 'darwin' | 'linux'>('auto');
   const [startingService, setStartingService] = useState(false);
   const [savingAiConfig, setSavingAiConfig] = useState(false);
+
+  // Gemini & Multimodal Vision Configuration
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash');
+  const [visionLocalModel, setVisionLocalModel] = useState('llama3.2-vision');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Per-model download state: { [modelValue]: { progress: 0-100, status: 'idle'|'pulling'|'done'|'error', statusText: string } }
   const [pullState, setPullState] = useState<Record<string, { progress: number; status: 'idle'|'pulling'|'done'|'error'; statusText: string }>>({});
 
   const AVAILABLE_MODELS = [
-    { value: 'llama3.2-vision', label: 'Llama 3.2 Vision (11B)', desc: 'Medical Vision & OCR · Lab & Chart Parsing · ~7.9 GB', recommended: true },
+    { value: 'llama3.2-vision', label: 'Llama 3.2 Vision (11B)', desc: 'Medical Vision & OCR · Drug Packaging Recognition · ~7.9 GB', recommended: true },
     { value: 'llava', label: 'LLaVA 7B (Vision & OCR)', desc: 'Medical Image & Document OCR · ~4.5 GB', recommended: false },
     { value: 'qwen2.5:7b', label: 'Qwen 2.5 (7B)', desc: 'Advanced Clinical Reasoning & Parsing · ~4.7 GB', recommended: false },
     { value: 'medllama2', label: 'MedLlama2', desc: 'Medical-tuned · 4-bit · ~3.8 GB', recommended: false },
@@ -531,9 +545,12 @@ const Settings = () => {
   // Load AI config from backend on mount
   useEffect(() => {
     api.get('/openmed/ai-config').then(res => {
-      if (res.data?.success) {
+      if (res.data?.success && res.data.data) {
         setAiLlmEnabled(res.data.data.llmEnabled ?? false);
         setAiOllamaModel(res.data.data.ollamaModel ?? 'medllama2');
+        if (res.data.data.geminiApiKey) setGeminiApiKey(res.data.data.geminiApiKey);
+        if (res.data.data.geminiModel) setGeminiModel(res.data.data.geminiModel);
+        if (res.data.data.visionLocalModel) setVisionLocalModel(res.data.data.visionLocalModel);
       }
     }).catch(() => {});
   }, []);
@@ -583,11 +600,46 @@ const Settings = () => {
     }
   };
 
+  const handleTestGemini = async () => {
+    if (!geminiApiKey.trim()) {
+      enqueueSnackbar('Please enter a Google Gemini API Key to test connection', { variant: 'warning' });
+      return;
+    }
+    setTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await api.post('/openmed/test-gemini', {
+        apiKey: geminiApiKey.trim(),
+        model: geminiModel.trim()
+      });
+      if (res.data?.success) {
+        setGeminiTestResult({ success: true, message: res.data.message });
+        enqueueSnackbar(res.data.message, { variant: 'success' });
+      } else {
+        setGeminiTestResult({ success: false, message: res.data?.message || 'Connection test failed' });
+        enqueueSnackbar(res.data?.message || 'Connection test failed', { variant: 'error' });
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to ping Google Gemini API';
+      setGeminiTestResult({ success: false, message: msg });
+      enqueueSnackbar(msg, { variant: 'error' });
+    } finally {
+      setTestingGemini(false);
+    }
+  };
+
   const handleSaveAiConfig = async () => {
     setSavingAiConfig(true);
     try {
-      await api.put('/openmed/ai-config', { llmEnabled: aiLlmEnabled, ollamaModel: aiOllamaModel, nerEnabled: true });
-      enqueueSnackbar('AI Engine settings saved successfully', { variant: 'success' });
+      await api.put('/openmed/ai-config', {
+        llmEnabled: aiLlmEnabled,
+        ollamaModel: aiOllamaModel,
+        nerEnabled: true,
+        geminiApiKey: geminiApiKey.trim(),
+        geminiModel: geminiModel.trim(),
+        visionLocalModel: visionLocalModel.trim()
+      });
+      enqueueSnackbar('AI Engine, Google Gemini & Vision configurations saved to database successfully!', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to save AI Engine settings', { variant: 'error' });
     } finally {
@@ -1397,7 +1449,243 @@ const Settings = () => {
 
               <Grid container spacing={3}>
 
-                {/* NER Status — always on */}
+                {/* ── 1. Google Gemini Cloud Multimodal Vision Card ──────────────── */}
+                <Grid item xs={12}>
+                  <Box sx={{
+                    p: 3,
+                    borderRadius: 2.5,
+                    background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%)',
+                    border: '1px solid rgba(99, 102, 241, 0.35)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
+                  }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2} flexWrap="wrap" gap={1.5}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Avatar sx={{ bgcolor: 'rgba(59, 130, 246, 0.25)', border: '1px solid rgba(59, 130, 246, 0.5)', width: 40, height: 40 }}>
+                          <AutoAwesome sx={{ color: '#60a5fa', fontSize: 22 }} />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            Google Gemini Multimodal Vision & Cloud AI
+                            <Chip label="PRIMARY VISION & OCR" size="small" sx={{ bgcolor: 'rgba(59, 130, 246, 0.3)', color: '#93c5fd', fontWeight: 800, fontSize: 10, height: 20 }} />
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                            Used for instant AI Drug Packaging OCR, NAFDAC extraction & formulation identification when internet is available.
+                          </Typography>
+                        </Box>
+                      </Stack>
+
+                      {/* Action Buttons: Test Connection & Save */}
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={testingGemini ? <CircularProgress size={14} color="inherit" /> : <CloudQueue fontSize="small" />}
+                          onClick={handleTestGemini}
+                          disabled={testingGemini || !geminiApiKey.trim()}
+                          sx={{
+                            borderColor: '#60a5fa',
+                            color: '#93c5fd',
+                            fontWeight: 700,
+                            fontSize: 12,
+                            textTransform: 'none',
+                            px: 2,
+                            py: 0.8,
+                            borderRadius: 1.5,
+                            '&:hover': { bgcolor: 'rgba(96, 165, 250, 0.15)', borderColor: '#93c5fd' }
+                          }}
+                        >
+                          {testingGemini ? 'Testing Ping...' : 'Test Gemini Connection'}
+                        </Button>
+
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={savingAiConfig ? <CircularProgress size={14} color="inherit" /> : <CheckCircle sx={{ fontSize: 16 }} />}
+                          onClick={handleSaveAiConfig}
+                          disabled={savingAiConfig}
+                          sx={{
+                            background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                            color: '#fff',
+                            fontWeight: 800,
+                            fontSize: 12,
+                            textTransform: 'none',
+                            px: 2.5,
+                            py: 0.8,
+                            borderRadius: 1.5,
+                            boxShadow: '0 4px 12px rgba(37,99,235,0.4)',
+                            '&:hover': { background: 'linear-gradient(135deg, #1d4ed8 0%, #6d28d9 100%)' }
+                          }}
+                        >
+                          {savingAiConfig ? 'Saving...' : 'Save Gemini Settings'}
+                        </Button>
+                      </Stack>
+                    </Stack>
+
+                    {geminiTestResult && (
+                      <Alert
+                        severity={geminiTestResult.success ? 'success' : 'error'}
+                        variant="filled"
+                        sx={{
+                          mb: 2,
+                          borderRadius: 2,
+                          py: 0.5,
+                          bgcolor: geminiTestResult.success ? 'rgba(5, 150, 105, 0.9)' : 'rgba(220, 38, 38, 0.9)'
+                        }}
+                      >
+                        {geminiTestResult.message}
+                      </Alert>
+                    )}
+
+                    <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+                      {/* Gemini API Key */}
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Google Gemini API Key *"
+                          placeholder="AIzaSy..."
+                          type={showGeminiKey ? 'text' : 'password'}
+                          value={geminiApiKey}
+                          onChange={e => setGeminiApiKey(e.target.value)}
+                          InputProps={{
+                            startAdornment: <Key sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 18, mr: 1 }} />,
+                            endAdornment: (
+                              <IconButton
+                                size="small"
+                                onClick={() => setShowGeminiKey(s => !s)}
+                                sx={{ color: 'rgba(255,255,255,0.6)' }}
+                              >
+                                {showGeminiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            )
+                          }}
+                          helperText={
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
+                              Need a key? Generate one for free at{' '}
+                              <a
+                                href="https://aistudio.google.com/app/apikey"
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ color: '#93c5fd', textDecoration: 'underline' }}
+                              >
+                                Google AI Studio (aistudio.google.com)
+                              </a>
+                            </span>
+                          }
+                          sx={{
+                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                            '& .MuiOutlinedInput-root': {
+                              color: '#fff',
+                              bgcolor: 'rgba(0,0,0,0.3)',
+                              '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                              '&:hover fieldset': { borderColor: '#60a5fa' },
+                              '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
+                            }
+                          }}
+                        />
+                      </Grid>
+
+                      {/* Gemini Model Number / Name Input (Not hardcoded) */}
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Gemini Model Number / Name *"
+                          placeholder="e.g. gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro..."
+                          value={geminiModel}
+                          onChange={e => setGeminiModel(e.target.value.trim())}
+                          helperText={
+                            <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
+                              Appended to API path: <code style={{ color: '#93c5fd', background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>models/{geminiModel || '{model_number}'}:generateContent</code>
+                            </span>
+                          }
+                          sx={{
+                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                            '& .MuiOutlinedInput-root': {
+                              color: '#fff',
+                              bgcolor: 'rgba(0,0,0,0.3)',
+                              '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                              '&:hover fieldset': { borderColor: '#60a5fa' },
+                              '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
+                            }
+                          }}
+                        />
+
+                        {/* Quick Suggestion Chips */}
+                        <Stack direction="row" spacing={0.8} mt={1} flexWrap="wrap" gap={0.5} alignItems="center">
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 10.5 }}>Quick fill:</Typography>
+                          {[
+                            'gemini-2.5-flash',
+                            'gemini-2.0-flash',
+                            'gemini-1.5-flash',
+                            'gemini-1.5-pro',
+                            'gemini-2.5-pro'
+                          ].map(modelName => (
+                            <Chip
+                              key={modelName}
+                              label={modelName}
+                              size="small"
+                              onClick={() => setGeminiModel(modelName)}
+                              sx={{
+                                height: 22,
+                                fontSize: 10.5,
+                                cursor: 'pointer',
+                                bgcolor: geminiModel === modelName ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255,255,255,0.08)',
+                                color: geminiModel === modelName ? '#93c5fd' : 'rgba(255,255,255,0.7)',
+                                border: geminiModel === modelName ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                                '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.25)' }
+                              }}
+                            />
+                          ))}
+                        </Stack>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Grid>
+
+                {/* ── 2. Local Vision Model (Offline Fallback) ────────────────────── */}
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ p: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', height: '100%' }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <CameraAlt sx={{ color: '#fbbf24', fontSize: 22 }} />
+                        <Typography fontWeight={700} sx={{ color: '#fff' }}>Local Vision Model (Offline Fallback)</Typography>
+                      </Stack>
+                      <Chip
+                        label={ollamaModels.some(m => m.name.includes(visionLocalModel) || visionLocalModel.includes(m.name)) ? "LOCAL ✓" : "OPTIONAL"}
+                        size="small"
+                        sx={{ bgcolor: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontWeight: 700, fontSize: 11 }}
+                      />
+                    </Stack>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, mb: 1.5 }}>
+                      When offline or internet drops, drug package scans automatically fall back to this local Ollama vision model running directly on hospital hardware.
+                    </Typography>
+
+                    <FormControl fullWidth size="small">
+                      <Select
+                        value={visionLocalModel}
+                        onChange={e => setVisionLocalModel(e.target.value)}
+                        sx={{
+                          color: '#fff',
+                          bgcolor: 'rgba(0,0,0,0.25)',
+                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#fbbf24' },
+                          '& .MuiSvgIcon-root': { color: '#fff' },
+                        }}
+                      >
+                        <MenuItem value="llama3.2-vision">llama3.2-vision (11B Medical & Package Vision)</MenuItem>
+                        <MenuItem value="llava">llava (7B General OCR & Package Vision)</MenuItem>
+                        <MenuItem value="minicpm-v">minicpm-v (8B Lightweight Vision)</MenuItem>
+                        <MenuItem value="moondream">moondream (2B Ultralight Fast Vision)</MenuItem>
+                        {ollamaModels.filter(m => !['llama3.2-vision', 'llava', 'minicpm-v', 'moondream'].includes(m.name)).map(m => (
+                          <MenuItem key={m.name} value={m.name}>{m.name} ({m.sizeMB} MB — Installed)</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                </Grid>
+
+                {/* ── 3. Clinical NER (OpenMed SDK) ──────────────────────────────── */}
                 <Grid item xs={12} md={6}>
                   <Box sx={{ p: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', height: '100%' }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
@@ -1405,7 +1693,7 @@ const Settings = () => {
                         <Biotech sx={{ color: '#34d399', fontSize: 22 }} />
                         <Typography fontWeight={700} sx={{ color: '#fff' }}>Clinical NER (OpenMed SDK)</Typography>
                       </Stack>
-                      <Chip label="ALWAYS ON" size="small" sx={{ bgcolor: 'rgba(52,211,153,0.2)', color: '#34d399', fontWeight: 700, fontSize: 11 }} />
+                      <Chip label="ALWAYS ACTIVE" size="small" sx={{ bgcolor: 'rgba(52,211,153,0.2)', color: '#34d399', fontWeight: 700, fontSize: 11 }} />
                     </Stack>
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
                       Medical dictionary enrichment runs on every chat query. Extracts
@@ -1415,13 +1703,13 @@ const Settings = () => {
                   </Box>
                 </Grid>
 
-                {/* Ollama LLM Toggle */}
+                {/* ── 4. Ollama LLM Toggle ───────────────────────────────────────── */}
                 <Grid item xs={12} md={6}>
                   <Box sx={{ p: 2.5, borderRadius: 2, background: aiLlmEnabled ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.06)', border: `1px solid ${aiLlmEnabled ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)'}`, height: '100%', transition: 'all 0.3s' }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Psychology sx={{ color: '#a78bfa', fontSize: 22 }} />
-                        <Typography fontWeight={700} sx={{ color: '#fff' }}>Quantized LLM (Ollama)</Typography>
+                        <Typography fontWeight={700} sx={{ color: '#fff' }}>Quantized Local LLM (Ollama Text)</Typography>
                       </Stack>
                       <FormControlLabel
                         control={
@@ -1446,7 +1734,7 @@ const Settings = () => {
                   </Box>
                 </Grid>
 
-                {/* Ollama Live Status & OS Installer */}
+                {/* ── 5. Ollama Live Status & OS Installer ────────────────────────── */}
                 <Grid item xs={12} md={6}>
                   <Box sx={{ p: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
@@ -1595,140 +1883,117 @@ const Settings = () => {
                   </Box>
                 </Grid>
 
-                {/* Model Selection & Download Manager */}
-                <Grid item xs={12} md={6}>
+                {/* ── 6. Model Selection & Download Manager ───────────────────────── */}
+                <Grid item xs={12}>
                   <Box sx={{ p: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <Stack direction="row" spacing={1} alignItems="center" mb={1.5}>
                       <MemoryOutlined sx={{ color: '#60a5fa', fontSize: 20 }} />
-                      <Typography fontWeight={700} sx={{ color: '#fff' }}>Active Model Selection</Typography>
+                      <Typography fontWeight={700} sx={{ color: '#fff' }}>Local Model Manager & Clinical Models</Typography>
                     </Stack>
-                    <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                      <Select
-                        value={aiOllamaModel}
-                        onChange={e => setAiOllamaModel(e.target.value)}
-                        disabled={!aiLlmEnabled}
-                        sx={{
-                          color: '#fff',
-                          background: 'rgba(255,255,255,0.08)',
-                          '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(139,92,246,0.6)' },
-                          '.MuiSvgIcon-root': { color: '#fff' },
-                        }}
-                      >
-                        {AVAILABLE_MODELS.map(m => {
-                          const isInstalled = ollamaModels.some(om => om.name.includes(m.value) || m.value.includes(om.name));
-                          return (
-                            <MenuItem key={m.value} value={m.value}>
-                              {m.label} ({m.desc}) {isInstalled ? ' — Installed ✓' : ' — (Not Installed)'}
-                            </MenuItem>
-                          );
-                        })}
-                        {ollamaModels.filter(m => !AVAILABLE_MODELS.find(am => am.value === m.name || m.name.includes(am.value))).map(m => (
-                          <MenuItem key={m.name} value={m.name}>{m.name} ({m.sizeMB} MB — Installed ✓)</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
 
                     <Typography variant="subtitle2" fontWeight={700} sx={{ color: 'rgba(255,255,255,0.9)', mb: 1 }}>
                       Model Download Manager
                     </Typography>
 
-                    <Stack spacing={1.5}>
+                    <Grid container spacing={2}>
                       {AVAILABLE_MODELS.map(m => {
                         const installedInfo = ollamaModels.find(om => om.name.includes(m.value) || m.value.includes(om.name));
                         const state = pullState[m.value] || { progress: 0, status: 'idle', statusText: '' };
                         const isDownloading = state.status === 'pulling';
 
                         return (
-                          <Box key={m.value} sx={{ p: 1.5, borderRadius: 1.5, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.5}>
-                              <Box>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                  <Typography variant="body2" fontWeight={700} sx={{ color: '#fff' }}>
-                                    {m.label}
-                                  </Typography>
-                                  {m.recommended && (
-                                    <Chip label="Recommended" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(99,102,241,0.3)', color: '#818cf8', fontWeight: 700 }} />
-                                  )}
-                                </Stack>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>
-                                  {m.desc}
-                                </Typography>
-                              </Box>
-
-                              <Box>
-                                {installedInfo ? (
+                          <Grid item xs={12} md={6} key={m.value}>
+                            <Box sx={{ p: 1.5, borderRadius: 1.5, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                              <Stack direction="row" alignItems="flex-start" justifyContent="space-between" mb={0.5}>
+                                <Box sx={{ pr: 1 }}>
                                   <Stack direction="row" alignItems="center" spacing={1}>
-                                    <Chip icon={<CheckCircle sx={{ fontSize: '14px !important', color: '#34d399 !important' }} />} label="Installed" size="small" sx={{ bgcolor: 'rgba(52,211,153,0.15)', color: '#34d399', fontSize: 11, fontWeight: 700 }} />
-                                    <Tooltip title="Delete Model">
-                                      <IconButton size="small" onClick={() => handleDeleteModel(installedInfo.name)} sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#f87171' } }}>
-                                        <DeleteOutline fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
+                                    <Typography variant="body2" fontWeight={700} sx={{ color: '#fff' }}>
+                                      {m.label}
+                                    </Typography>
+                                    {m.recommended && (
+                                      <Chip label="Recommended" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(99,102,241,0.3)', color: '#818cf8', fontWeight: 700 }} />
+                                    )}
                                   </Stack>
-                                ) : isDownloading ? (
-                                  <Chip label={`${state.progress}%`} size="small" sx={{ bgcolor: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontSize: 11, fontWeight: 700 }} />
-                                ) : (
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<Download fontSize="small" />}
-                                    onClick={() => handlePullModel(m.value)}
-                                    disabled={ollamaStatus !== 'running'}
-                                    sx={{
-                                      borderColor: 'rgba(139,92,246,0.5)',
-                                      color: '#c4b5fd',
-                                      fontSize: 11,
-                                      py: 0.3,
-                                      px: 1.5,
-                                      '&:hover': { borderColor: '#a78bfa', bgcolor: 'rgba(139,92,246,0.1)' },
-                                    }}
-                                  >
-                                    Download
-                                  </Button>
-                                )}
-                              </Box>
-                            </Stack>
+                                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mt: 0.5 }}>
+                                    {m.desc}
+                                  </Typography>
+                                </Box>
 
-                            {isDownloading && (
-                              <Box sx={{ mt: 1 }}>
-                                <LinearProgress variant="determinate" value={state.progress} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.1)', '& .MuiLinearProgress-bar': { bgcolor: '#a78bfa' } }} />
-                                <Typography variant="caption" sx={{ color: '#fbbf24', fontSize: 10, mt: 0.5, display: 'block' }}>
-                                  {state.statusText} ({state.progress}%)
-                                </Typography>
-                              </Box>
-                            )}
-                          </Box>
+                                <Box sx={{ flexShrink: 0 }}>
+                                  {installedInfo ? (
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                      <Chip icon={<CheckCircle sx={{ fontSize: '14px !important', color: '#34d399 !important' }} />} label="Installed" size="small" sx={{ bgcolor: 'rgba(52,211,153,0.15)', color: '#34d399', fontSize: 11, fontWeight: 700 }} />
+                                      <Tooltip title="Delete Model">
+                                        <IconButton size="small" onClick={() => handleDeleteModel(installedInfo.name)} sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#f87171' } }}>
+                                          <DeleteOutline fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Stack>
+                                  ) : isDownloading ? (
+                                    <Chip label={`${state.progress}%`} size="small" sx={{ bgcolor: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontSize: 11, fontWeight: 700 }} />
+                                  ) : (
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      startIcon={<Download fontSize="small" />}
+                                      onClick={() => handlePullModel(m.value)}
+                                      disabled={ollamaStatus !== 'running'}
+                                      sx={{
+                                        borderColor: 'rgba(139,92,246,0.5)',
+                                        color: '#c4b5fd',
+                                        fontSize: 11,
+                                        py: 0.3,
+                                        px: 1.5,
+                                        '&:hover': { borderColor: '#a78bfa', bgcolor: 'rgba(139,92,246,0.1)' },
+                                      }}
+                                    >
+                                      Download
+                                    </Button>
+                                  )}
+                                </Box>
+                              </Stack>
+
+                              {isDownloading && (
+                                <Box sx={{ mt: 1 }}>
+                                  <LinearProgress variant="determinate" value={state.progress} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.1)', '& .MuiLinearProgress-bar': { bgcolor: '#a78bfa' } }} />
+                                  <Typography variant="caption" sx={{ color: '#fbbf24', fontSize: 10, mt: 0.5, display: 'block' }}>
+                                    {state.statusText} ({state.progress}%)
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          </Grid>
                         );
                       })}
-                    </Stack>
+                    </Grid>
                   </Box>
                 </Grid>
 
-                {/* Save Button */}
+                {/* ── 7. Save All AI Configurations ──────────────────────────────── */}
                 <Grid item xs={12}>
                   <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 2 }} />
-                  <Stack direction="row" spacing={2} alignItems="center">
+                  <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" gap={1}>
                     <Button
                       variant="contained"
                       onClick={handleSaveAiConfig}
                       disabled={savingAiConfig}
-                      startIcon={<SmartToy />}
+                      startIcon={savingAiConfig ? <CircularProgress size={18} color="inherit" /> : <SmartToy />}
                       sx={{
-                        background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                        background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
                         color: '#fff',
-                        fontWeight: 700,
+                        fontWeight: 800,
                         px: 4,
-                        py: 1.2,
+                        py: 1.3,
                         borderRadius: 2,
-                        '&:hover': { background: 'linear-gradient(135deg, #6d28d9, #4338ca)' },
+                        boxShadow: '0 4px 16px rgba(37,99,235,0.35)',
+                        '&:hover': { background: 'linear-gradient(135deg, #1d4ed8 0%, #6d28d9 100%)' },
                         '&.Mui-disabled': { opacity: 0.5, color: '#fff' },
                       }}
                     >
-                      {savingAiConfig ? 'Saving...' : 'Save AI Engine Settings'}
+                      {savingAiConfig ? 'Saving Configurations...' : 'Save AI, Gemini & Vision Configuration'}
                     </Button>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
-                      Settings apply system-wide. OpenMed NER is always active regardless of LLM toggle.
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)' }}>
+                      Settings are saved in the PostgreSQL database and immediately applied to Drug Vision Scanner, Clinical Assistant, and OpenMed modules.
                     </Typography>
                   </Stack>
                 </Grid>

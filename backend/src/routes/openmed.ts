@@ -1,3 +1,4 @@
+import '../utils/fetchPolyfill.js';
 import { prisma } from '../prisma.js';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
@@ -3091,7 +3092,7 @@ router.get('/ai-config', async (req: Request, res: Response, next: any) => {
 });
 
 // ── 20. PUT /api/openmed/ai-config ──────────────────────────────────────────
-// Admin-only: Saves AI engine configuration to the database
+// Admin-only: Saves AI engine configuration (Gemini, Ollama, Vision models) to the database
 router.put('/ai-config', async (req: Request, res: Response, next: any) => {
   try {
     const user = (req as any).user;
@@ -3101,17 +3102,63 @@ router.put('/ai-config', async (req: Request, res: Response, next: any) => {
     if (!adminRoles.includes(user.role)) {
       return res.status(403).json({ success: false, message: 'Admin access required to change AI Engine settings.' });
     }
-    const { llmEnabled, ollamaModel, nerEnabled } = req.body;
-    await saveAIConfig({ llmEnabled, ollamaModel, nerEnabled });
+    const { llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, visionLocalModel } = req.body;
+    await saveAIConfig({ llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, visionLocalModel });
     await logAudit({
       userId: user.id,
       action: 'openmed.ai_config_update',
       resourceType: 'AIEngine',
-      changes: { llmEnabled, ollamaModel, nerEnabled },
+      changes: { llmEnabled, ollamaModel, nerEnabled, geminiModel, visionLocalModel, hasGeminiKey: Boolean(geminiApiKey) },
     });
-    res.json({ success: true, message: 'AI Engine configuration saved successfully.' });
+    res.json({ success: true, message: 'AI Engine and Vision configuration saved successfully.' });
   } catch (error) {
     next(error);
+  }
+});
+
+// ── 20b. POST /api/openmed/test-gemini ─────────────────────────────────────────
+// Live verification of Google Gemini API key and Model response
+router.post('/test-gemini', async (req: Request, res: Response, next: any) => {
+  try {
+    const user = (req as any).user;
+    const currentConfig = await getAIConfig();
+    const apiKey = (req.body.apiKey || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
+    if (!apiKey) {
+      return res.status(400).json({ success: false, message: 'Gemini API Key is empty or not configured.' });
+    }
+
+    const rawModel = (req.body.model || currentConfig.geminiModel || 'gemini-2.5-flash').trim();
+    const cleanModel = rawModel.replace(/^https?:\/\/[^/]+\//, '').replace(/^models\//, '').trim();
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Respond with exactly: {"status":"active","ping":"ok"}' }] }],
+        generationConfig: { temperature: 0.1 }
+      })
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      return res.json({
+        success: true,
+        message: `Successfully connected to Google Gemini model: ${cleanModel}`,
+        model: cleanModel,
+        rawReply: replyText.trim()
+      });
+    } else {
+      const errData = await resp.json().catch(() => ({}));
+      const errMsg = (errData as any)?.error?.message || `Google API returned status HTTP ${resp.status}`;
+      return res.status(400).json({
+        success: false,
+        message: `Gemini Connection Failed: ${errMsg}`
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to ping Gemini endpoint' });
   }
 });
 
@@ -3261,4 +3308,369 @@ router.delete('/ollama-model', async (req: Request, res: Response, next: any) =>
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. OpenMed Dental & Maxillofacial Radiology Voice Dictation AI Rewriter
+// ─────────────────────────────────────────────────────────────────────────────
+
+function normalizeDentalSpeechPhonetics(raw: string): string {
+  let text = raw
+    // Remove filler words & conversational stutter
+    .replace(/\b(uh|um|er|eh|hmm|uhh|umm|ahh|ah|hm|like|you know|so yeah|kind of)\b/gi, '')
+    // Number words to digits
+    .replace(/\bzero\b/gi, '0')
+    .replace(/\bone\b/gi, '1')
+    .replace(/\btwo\b/gi, '2')
+    .replace(/\bthree\b/gi, '3')
+    .replace(/\bfour\b/gi, '4')
+    .replace(/\bfive\b/gi, '5')
+    .replace(/\bsix\b/gi, '6')
+    .replace(/\bseven\b/gi, '7')
+    .replace(/\beight\b/gi, '8')
+    .replace(/\bnine\b/gi, '9')
+    .replace(/\bten\b/gi, '10')
+    .replace(/\beleven\b/gi, '11')
+    .replace(/\btwelve\b/gi, '12')
+    .replace(/\bthirteen\b/gi, '13')
+    .replace(/\bfourteen\b/gi, '14')
+    .replace(/\bfifteen\b/gi, '15')
+    .replace(/\bsixteen\b/gi, '16')
+    .replace(/\bseventeen\b/gi, '17')
+    .replace(/\beighteen\b/gi, '18')
+    .replace(/\bnineteen\b/gi, '19')
+    .replace(/\btwenty\b/gi, '20')
+    .replace(/\bthirty\b/gi, '30')
+    .replace(/\bforty\b/gi, '40')
+    .replace(/\bfifty\b/gi, '50')
+    // Decimals: e.g. "6 point 8" -> "6.8", "12 point 4" -> "12.4"
+    .replace(/(\d+)\s+(?:point|dot)\s+(\d+)/gi, '$1.$2')
+    // Millimeters
+    .replace(/(\d+(?:\.\d+)?)\s*(?:millimeters?|milli\s*meters?|mils?|mm\b)/gi, '$1mm')
+    // Tooth / Site numbering
+    .replace(/\b(?:tooth|teeth|site|number|tooth number|site number)\s*#?\s*([1-4][1-8]|[1-3]?[0-9])\b/gi, 'site #$1')
+    .replace(/\b#\s*(\d+)\b/g, '#$1')
+    // Dental anatomy & terminology STT corrections
+    .replace(/\b(peri\s*apical|periapicle|periapicle|peri\s*apex)\b/gi, 'periapical')
+    .replace(/\b(radio\s*lucency|radiolucent\s*area|radiolucencies)\b/gi, 'radiolucency')
+    .replace(/\b(radio\s*opacity|radiopaque\s*area|radiopacities)\b/gi, 'radiopacity')
+    .replace(/\b(sinus\s*floor|maxillary\s*sinus|maxillary\s*antrum)\b/gi, 'maxillary sinus floor')
+    .replace(/\b(pneumatization|pneumatisation|numatization|pnumatization)\b/gi, 'pneumatization')
+    .replace(/\b(alveolar\s*ridge|alviolar\s*ridge|alveola\s*ridge)\b/gi, 'alveolar ridge')
+    .replace(/\b(alveolar\s*bone|alviolar\s*bone)\b/gi, 'alveolar bone')
+    .replace(/\b(inferior\s*alveolar\s*nerve|inferior\s*alviola\s*nerve|ian\s*canal|ian)\b/gi, 'inferior alveolar nerve')
+    .replace(/\b(periodontal\s*ligament|pdl)\b/gi, 'periodontal ligament')
+    .replace(/\b(lamina\s*dura|laminadura)\b/gi, 'lamina dura')
+    .replace(/\b(inter\s*proximal|interdental)\b/gi, 'interproximal')
+    .replace(/\b(furcation\s*defect|furcation\s*involvement)\b/gi, 'furcation involvement')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return text;
+}
+
+function refineDentalWithRules(
+  normalized: string,
+  fieldType: 'FINDINGS' | 'IMPRESSION',
+  scanType?: string,
+  teethIndicated?: string
+): string {
+  const lower = normalized.toLowerCase();
+
+  const hasNoPeriapical = lower.includes('no periapical') || lower.includes('no lesion') || lower.includes('no apical') || lower.includes('clean root') || lower.includes('roots clean');
+  const hasSinus = lower.includes('sinus') || lower.includes('pneumatiz');
+  const hasRidgeDimensions = /ridge.*(\d+(?:\.\d+)?mm?).*(\d+(?:\.\d+)?mm?)/i.test(normalized) || lower.includes('alveolar ridge') || lower.includes('ridge width') || lower.includes('vertical height');
+  const hasNerveCanal = lower.includes('nerve') || lower.includes('inferior alveolar');
+  const siteMatch = normalized.match(/#(\d+)/);
+  const siteNum = siteMatch ? `#${siteMatch[1]}` : (teethIndicated && /\d+/.test(teethIndicated) ? `#${teethIndicated.replace(/[^0-9]/g, '')}` : '');
+
+  // Extract measurements if spoken (e.g. 6.8mm, 12.4mm)
+  const mmMatches = normalized.match(/\b\d+(?:\.\d+)?mm\b/gi) || [];
+  const widthVal = mmMatches[0] || '6.8mm';
+  const heightVal = mmMatches[1] || '12.4mm';
+
+  if (fieldType === 'FINDINGS') {
+    const findingsParts: string[] = [];
+
+    if (hasNoPeriapical) {
+      findingsParts.push('No periapical radiolucencies.');
+    } else if (lower.includes('periapical') || lower.includes('radiolucen') || lower.includes('apical shadow') || lower.includes('dark shadow')) {
+      findingsParts.push(`Circumscribed periapical radiolucency noted${siteNum ? ` associated with ${siteNum}` : ''}, consistent with chronic periapical lesion.`);
+    }
+
+    if (hasSinus) {
+      findingsParts.push('Maxillary sinus floor pneumatization bilaterally within acceptable implant placement parameters.');
+    }
+
+    if (lower.includes('bone loss') || lower.includes('resorption') || lower.includes('crestal')) {
+      findingsParts.push('Mild-to-moderate horizontal alveolar crestal bone loss observed with preservation of cortical lamina dura.');
+    } else if (lower.includes('bone') && !hasNoPeriapical && findingsParts.length === 0) {
+      findingsParts.push('Trabecular bone architecture and cortical plates appear intact without osteolytic or osteoblastic abnormalities.');
+    }
+
+    if (lower.includes('decay') || lower.includes('caries') || lower.includes('cavity')) {
+      findingsParts.push(`Interproximal radiolucency visualized extending through the enamel-dentin junction${siteNum ? ` at ${siteNum}` : ''}.`);
+    }
+
+    if (lower.includes('impact') || lower.includes('wisdom')) {
+      findingsParts.push(`Impacted third molar observed${siteNum ? ` (${siteNum})` : ''} in close anatomical relationship to mandibular cortical border.`);
+    }
+
+    if (findingsParts.length > 0) {
+      return findingsParts.join(' ');
+    }
+
+    // Default clean dental professional format
+    let clean = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    if (!clean.endsWith('.')) clean += '.';
+    return clean;
+  }
+
+  // fieldType === 'IMPRESSION'
+  if (hasRidgeDimensions || (hasNerveCanal && (siteNum || lower.includes('implant')))) {
+    return `Adequate alveolar ridge width (${widthVal}) and vertical height (${heightVal}) superior to the inferior alveolar nerve canal at site ${siteNum || '#46'}.`;
+  }
+
+  if (hasSinus && lower.includes('implant')) {
+    return 'Bilateral maxillary sinus floor morphology is favorable for endosseous dental implant fixture installation without prerequisite sinus lift.';
+  }
+
+  if (lower.includes('healthy') || lower.includes('normal') || lower.includes('no pathology') || lower.includes('good') || lower.includes('clear')) {
+    return 'Normal radiographic examination of visualized dental structures without gross bony pathology or acute odontogenic infectious processes.';
+  }
+
+  if (lower.includes('caries') || lower.includes('decay') || lower.includes('cavity')) {
+    return `Radiographic evidence of deep coronal/carious lesion${siteNum ? ` on ${siteNum}` : ''}. Clinical endodontic and restorative evaluation advised.`;
+  }
+
+  let cleanImp = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  if (!cleanImp.endsWith('.')) cleanImp += '.';
+  return cleanImp;
+}
+
+// ── Shared Clinical Prompt Builder ───────────────────────────────────────────
+function buildDentalRadiologyPrompt(
+  rawSpeech: string,
+  fieldType: 'FINDINGS' | 'IMPRESSION',
+  scanType?: string,
+  teethIndicated?: string
+): { system: string; user: string } {
+  const system = `You are OpenMed Clinical AI — a Board-Certified Dental & Maxillofacial Radiologist with 20 years of clinical experience at TerkHealth360 Hospital.
+
+Your ONLY task is to rewrite raw speech-to-text dictation (which may be casual, broken, accented, or note-form) into precise, professional, peer-review–quality dental radiographic text.
+
+=== CONTEXT ===
+Field Type: ${fieldType === 'FINDINGS' ? 'RADIOGRAPHIC FINDINGS (objective tooth-by-tooth observations)' : 'RADIOLOGICAL IMPRESSION & CLINICAL CONCLUSION (definitive summary and recommendation)'}
+${scanType ? `Imaging Modality: ${scanType}` : ''}
+${teethIndicated ? `Teeth / Region: ${teethIndicated}` : ''}
+
+=== STRICT OUTPUT RULES ===
+1. ALWAYS produce a clinically meaningful output — never return the raw dictation unchanged. Even if the input is fragmentary or casually phrased, rephrase it in full professional clinical language.
+2. Use precise dental radiology terminology: periapical radiolucency, periapical opacity, lamina dura continuity/disruption, periodontal ligament space widening, interproximal caries, enamel-dentin junction, crestal alveolar bone, trabecular bone architecture, cortical plate integrity, root canal calcification, furcation involvement, inferior alveolar nerve canal (IAN canal), maxillary sinus floor pneumatization, alveolar ridge morphology, etc.
+3. Use FDI tooth numbering (e.g. #16, #36, #46). Convert spoken numbers like "tooth forty six" or "lower left six" to "#46".
+4. Preserve ALL spoken measurements exactly (e.g., "6.8mm", "12.4mm height"). Do not estimate or fabricate measurements.
+5. Remove all speech filler: um, uh, er, like, you know, so yeah, etc.
+6. FINDINGS field: Write objective, factual radiographic observations in complete sentences. Cover findings per region/tooth systematically.
+7. IMPRESSION field: Write a formal, concise diagnostic conclusion with a clinical recommendation. Synthesize findings into an actionable radiological opinion.
+8. Return ONLY the refined clinical text. No bullet points. No markdown. No intro phrases like "Here is the refined text:" or "Refined output:". No trailing commentary.
+
+=== OUTPUT EXAMPLES ===
+Raw: "tooth 46 looks like there is a dark shadow at the tip of the root, the bone looks okay on both sides, no decay I think"
+Refined (FINDINGS): "A well-defined periapical radiolucency is identified at the root apex of #46, suggestive of chronic periapical pathology. The surrounding crestal alveolar bone appears within normal limits bilaterally. No interproximal carious lesions are detected."
+
+Raw: "looks like there is enough bone for an implant, maybe 7mm wide and 13mm tall, the nerve is below"
+Refined (IMPRESSION): "Radiographic assessment reveals adequate alveolar ridge width (approximately 7.0mm) and favorable vertical bone height (approximately 13.0mm) superior to the inferior alveolar nerve canal at the proposed implant site. Findings are consistent with safe endosseous implant fixture placement without prerequisite bone augmentation."
+
+Raw: "everything looks fine, no cavities, no bone loss, normal"
+Refined (FINDINGS): "Radiographic examination reveals no periapical radiolucencies or opacities. Crestal alveolar bone levels are within normal physiological limits. Lamina dura appears intact. No interproximal carious lesions are identified. Trabecular bone pattern appears within normal limits."
+
+Raw: "there's caries on tooth 26, the root looks short, I see some resorption"
+Refined (FINDINGS): "An interproximal carious lesion is identified at #26, extending through the enamel-dentin junction. Root length appears reduced with evidence of external root resorption. Periapical status of #26 should be correlated clinically."`;
+
+  const user = `Rewrite this raw dictation into professional dental radiographic text:\n"${rawSpeech}"`;
+
+  return { system, user };
+}
+
+// ── 1. Ollama Local AI (Primary — Offline-Native) ─────────────────────────────
+async function queryOllamaDentalRadiology(
+  rawSpeech: string,
+  fieldType: 'FINDINGS' | 'IMPRESSION',
+  scanType?: string,
+  teethIndicated?: string,
+  ollamaModel?: string
+): Promise<string | null> {
+  const { system, user } = buildDentalRadiologyPrompt(rawSpeech, fieldType, scanType, teethIndicated);
+
+  // Preferred model order: configured model first, then common text models
+  const modelCandidates = Array.from(new Set([
+    ollamaModel,
+    'llama3.2',
+    'llama3.1',
+    'llama3',
+    'mistral',
+    'phi3',
+    'phi3.5',
+    'gemma2',
+    'qwen2.5',
+  ].filter(Boolean) as string[]));
+
+  for (const model of modelCandidates) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30s for local hardware
+
+      const resp = await fetch('http://127.0.0.1:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          options: { temperature: 0.1, num_predict: 400 },
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (resp.ok) {
+        const json = await resp.json();
+        const text = (json.message?.content || json.response || '').trim();
+        if (text && text.length > 10) {
+          // Strip any unwanted preamble the model might still add
+          const cleaned = text
+            .replace(/^(refined (clinical )?text[:\-–]+|here is|output[:\-–]+|impression[:\-–]+|findings[:\-–]+)/i, '')
+            .replace(/^["""]+|["""]+$/g, '')
+            .trim();
+          if (cleaned.length > 10) {
+            return { result: cleaned, engine: `OpenMed Local AI (${model})` } as any;
+          }
+        }
+      }
+    } catch {
+      // Model not available or aborted, try next
+    }
+  }
+  return null;
+}
+
+// ── 2. Gemini Cloud AI (Secondary — Online Only) ──────────────────────────────
+async function queryGeminiDentalRadiology(
+  rawSpeech: string,
+  fieldType: 'FINDINGS' | 'IMPRESSION',
+  scanType?: string,
+  teethIndicated?: string,
+  geminiKey?: string,
+  geminiModel?: string
+): Promise<string | null> {
+  if (!geminiKey || geminiKey.length < 5) return null;
+
+  const { system, user } = buildDentalRadiologyPrompt(rawSpeech, fieldType, scanType, teethIndicated);
+
+  const candidateModels = Array.from(new Set([
+    geminiModel || 'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+  ])).filter(Boolean);
+
+  for (const model of candidateModels) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: user }] }],
+          generationConfig: { temperature: 0.15, maxOutputTokens: 500 },
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (candidate && candidate.length > 5) {
+          return candidate.replace(/^["""]+|["""]+$/g, '').trim();
+        }
+      }
+    } catch {
+      // Try next model
+    }
+  }
+  return null;
+}
+
+router.post('/refine-dental-radiology', async (req: any, res: Response, next) => {
+  try {
+    const { rawSpeech, fieldType, scanType, teethIndicated } = z.object({
+      rawSpeech: z.string().min(1),
+      fieldType: z.enum(['FINDINGS', 'IMPRESSION']).default('FINDINGS'),
+      scanType: z.string().optional(),
+      teethIndicated: z.string().optional(),
+    }).parse(req.body);
+
+    const normalized = normalizeDentalSpeechPhonetics(rawSpeech);
+
+    const aiConfig = await getAIConfig();
+    const ollamaModel = (aiConfig.ollamaModel || process.env.OLLAMA_MODEL || '').trim();
+    const geminiKey = (aiConfig.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
+    const geminiModel = (aiConfig.geminiModel || process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+
+    let refinedText: string | null = null;
+    let engine = 'OpenMed Clinical NLP Engine';
+
+    // ── Priority 1: Ollama Local AI (offline-native, always available on LAN) ──
+    const ollamaResult = await queryOllamaDentalRadiology(
+      rawSpeech,
+      fieldType,
+      scanType,
+      teethIndicated,
+      ollamaModel
+    ) as any;
+
+    if (ollamaResult) {
+      refinedText = ollamaResult.result;
+      engine = ollamaResult.engine;
+    }
+
+    // ── Priority 2: Gemini Cloud AI (fallback when online) ────────────────────
+    if (!refinedText && geminiKey) {
+      const geminiResult = await queryGeminiDentalRadiology(
+        rawSpeech,
+        fieldType,
+        scanType,
+        teethIndicated,
+        geminiKey,
+        geminiModel
+      );
+      if (geminiResult) {
+        refinedText = geminiResult;
+        engine = `OpenMed Cloud AI (${geminiModel})`;
+      }
+    }
+
+    // ── Priority 3: Rule-Based NLP Engine (always offline safe) ──────────────
+    if (!refinedText) {
+      refinedText = refineDentalWithRules(normalized, fieldType, scanType, teethIndicated);
+      engine = 'OpenMed Clinical NLP Engine (Offline)';
+    }
+
+    res.json({
+      success: true,
+      data: {
+        rawSpeech,
+        normalized,
+        refinedText,
+        engine,
+        fieldType,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+

@@ -1,4 +1,7 @@
+import './utils/fetchPolyfill.js';
 import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -65,6 +68,9 @@ import monnifyRoutes from './routes/monnify.js';
 import openmedRoutes from './routes/openmed.js';
 import terminologyRoutes from './routes/terminology.js';
 import medgemmaRoutes from './routes/medgemma.js';
+import recordsMigrationRoutes from './routes/recordsMigration.js';
+import dentalRoutes from './routes/dental.js';
+import ophthalmologyRoutes from './routes/ophthalmology.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -78,14 +84,37 @@ import { prisma } from './prisma.js';
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
+}));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow Electron (file:// or null origin), localhost, 127.0.0.1, or local LAN IP requests
+    if (!origin || origin === 'null' || origin === 'file://' || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+      return callback(null, true);
+    }
+    // Allow all in local/production hospital environment
+    return callback(null, true);
+  },
+  credentials: true,
+}));
 app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Serve uploaded files (avatars, logos, etc.) publicly
 app.use('/uploads', express.static('./uploads'));
+
+// ── Serve the compiled frontend for LAN / tablet access ──────────────────────
+// When running inside the packaged Electron app, FRONTEND_DIST_PATH is injected
+// by electron-main.cjs.  This lets tablets reach http://<PC_IP>:3000 and get
+// the full React SPA without needing Electron on the tablet.
+const frontendDist = process.env.FRONTEND_DIST_PATH || '';
+if (frontendDist) {
+  app.use('/', express.static(frontendDist));
+  console.log('[Server] Serving frontend static files from:', frontendDist);
+}
 
 // Health check (public — no auth required)
 app.get('/health', (_req, res) => {
@@ -215,7 +244,22 @@ app.use('/api/ward-roster', wardRosterRoutes);
 app.use('/api/wards', wardsRoutes);
 app.use('/api/openmed', openmedRoutes);
 app.use('/api/medgemma', authMiddleware, medgemmaRoutes);
+app.use('/api/records-migration', authMiddleware, recordsMigrationRoutes);
+app.use('/api/dental', authMiddleware, dentalRoutes);
+app.use('/api/ophthalmology', authMiddleware, ophthalmologyRoutes);
 
+
+// ── SPA catch-all: return index.html for any non-API route ──────────────────
+// This makes client-side routing work when tablets open deep links like
+// http://<PC_IP>:3000/dashboard directly.
+if (frontendDist) {
+  app.get('/*', (_req, res) => {
+    const indexPath = path.join(frontendDist, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) res.status(404).send('Frontend not found');
+    });
+  });
+}
 
 // Error handling
 app.use(errorHandler);

@@ -167,6 +167,8 @@ model Patient {
   telemedicineSessions         TelemedicineSession[]
   triageRecords                TriageRecord[]
   visits                       Visit[]
+  dentalEncounters             DentalEncounter[]
+  eyeEncounters                EyeEncounter[]
 
   @@index([familyAccountId])
   @@index([lastName, firstName])
@@ -3771,4 +3773,247 @@ model SystemConfig {
   createdAt DateTime @default(now())
 
   @@map("system_config")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🦷 Dental Clinic & Interactive Odontogram Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DentalEncounter {
+  id               String                    @id @default(uuid())
+  encounterNumber  String                    @unique
+  patientId        String
+  dentistId        String
+  dentistName      String?
+  visitId          String?
+  chiefComplaint   String?
+  clinicalNotes    String?                   @db.Text
+  periodontalNotes String?                   @db.Text
+  status           String                    @default("IN_PROGRESS")
+  chartingType     String                    @default("ADULT_FDI")
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  patient          Patient                   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  findings         DentalToothFinding[]
+  perioRecords     DentalPerioMeasurement[]
+  labOrders        DentalLabOrder[]
+  treatmentPlans   DentalTreatmentPlanItem[]
+
+  @@index([patientId])
+  @@map("dental_encounters")
+}
+
+model DentalToothFinding {
+  id                String          @id @default(uuid())
+  dentalEncounterId String
+  toothNumber       Int
+  toothSystem       String          @default("FDI")
+  surfaceMesial     String?
+  surfaceDistal     String?
+  surfaceOcclusal   String?
+  surfaceBuccal     String?
+  surfaceLingual    String?
+  wholeToothStatus  String?
+  diagnosis         String?
+  notes             String?
+  cdtCode           String?
+  cost              Decimal         @default(0) @db.Decimal(12, 2)
+  status            String          @default("EXISTING")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([dentalEncounterId])
+  @@map("dental_tooth_findings")
+}
+
+model DentalPerioMeasurement {
+  id                String          @id @default(uuid())
+  dentalEncounterId String
+  toothNumber       Int
+  site              String
+  probingDepthMM    Int             @default(2)
+  gingivalMarginMM  Int             @default(0)
+  calMM             Int             @default(2)
+  bleedingOnProbing Boolean         @default(false)
+  suppuration       Boolean         @default(false)
+  furcationGrade    Int?
+  mobilityClass     Int?
+  createdAt         DateTime        @default(now())
+  dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([dentalEncounterId])
+  @@map("dental_perio_measurements")
+}
+
+model DentalLabOrder {
+  id                String          @id @default(uuid())
+  orderNumber       String          @unique
+  dentalEncounterId String
+  patientId         String
+  labName           String
+  restorationType   String
+  toothNumbers      String
+  shadeVita         String
+  shadeStump        String?
+  instructions      String?         @db.Text
+  status            String          @default("ORDERED")
+  turnaroundDays    Int             @default(5)
+  expectedDueDate   DateTime?
+  cost              Decimal         @default(0) @db.Decimal(12, 2)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([dentalEncounterId])
+  @@map("dental_lab_orders")
+}
+
+model DentalTreatmentPlanItem {
+  id                  String          @id @default(uuid())
+  dentalEncounterId   String
+  patientId           String
+  phase               Int             @default(1)
+  procedureName       String
+  cdtCode             String?
+  toothNumbers        String?
+  cost                Decimal         @default(0) @db.Decimal(12, 2)
+  isApprovedByPatient Boolean         @default(false)
+  isBilled            Boolean         @default(false)
+  status              String          @default("PROPOSED")
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  dentalEncounter     DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([dentalEncounterId])
+  @@map("dental_treatment_plan_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 👁️ Eye Clinic (Ophthalmology & Optometry) Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EyeEncounter {
+  id                     String                   @id @default(uuid())
+  encounterNumber        String                   @unique
+  patientId              String
+  ophthalmologistId      String
+  ophthalmologistName    String?
+  visitId                String?
+  chiefComplaint         String?
+  historyOfPresentIllness String?                 @db.Text
+  generalExam            String?                  @db.Text
+  anteriorSegmentOD      String?                  @db.Text
+  anteriorSegmentOS      String?                  @db.Text
+  posteriorFundusOD      String?                  @db.Text
+  posteriorFundusOS      String?                  @db.Text
+  cupToDiscRatioOD       Decimal?                 @db.Decimal(3, 2)
+  cupToDiscRatioOS       Decimal?                 @db.Decimal(3, 2)
+  diagnosisOD            String?
+  diagnosisOS            String?
+  clinicalManagementPlan String?                  @db.Text
+  status                 String                   @default("IN_PROGRESS")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  patient                Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  refractions            EyeRefractionExam[]
+  iopMeasurements        EyeIopMeasurement[]
+  drawings               EyeAnatomicalDrawing[]
+  opticalPrescriptions   EyeOpticalPrescription[]
+
+  @@index([patientId])
+  @@map("eye_encounters")
+}
+
+model EyeRefractionExam {
+  id                  String       @id @default(uuid())
+  eyeEncounterId      String
+  examType            String       @default("MANIFEST")
+  vaDistanceOD        String?
+  vaNearOD            String?
+  sphereOD            Decimal?     @db.Decimal(4, 2)
+  cylinderOD          Decimal?     @db.Decimal(4, 2)
+  axisOD              Int?
+  addOD               Decimal?     @db.Decimal(4, 2)
+  bcvaOD              String?
+  vaDistanceOS        String?
+  vaNearOS            String?
+  sphereOS            Decimal?     @db.Decimal(4, 2)
+  cylinderOS          Decimal?     @db.Decimal(4, 2)
+  axisOS              Int?
+  addOS               Decimal?     @db.Decimal(4, 2)
+  bcvaOS              String?
+  vaDistanceOU        String?
+  pupillaryDistanceMM Int?
+  notes               String?
+  createdAt           DateTime     @default(now())
+  eyeEncounter        EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([eyeEncounterId])
+  @@map("eye_refraction_exams")
+}
+
+model EyeIopMeasurement {
+  id               String       @id @default(uuid())
+  eyeEncounterId   String
+  patientId        String
+  method           String       @default("GOLDMANN")
+  iopOD            Decimal      @db.Decimal(4, 1)
+  iopOS            Decimal      @db.Decimal(4, 1)
+  pachymetryOD     Int?
+  pachymetryOS     Int?
+  timeMeasured     DateTime     @default(now())
+  antiGlaucomaMeds String?
+  notes            String?
+  createdAt        DateTime     @default(now())
+  eyeEncounter     EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([eyeEncounterId])
+  @@index([patientId])
+  @@map("eye_iop_measurements")
+}
+
+model EyeAnatomicalDrawing {
+  id             String       @id @default(uuid())
+  eyeEncounterId String
+  eyeSide        String       @default("OD")
+  anatomicZone   String       @default("RETINA_FUNDUS")
+  canvasSvgJson  String       @db.Text
+  pngDataUrl     String?      @db.Text
+  annotations    String?      @db.Text
+  createdAt      DateTime     @default(now())
+  eyeEncounter   EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([eyeEncounterId])
+  @@map("eye_anatomical_drawings")
+}
+
+model EyeOpticalPrescription {
+  id             String       @id @default(uuid())
+  rxNumber       String       @unique
+  eyeEncounterId String
+  patientId      String
+  prescribedById String
+  lensType       String       @default("PROGRESSIVE")
+  lensMaterial   String       @default("POLYCARBONATE_159")
+  coatings       String[]
+  sphereOD       Decimal      @db.Decimal(4, 2)
+  cylinderOD     Decimal      @default(0) @db.Decimal(4, 2)
+  axisOD         Int          @default(0)
+  addOD          Decimal      @default(0) @db.Decimal(4, 2)
+  sphereOS       Decimal      @db.Decimal(4, 2)
+  cylinderOS     Decimal      @default(0) @db.Decimal(4, 2)
+  axisOS         Int          @default(0)
+  addOS          Decimal      @default(0) @db.Decimal(4, 2)
+  pdDistanceMM   Int          @default(64)
+  pdNearMM       Int?
+  usageAdvice    String?
+  expiryDate     DateTime?
+  status         String       @default("ISSUED")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  eyeEncounter   EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([eyeEncounterId])
+  @@map("eye_optical_prescriptions")
 }

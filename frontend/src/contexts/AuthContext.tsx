@@ -33,36 +33,61 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const cached = localStorage.getItem('cached_user');
+    if (cached) {
+      try { return JSON.parse(cached); } catch (_) {}
+    }
+    return null;
+  });
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !!localStorage.getItem('token') && !localStorage.getItem('cached_user'));
 
   useEffect(() => {
+    let isMounted = true;
     const initAuth = async () => {
       if (token) {
         try {
           const response = await api.get('/auth/me');
-          setUser(response.data);
-          localStorage.setItem('cached_user', JSON.stringify(response.data));
+          if (isMounted) {
+            setUser(response.data);
+            localStorage.setItem('cached_user', JSON.stringify(response.data));
+          }
         } catch (error) {
           // If offline or network error, fallback to cached user instead of logging out!
           const cached = localStorage.getItem('cached_user');
           if (cached) {
             try {
-              setUser(JSON.parse(cached));
+              if (isMounted) setUser(JSON.parse(cached));
             } catch (e) {
               localStorage.removeItem('token');
-              setToken(null);
+              if (isMounted) setToken(null);
             }
           } else {
             localStorage.removeItem('token');
-            setToken(null);
+            if (isMounted) setToken(null);
           }
         }
       }
-      setIsLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     };
     initAuth();
+
+    const handleUnauthorized = () => {
+      if (isMounted) {
+        setUser(null);
+        setToken(null);
+        setIsLoading(false);
+      }
+    };
+    window.addEventListener('auth-unauthorized', handleUnauthorized);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('auth-unauthorized', handleUnauthorized);
+    };
   }, [token]);
 
   const login = async (usernameOrEmail: string, password: string, trustDevice?: boolean) => {
@@ -88,33 +113,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('trusted_device_token', newDeviceToken);
       }
     } catch (err: any) {
-      // ── Offline Fallback Login ──────────────────────────────────────────────
-      const isNetworkError = !err.response || err.code === 'ERR_NETWORK' || !navigator.onLine;
-      if (isNetworkError) {
-        const u = usernameOrEmail.toLowerCase().trim();
-        const offlineRole = u.includes('nurse') ? 'NURSE' : u.includes('doc') || u.includes('physician') || u.includes('surgeon') ? 'PHYSICIAN' : 'SUPER_ADMIN';
-        const offlineUser: User = {
-          id: 'offline-' + Date.now(),
-          username: u || 'doctor',
-          email: `${u}@hospital.local`,
-          role: offlineRole,
-          roles: [offlineRole, 'DOCTOR', 'STAFF'],
-          permissions: ['*'],
-          departments: [{ id: '1', name: 'Clinical Services', code: 'CLINIC' }],
-          firstName: offlineRole === 'NURSE' ? 'Default' : 'Emmanuel',
-          lastName: offlineRole === 'NURSE' ? 'Nurse' : 'Vegher',
-          twoFactorEnabled: false,
-          twoFactorType: 'NONE',
-          profilePicture: null,
-          designation: offlineRole === 'NURSE' ? 'Senior Nursing Officer' : 'Chief Consultant Physician',
-          staffId: 'STAFF-OFFLINE-01'
-        };
-        const offlineToken = 'offline-jwt-token-' + Date.now();
-        setToken(offlineToken);
-        setUser(offlineUser);
-        localStorage.setItem('token', offlineToken);
-        localStorage.setItem('cached_user', JSON.stringify(offlineUser));
-        return;
+      // If the local hospital server is completely unreachable, provide a clear diagnostic error
+      if (!err.response) {
+        throw new Error('Cannot reach hospital local server. Please ensure the local server is running on the network.');
       }
       throw err;
     }
@@ -135,17 +136,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (token) {
       api.post('/auth/logout', {}).catch(err => console.error(err));
     }
-    // Clear all auth state from localStorage first
+
+    // 1. Clear all auth state from localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('cached_user');
     localStorage.removeItem('read_notification_ids');
-    // Clear React state
+    localStorage.removeItem('trusted_device_token');
+
+    // 2. Clear React state immediately so ProtectedRoute unloads
     setToken(null);
     setUser(null);
-    // In Electron HashRouter, ensure hash is reset to #/login immediately
-    try {
-      window.location.hash = '#/login';
-    } catch (_) {}
+    setIsLoading(false);
+
+    // 3. Navigate to login.
+    //    In the packaged Electron app, ask the main process to do a full
+    //    loadFile() to index.html#/login — this is the only reliable way
+    //    to reset HashRouter state in a file:// context.
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.reloadToLogin) {
+      (window as any).electronAPI.reloadToLogin();
+      return;
+    }
+
+    // 4. Browser / dev fallback — React Router will pick up the hash change
+    //    because ProtectedRoute will redirect unauthenticated users to /login.
+    if (typeof window !== 'undefined') {
+      window.location.hash = '/login';
+    }
   };
 
   const refreshUser = async () => {

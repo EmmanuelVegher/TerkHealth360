@@ -16,11 +16,11 @@ import {
   Warehouse, LocalShipping, RequestQuote, Payment, CreditCard, Analytics,
   SettingsInputComponent, LocalGasStation, BarChart, AccessTime, LocalAtm, PlusOne, AutoGraph, NotificationsActive, TrendingUp, BabyChangingStation, CalendarMonth, DateRange, Description, PersonalVideo, Speed,
   Healing, AutoAwesome, MonitorHeart, Person, CallMade, Close, RateReview, Hotel, Sensors, AccountTree,
+  Gavel, WorkHistory, RemoveRedEye, Palette,
 } from '@mui/icons-material';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 import { useAuth } from '../contexts/AuthContext';
-import { useAttendanceStatus } from '../hooks/useAttendanceStatus';
 import ActiveDutySessionCard from './ActiveDutySessionCard';
 import {
   isUserLabStaff, LAB_DESIGNATIONS,
@@ -148,6 +148,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
     'Messages': true,
     'Workforce & Roster': true,
     'Timesheet': true,
+    'Bishop Module': true,
+    "Bishop's Desk": true,
   });
 
   const toggle = (label: string) =>
@@ -205,9 +207,25 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
       label: 'Main',
       items: [
         { text: 'Dashboard',    icon: <Dashboard />,           path: '/' },
-        { text: "Bishop Module", icon: <Shield />,    path: '/bishop-desk',  permission: 'finance:read', allowedDesignations: ['Bishop', 'Admin'] },
-        // { text: 'Registration',  icon: <HowToReg />,           path: '/register-patient', permission: 'patient:write', allowedDesignations: ['Record Officer', 'Secretary', 'Admin'] },
+        {
+          text: "Bishop Module",
+          icon: <Shield />,
+          path: '/bishop-desk',
+          allowedDesignations: ['Bishop', 'Admin', 'Super Admin'],
+          children: [
+            { text: 'Executive Overview', icon: <TrendingUp />, path: '/bishop-desk' },
+            { text: 'Financial & Transactions', icon: <AccountBalanceWallet />, path: '/bishop-desk/financial-reports' },
+            { text: 'Financial & Statutory Audits', icon: <Assessment />, path: '/bishop-desk/audit-reports' },
+            { text: 'Staff Leave Reports', icon: <BeachAccess />, path: '/bishop-desk/leave-reports' },
+            { text: 'Duty Roster & Shifts', icon: <CalendarMonth />, path: '/bishop-desk/roster-reports' },
+            { text: 'Clock-In & Attendance', icon: <AccessTime />, path: '/bishop-desk/attendance-reports' },
+            { text: 'Episcopal Payroll', icon: <Gavel />, path: '/bishop-desk/payroll' },
+            { text: 'Admin Timesheets', icon: <WorkHistory />, path: '/bishop-desk/timesheets' },
+            { text: 'Capital Projects', icon: <Assignment />, path: '/bishop-desk/projects' },
+          ],
+        },
         { text: 'Patients (MPI)', icon: <People />,            path: '/patients',     permission: 'patient:read', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Secretary', 'Admin'] },
+        { text: '📸 AI Folder & Record Migration', icon: <CameraAlt />, path: '/record-migration', allowedDesignations: ['Super Admin'] },
         // { text: 'Record Merges', icon: <HistoryEdu />,         path: '/merge-records', permission: 'patient:write', allowedDesignations: ['Record Officer', 'Admin'] },
         { text: 'Visits & Flow', icon: <DirectionsCar />,      path: '/visits',       permission: 'patient:read', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Admin'] },
         { text: 'Patient EMR & History', icon: <Portrait />,           path: '/emr-workspace', allowedDesignations: ['Doctor', 'Nurse', 'Pathologist', 'Lab Technician', 'Lab Scientist', 'Lab Scientists', 'Record Officer', 'Admin'] },
@@ -456,6 +474,35 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           ],
         },
         {
+          text: 'Dental Clinic',
+          icon: <MedicalServices />,
+          path: '/dental',
+          permission: 'clinical:read',
+          allowedDesignations: ['Doctor', 'Nurse', 'Admin', 'Super Admin'],
+          children: [
+            { text: 'Interactive Odontogram', icon: <MedicalServices />, path: '/dental/odontogram' },
+            { text: 'Periodontal Chart (CAL)', icon: <Science />, path: '/dental/perio' },
+            { text: 'Dental Radiology PACS', icon: <PersonalVideo />, path: '/dental/radiology' },
+            { text: 'Lab Slips & Vita Shade', icon: <Biotech />, path: '/dental/lab-orders' },
+            { text: 'Treatment Plan & CDT Billing', icon: <Receipt />, path: '/dental/treatment-plans' },
+            { text: 'Digital Consent Form', icon: <HistoryEdu />, path: '/dental/consent' },
+          ],
+        },
+        {
+          text: 'Eye Clinic (Ophthalmology)',
+          icon: <RemoveRedEye />,
+          path: '/eye-clinic',
+          permission: 'clinical:read',
+          allowedDesignations: ['Doctor', 'Nurse', 'Admin', 'Super Admin'],
+          children: [
+            { text: 'OD / OS Dual-Eye Refraction', icon: <RemoveRedEye />, path: '/eye-clinic/refraction' },
+            { text: 'Tonometry & Glaucoma IOP', icon: <Timeline />, path: '/eye-clinic/iop' },
+            { text: 'Anatomic Fundus Drawing', icon: <Palette />, path: '/eye-clinic/drawing' },
+            { text: 'Optical Shop E-Prescription', icon: <LocalPharmacy />, path: '/eye-clinic/optical-rx' },
+            { text: 'OCT & Equipment Telemetry', icon: <CameraAlt />, path: '/eye-clinic/telemetry' },
+          ],
+        },
+        {
           text: 'Mortuary & Funeral',
           icon: <SevereCold />,
           path: '/mortuary',
@@ -619,6 +666,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
             },
           ],
         },
+        /*
         {
           text: 'Finance Management',
           icon: <AccountBalance />,
@@ -659,19 +707,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
                 { text: 'Tax Compliance Filings', path: '/finance/assets/taxes' },
               ],
             },
-            /* {
-              text: 'Gateways & Governance',
-              icon: <CreditCard />,
-              path: '/finance/gateways',
-              children: [
-                { text: 'Payment Gateway Simulator', path: '/finance/gateways/simulator' },
-                { text: 'Gateway Reports & Settlements', path: '/finance/gateways/settlements' },
-                { text: 'Risk Register & Audits', path: '/finance/gateways/risks' },
-                { text: 'Fraud Alert Logs', path: '/finance/gateways/fraud' },
-              ],
-            }, */
           ],
         },
+        */
         /*
         {
           text: 'Assets & Biomedical',
@@ -721,6 +759,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           ],
         },
         */
+        /*
         {
           text: 'Staff Management',
           icon: <Work />,
@@ -770,17 +809,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
                 { text: 'Approval Tiers Matrix', path: '/staff/hierarchy/rules' },
               ],
             },
-            // {
-            //   text: 'Governance & HR Risk BI',
-            //   icon: <Shield />,
-            //   path: '/staff/governance-bi',
-            //   children: [
-            //     { text: 'Workforce BI Analytics', path: '/staff/governance-bi/analytics' },
-            //     { text: 'HR Risks & Succession', path: '/staff/governance-bi/risks' },
-            //   ],
-            // },
           ],
         },
+        */
         { text: 'Internal Requests', icon: <Assessment />,     path: '/internal-requests', permission: 'user:read', allowedDesignations: ['Secretary', 'Admin'] },
         { text: 'Admin Collaboration', icon: <People />,       path: '/admin-interactive', permission: 'user:read', allowedDesignations: ['Secretary', 'Admin'] },
         // { text: 'Internal Memos', icon: <Event />,             path: '/internal-memos', allowedDesignations: ['Secretary', 'Admin'] },
@@ -859,13 +890,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'Messages',
           icon: <Mail />,
           path: '/messages',
-          allowedDesignations: ['Doctor', 'Nurse', 'Pharmacist', 'Lab Technician', 'Pathologist', 'Record Officer', 'Secretary', 'Admin', 'Accountant'],
-          children: [
+          // Sub-category pages commented out - Unified WhatsApp-style staff chat module
+          /* children: [
             { text: 'Internal Chat & Channels', icon: <Mail />, path: '/messages/chat' },
             { text: 'Hospital Announcements', icon: <Event />, path: '/messages/announcements' },
             { text: 'Clinical Alert Pagers', icon: <NotificationsActive />, path: '/messages/alerts' },
             { text: 'Shift Handover Memos', icon: <Description />, path: '/messages/memos' },
-          ],
+          ], */
         },
         { text: 'Workflow Config', icon: <Policy />,           path: '/workflow-config', permission: 'settings:read', allowedDesignations: ['Admin'] },
         { text: 'Data Dictionary',  icon: <MenuBook />,         path: '/data-dictionary', permission: 'settings:read', allowedDesignations: ['Doctor', 'Lab Technician', 'Pathologist', 'Admin'] },
@@ -878,7 +909,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
     ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'U';
 
-  const attendance = useAttendanceStatus();
   const navigate = useNavigate();
 
   const sidebarContent = (
@@ -1095,8 +1125,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
       return false;
     }
 
-    // Workforce & Roster (Timesheet / Attendance / Shifts / Leave) is accessible to all authenticated hospital staff across all departments & roles
-    if (item.path === '/timesheets' || item.path?.startsWith('/timesheets') || item.text === 'Timesheet' || item.text === 'Workforce & Roster') {
+    // Messages and Workforce & Roster (Timesheet / Attendance / Shifts / Leave) are accessible to all authenticated hospital staff across all departments & roles
+    if (
+      item.path === '/messages' ||
+      item.path?.startsWith('/messages') ||
+      item.text === 'Messages' ||
+      item.path === '/timesheets' ||
+      item.path?.startsWith('/timesheets') ||
+      item.text === 'Timesheet' ||
+      item.text === 'Workforce & Roster'
+    ) {
       return true;
     }
 
@@ -1181,6 +1219,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
     // Accounts with cashier roles can always access Billing & Cashier Desk module pages
     if (isCashier && (item.path === '/billing' || item.path?.startsWith('/billing'))) {
       return true;
+    }
+
+    // AI Hospital Paper Folder & Record Migration Station is strictly accessible to Super Admin only
+    if (item.path === '/record-migration' || item.path?.startsWith('/record-migration')) {
+      return isSuperAdmin;
     }
 
     // ── Internal Auditor: MUST be checked FIRST before generic finance/staff rules ─────────────────

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { assetUrl } from '@/utils/assetUrl';
+import { assetUrl } from '../utils/assetUrl';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
   InputAdornment, IconButton, CircularProgress, Alert, Link,
@@ -59,20 +59,34 @@ const Login = () => {
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'starting' | 'unreachable'>('checking');
 
   useEffect(() => {
+    let interval: any = null;
+    let isMounted = true;
     const checkStatus = async () => {
       try {
         const res = await api.get('/startup-status');
-        setServerReady(res.data?.ready ?? true);
-        setStartupPhases(res.data?.phases || []);
+        if (!isMounted) return;
+        const ready = res.data?.ready ?? true;
+        setServerReady(ready);
+        if (Array.isArray(res.data?.phases) && res.data.phases.length > 0) {
+          setStartupPhases(res.data.phases);
+        }
         setServerStatus('online');
+        if (ready && interval) {
+          clearInterval(interval);
+        }
       } catch (err) {
-        setServerReady(true);
-        setServerStatus('online');
+        if (isMounted) {
+          setServerReady(true);
+          setServerStatus('online');
+        }
       }
     };
     checkStatus();
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
+    interval = setInterval(checkStatus, 5000);
+    return () => {
+      isMounted = false;
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -170,9 +184,12 @@ const Login = () => {
     <Box
       sx={{
         minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: { xs: 'column', md: 'row' },
-        overflow: 'hidden',
+        overflowX: 'hidden',
         fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}
     >
@@ -402,17 +419,75 @@ const Login = () => {
       <Box
         sx={{
           flex: 1,
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
           backgroundColor: '#f8f9fa',
-          p: { xs: 3, md: 6 },
+          p: { xs: 2, sm: 3, md: 6 },
+          overflowX: 'hidden',
         }}
       >
-        <Box sx={{ width: '100%', maxWidth: 440 }}>
+        <Box sx={{ width: '100%', maxWidth: 440, minWidth: 0, boxSizing: 'border-box' }}>
+          {/* Mobile & Portrait Hospital Branding Header */}
+          <Box
+            sx={{
+              display: { xs: 'flex', md: 'none' },
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+              mb: 2.5,
+            }}
+          >
+            <Box
+              component="img"
+              src={assetUrl('/hospital-logo.webp')}
+              alt="Faith Foundation Mission Hospital Logo"
+              sx={{
+                width: { xs: 72, sm: 88 },
+                height: { xs: 72, sm: 88 },
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 4px 14px rgba(13, 37, 96, 0.18))',
+                mb: 1,
+              }}
+            />
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 800,
+                color: '#0d2560',
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                lineHeight: 1.25,
+                fontSize: { xs: '1.05rem', sm: '1.3rem' },
+                textAlign: 'center',
+                px: 1,
+              }}
+            >
+              Faith Foundation Mission Hospital
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#d32f2f',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                mt: 0.5,
+              }}
+            >
+              Nsukka · Jehovah Rapha
+            </Typography>
+          </Box>
+
           {/* Header Title Info */}
-          <Box sx={{ mb: 4, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Box sx={{ mb: { xs: 2.5, sm: 3.5 }, width: '100%', minWidth: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             <Typography
               variant="body2"
               sx={{
@@ -440,6 +515,10 @@ const Login = () => {
           {/* Form Card */}
           <Card
             sx={{
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               borderRadius: '16px',
               boxShadow: '0 8px 32px rgba(13, 37, 96, 0.04)',
@@ -447,7 +526,7 @@ const Login = () => {
               mb: 3,
             }}
           >
-            <CardContent sx={{ p: 4 }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 }, '&:last-child': { pb: { xs: 2, sm: 3, md: 4 } }, boxSizing: 'border-box', minWidth: 0, width: '100%' }}>
               {error && (
                 <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
                   {error}
@@ -481,8 +560,8 @@ const Login = () => {
 
               {/* STEP 1: Login Form */}
               {step === 'login' && (
-                <form onSubmit={handleLoginSubmit}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <form onSubmit={handleLoginSubmit} style={{ width: '100%', minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
                     {/* Username Field */}
                     <Typography
                       variant="caption"
@@ -499,10 +578,11 @@ const Login = () => {
                     <TextField
                       value={usernameOrEmail}
                       onChange={e => setUsernameOrEmail(e.target.value)}
-                      placeholder="Enter username, email, or Staff ID (e.g. FIN-0002)"
+                      placeholder="Username, email, or Staff ID"
                       fullWidth
                       required
                       autoFocus
+                      inputProps={{ style: { minWidth: 0 } }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -569,6 +649,7 @@ const Login = () => {
                       placeholder="••••••••••••"
                       fullWidth
                       required
+                      inputProps={{ style: { minWidth: 0 } }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -607,7 +688,7 @@ const Login = () => {
                     />
 
                     {/* Checkbox and Sync Badge */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 3 }}>
                       <FormControlLabel
                         control={
                           <Checkbox

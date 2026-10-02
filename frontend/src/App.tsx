@@ -68,6 +68,9 @@ import StaffRequisitions from './pages/StaffRequisitions';
 import AdminDesk from './pages/AdminDesk';
 import InternalMemos from './pages/InternalMemos';
 import LeaveManagementPage from './pages/LeaveManagementPage';
+import RecordMigration from './pages/RecordMigration';
+import DentalClinic from './pages/DentalClinic';
+import EyeClinic from './pages/EyeClinic';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -111,6 +114,7 @@ function App() {
         <Route path="patients"     element={<Patients />} />
         <Route path="patients/:id" element={<PatientDetail />} />
         <Route path="register-patient" element={<PatientRegistration />} />
+        <Route path="record-migration" element={<RecordMigration />} />
         <Route path="merge-records" element={<MergeRecords />} />
         <Route path="visits"       element={<Visits />} />
         <Route path="emr-workspace" element={<EMRDashboard />} />
@@ -161,6 +165,22 @@ function App() {
         <Route path="maternity/*"  element={<Navigate to="/ipd/maternity" replace />} />
         <Route path="labour-ward"  element={<LabourWard />} />
         <Route path="ambulance"    element={<Ambulance />} />
+        {/* Dental & Eye Clinic */}
+        <Route path="dental"                  element={<DentalClinic />} />
+        <Route path="dental/odontogram"       element={<DentalClinic />} />
+        <Route path="dental/perio"            element={<DentalClinic />} />
+        <Route path="dental/radiology"        element={<DentalClinic />} />
+        <Route path="dental/lab-orders"       element={<DentalClinic />} />
+        <Route path="dental/treatment-plans"  element={<DentalClinic />} />
+        <Route path="dental/consent"          element={<DentalClinic />} />
+        <Route path="dental/*"                element={<DentalClinic />} />
+        <Route path="eye-clinic"              element={<EyeClinic />} />
+        <Route path="eye-clinic/refraction"   element={<EyeClinic />} />
+        <Route path="eye-clinic/iop"          element={<EyeClinic />} />
+        <Route path="eye-clinic/drawing"      element={<EyeClinic />} />
+        <Route path="eye-clinic/optical-rx"   element={<EyeClinic />} />
+        <Route path="eye-clinic/telemetry"    element={<EyeClinic />} />
+        <Route path="eye-clinic/*"            element={<EyeClinic />} />
         {/* Finance & HR */}
         <Route path="billing"      element={<Billing />} />
         <Route path="billing/*"    element={<Billing />} />
@@ -234,8 +254,8 @@ function App() {
         <Route path="attendance"   element={<Attendance />} />
         <Route path="leave"        element={<LeaveManagementPage />} />
         <Route path="leave/*"      element={<LeaveManagementPage />} />
-        <Route path="staff/attendance-roster/leave" element={<LeaveManagementPage />} />
-        <Route path="bishop-desk"  element={<BishopsDashboard />} />
+        <Route path="bishop-desk"   element={<BishopsDashboard />} />
+        <Route path="bishop-desk/*" element={<BishopsDashboard />} />
         <Route path="staff-attendance" element={<WorkforceHR defaultTab={1} viewType="hr" />} />
         <Route path="timesheets"   element={<TimesheetPage />} />
         <Route path="timesheets/*" element={<TimesheetPage />} />
@@ -275,9 +295,12 @@ function App() {
         <Route path="architecture"  element={<TechnicalArchitecture />} />
         <Route path="architecture/*" element={<TechnicalArchitecture />} />
         <Route path="data-dictionary" element={<DataDictionary />} />
-        {/* Catch-all */}
+        {/* Catch-all for authenticated shell */}
         <Route path="*"            element={<Navigate to="/" replace />} />
       </Route>
+
+      {/* Global Fallback Route (ensures non-blank screen on invalid route or unauthenticated state) */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
     <GlobalCallDialog />
     </>

@@ -40,8 +40,8 @@ const LAYERS: CheckableLayer[] = ['PRIMARY', 'STANDBY', 'CLOUD'];
 // Track consecutive counts independently from the pool's accumulated totals
 const _counts: Record<CheckableLayer, { failures: number; successes: number; wasDown: boolean }> = {
   PRIMARY: { failures: 0, successes: 0, wasDown: false },
-  STANDBY: { failures: 0, successes: 0, wasDown: true },
-  CLOUD:   { failures: 0, successes: 0, wasDown: false },
+  STANDBY: { failures: 0, successes: 0, wasDown: false },
+  CLOUD:   { failures: 0, successes: 0, wasDown: true },
 };
 
 // ── Persist a system event to DB (best-effort) ────────────────────────────

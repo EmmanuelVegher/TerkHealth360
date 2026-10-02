@@ -9,13 +9,14 @@ import {
   Search, History, Portrait, Print, Warning, CheckCircle, Refresh,
   AutoAwesome, Analytics, TrendingUp, ShowChart, Biotech, Medication,
   ContentCut, ChildCare, LocalHospital, Favorite, Thermostat, Opacity,
-  Speed, LocalPharmacy, Healing, MedicalInformation, Assessment, ArrowForward
+  Speed, LocalPharmacy, Healing, MedicalInformation, Assessment, ArrowForward,
+  MedicalServices, Science, Receipt, Launch
 } from '@mui/icons-material';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend
 } from 'recharts';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSnackbar } from 'notistack';
 
@@ -49,6 +50,7 @@ const getProcedureOpNoteFallback = (procedureName: string = '') => {
 };
 
 const EMRDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
   const urlPatientId = searchParams.get('patientId') || searchParams.get('id');
@@ -64,6 +66,7 @@ const EMRDashboard: React.FC = () => {
   const [labOrders, setLabOrders] = useState<any[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [encounters, setEncounters] = useState<any[]>([]);
+  const [dentalEncounters, setDentalEncounters] = useState<any[]>([]);
 
   // Active Tab value
   const [activeTab, setActiveTab] = useState(0);
@@ -94,12 +97,13 @@ const EMRDashboard: React.FC = () => {
   const loadEMR = async (patId: string) => {
     setLoadingEMR(true);
     try {
-      const [resSummary, resTimeline, resLabs, resRx, resEnc] = await Promise.allSettled([
+      const [resSummary, resTimeline, resLabs, resRx, resEnc, resDental] = await Promise.allSettled([
         api.get(`/emr/summary/${patId}`),
         api.get(`/emr/timeline/${patId}`),
         api.get(`/lims/orders?patientId=${patId}`),
         api.get(`/pharmacy/prescriptions?patientId=${patId}`),
         api.get(`/fhir/Encounter?patient=${patId}`),
+        api.get(`/dental/encounters?patientId=${patId}`),
       ]);
 
       if (resSummary.status === 'fulfilled') setEmrData(resSummary.value.data);
@@ -110,6 +114,9 @@ const EMRDashboard: React.FC = () => {
         const raw = resEnc.value.data;
         const list = raw?.entry ? raw.entry.map((e: any) => e.resource) : (Array.isArray(raw) ? raw : []);
         setEncounters(list);
+      }
+      if (resDental.status === 'fulfilled') {
+        setDentalEncounters(resDental.value.data?.data || []);
       }
     } catch (err) {
       console.error('Error loading EMR details:', err);
@@ -153,6 +160,7 @@ const EMRDashboard: React.FC = () => {
       setLabOrders([]);
       setPrescriptions([]);
       setEncounters([]);
+      setDentalEncounters([]);
     }
   }, [selectedPat]);
 
@@ -736,6 +744,7 @@ const EMRDashboard: React.FC = () => {
                 <Tab icon={<History fontSize="small" />} iconPosition="start" label={`Encounters & SOAP Notes (${emrData.consultationNotes?.length || 0})`} />
                 <Tab icon={<Medication fontSize="small" />} iconPosition="start" label={`Prescriptions (${prescriptions.length || emrData.recentMeds?.length || 0})`} />
                 <Tab icon={<Biotech fontSize="small" />} iconPosition="start" label={`Lab Diagnostics (${labOrders.length || 0})`} />
+                <Tab icon={<MedicalServices fontSize="small" />} iconPosition="start" label={`🦷 Dental & Odontogram (${dentalEncounters.length})`} />
                 <Tab icon={<ContentCut fontSize="small" />} iconPosition="start" label={`Surgical History (${(emrData.surgicalBookings || []).length})`} />
                 <Tab icon={<ChildCare fontSize="small" />} iconPosition="start" label={`ANC & Maternity (${(emrData.ancRecords || []).length || (emrData.history?.lmp || emrData.history?.gravida !== undefined ? 1 : 0)})`} />
                 <Tab icon={<Warning fontSize="small" />} iconPosition="start" label={`Allergies & Alerts (${emrData.allergies?.length || 0})`} />
@@ -1051,8 +1060,276 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 3: SURGICAL HISTORY ─────────────────────────────────── */}
+              {/* ── TAB 3: DENTAL & ODONTOGRAM CLINICAL RECORDS ─────────────── */}
               {activeTab === 3 && (
+                <Stack spacing={2.5}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                        🦷 Longitudinal Dental & Odontogram Clinical Records
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        PostgreSQL-Synced Interactive Odontograms, Periodontal CAL Probing & CDT Treatment Plans
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip
+                        label={`${dentalEncounters.length} Dental Encounter(s)`}
+                        color="primary"
+                        size="small"
+                        sx={{ fontWeight: 800 }}
+                      />
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<Launch />}
+                        onClick={() => navigate('/dental/odontogram')}
+                        sx={{
+                          borderRadius: 2,
+                          fontWeight: 800,
+                          textTransform: 'none',
+                          bgcolor: '#1e3a8a',
+                          '&:hover': { bgcolor: '#1e40af' }
+                        }}
+                      >
+                        Open Full Odontogram Suite
+                      </Button>
+                    </Stack>
+                  </Box>
+
+                  {dentalEncounters.length > 0 ? (
+                    dentalEncounters.map((dent: any, dIdx: number) => {
+                      const findings = dent.findings || [];
+                      const perio = dent.perioRecords || [];
+                      const labSlips = dent.labOrders || [];
+                      const plans = dent.treatmentPlans || [];
+
+                      return (
+                        <Paper
+                          key={dent.id || dIdx}
+                          variant="outlined"
+                          sx={{
+                            p: 2.5,
+                            borderRadius: 3,
+                            borderLeft: '5px solid #1e3a8a',
+                            bgcolor: '#ffffff',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                            <Box>
+                              <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                                <Chip
+                                  label={dent.encounterNumber}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: '0.72rem' }}
+                                />
+                                <Chip
+                                  label={dent.chartingType || 'ADULT_FDI'}
+                                  size="small"
+                                  variant="outlined"
+                                  color="info"
+                                  sx={{ fontWeight: 700, fontSize: '0.68rem' }}
+                                />
+                                <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                  Chief Complaint: {dent.chiefComplaint || 'Routine Dental Checkup & Charting'}
+                                </Typography>
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                📅 Encounter Date: {new Date(dent.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} • 👨‍⚕️ Attending Dentist: <strong>{dent.dentistName || 'Dr. Dental Surgeon'}</strong>
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label={dent.status || 'COMPLETED'}
+                              color={dent.status === 'COMPLETED' ? 'success' : 'warning'}
+                              size="small"
+                              sx={{ fontWeight: 800 }}
+                            />
+                          </Box>
+
+                          <Divider sx={{ my: 1.5 }} />
+
+                          {/* 1. Odontogram Tooth Findings */}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={800} color="#1e3a8a" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                              <MedicalServices fontSize="small" /> Documented Tooth Conditions & Findings ({findings.length} teeth)
+                            </Typography>
+                            {findings.length > 0 ? (
+                              <Grid container spacing={1.5}>
+                                {findings.map((f: any) => {
+                                  const surfaces = [
+                                    f.surfaceMesial ? 'M' : '',
+                                    f.surfaceDistal ? 'D' : '',
+                                    f.surfaceOcclusal ? 'O' : '',
+                                    f.surfaceBuccal ? 'B' : '',
+                                    f.surfaceLingual ? 'L' : '',
+                                  ].filter(Boolean).join('');
+
+                                  let badgeColor: 'error' | 'warning' | 'info' | 'primary' | 'secondary' | 'default' = 'default';
+                                  if (f.wholeToothStatus === 'CARIES') badgeColor = 'error';
+                                  else if (f.wholeToothStatus === 'ROOT_CANAL') badgeColor = 'secondary';
+                                  else if (f.wholeToothStatus === 'PORCELAIN_CROWN') badgeColor = 'warning';
+                                  else if (f.wholeToothStatus === 'IMPLANT') badgeColor = 'info';
+                                  else if (f.wholeToothStatus === 'COMPOSITE_FILLING') badgeColor = 'primary';
+
+                                  return (
+                                    <Grid item xs={12} sm={6} md={4} key={f.id || f.toothNumber}>
+                                      <Paper
+                                        variant="outlined"
+                                        sx={{
+                                          p: 1.5,
+                                          borderRadius: 2,
+                                          bgcolor: '#f8fafc',
+                                          borderColor: '#e2e8f0',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          gap: 0.5
+                                        }}
+                                      >
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                            Tooth #{f.toothNumber}
+                                          </Typography>
+                                          <Chip
+                                            label={f.wholeToothStatus?.replace('_', ' ') || 'SOUND'}
+                                            color={badgeColor}
+                                            size="small"
+                                            sx={{ fontWeight: 800, fontSize: '0.65rem' }}
+                                          />
+                                        </Box>
+                                        {surfaces && (
+                                          <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 700 }}>
+                                            Surfaces Involved: [{surfaces}]
+                                          </Typography>
+                                        )}
+                                        {f.diagnosis && (
+                                          <Typography variant="caption" color="text.secondary">
+                                            Diagnosis: {f.diagnosis}
+                                          </Typography>
+                                        )}
+                                        {f.cdtCode && (
+                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                                            <Chip label={f.cdtCode} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.62rem' }} />
+                                            {f.cost > 0 && (
+                                              <Typography variant="caption" fontWeight={700} color="#16a34a">
+                                                ₦{Number(f.cost).toLocaleString()}
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        )}
+                                      </Paper>
+                                    </Grid>
+                                  );
+                                })}
+                              </Grid>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                No pathological findings recorded. Dentition charted as sound.
+                              </Typography>
+                            )}
+                          </Box>
+
+                          {/* 2. Treatment Plans & CDT Auto-Billing */}
+                          {plans.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="subtitle2" fontWeight={800} color="#0f172a" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                                <Receipt fontSize="small" /> Proposed CDT Treatment Plan ({plans.length} items)
+                              </Typography>
+                              <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                                <Table size="small">
+                                  <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                                    <TableRow>
+                                      <TableCell sx={{ fontWeight: 800, fontSize: '0.75rem' }}>Phase</TableCell>
+                                      <TableCell sx={{ fontWeight: 800, fontSize: '0.75rem' }}>Tooth</TableCell>
+                                      <TableCell sx={{ fontWeight: 800, fontSize: '0.75rem' }}>CDT Code & Procedure</TableCell>
+                                      <TableCell sx={{ fontWeight: 800, fontSize: '0.75rem' }}>Fee</TableCell>
+                                      <TableCell sx={{ fontWeight: 800, fontSize: '0.75rem' }}>Status</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {plans.map((p: any) => (
+                                      <TableRow key={p.id} hover>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{p.phase}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{p.toothNumber ? `#${p.toothNumber}` : 'Full Mouth'}</TableCell>
+                                        <TableCell sx={{ fontSize: '0.78rem' }}>
+                                          <strong>{p.cdtCode}</strong> — {p.procedureName}
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 700, color: '#16a34a', fontSize: '0.78rem' }}>
+                                          ₦{Number(p.cost || 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Chip
+                                            label={p.status || 'PLANNED'}
+                                            color={p.status === 'COMPLETED' ? 'success' : 'default'}
+                                            size="small"
+                                            sx={{ fontWeight: 700, fontSize: '0.62rem' }}
+                                          />
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            </Box>
+                          )}
+
+                          {/* 3. Dental Prosthetics Lab Slips */}
+                          {labSlips.length > 0 && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography variant="subtitle2" fontWeight={800} color="#0f172a" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                                <Biotech fontSize="small" /> Dental Prosthetic Lab Orders ({labSlips.length})
+                              </Typography>
+                              <Stack spacing={1}>
+                                {labSlips.map((ls: any) => (
+                                  <Paper key={ls.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', borderColor: '#bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                                    <Box>
+                                      <Typography variant="subtitle2" fontWeight={800} color="#166534">
+                                        Slip #{ls.orderNumber} — {ls.restorationType} (Tooth #{ls.toothNumbers})
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Lab: {ls.labName} • Vita Shade: <strong>{ls.shadeVita}</strong> {ls.shadeStump ? `(Stump: ${ls.shadeStump})` : ''} • Turnaround: {ls.turnaroundDays || 5} days
+                                      </Typography>
+                                    </Box>
+                                    <Chip label={ls.status || 'IN_FABRICATION'} color="success" size="small" sx={{ fontWeight: 800, fontSize: '0.65rem' }} />
+                                  </Paper>
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
+                        </Paper>
+                      );
+                    })
+                  ) : (
+                    <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 3, bgcolor: '#f8fafc' }}>
+                      <MedicalServices sx={{ fontSize: 48, color: '#94a3b8', mb: 1 }} />
+                      <Typography variant="subtitle1" fontWeight={800} color="text.primary" mb={0.5}>
+                        No Dental Encounters or Odontogram Records Logged Yet
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" mb={2} maxWidth={500} mx="auto">
+                        Initiate a visual 5-surface odontogram charting, periodontal probing evaluation, or CDT treatment plan for this patient.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        startIcon={<Launch />}
+                        onClick={() => navigate('/dental/odontogram')}
+                        sx={{
+                          borderRadius: 2,
+                          fontWeight: 800,
+                          textTransform: 'none',
+                          bgcolor: '#1e3a8a',
+                          '&:hover': { bgcolor: '#1e40af' }
+                        }}
+                      >
+                        Start Dental Odontogram Exam
+                      </Button>
+                    </Paper>
+                  )}
+                </Stack>
+              )}
+
+              {/* ── TAB 4: SURGICAL HISTORY ─────────────────────────────────── */}
+              {activeTab === 4 && (
                 <Stack spacing={2.5}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle1" fontWeight={800}>
@@ -1260,8 +1537,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 4: ANC & MATERNITY / OBSTETRIC HISTORY ──────────────── */}
-              {activeTab === 4 && (
+              {/* ── TAB 5: ANC & MATERNITY / OBSTETRIC HISTORY ──────────────── */}
+              {activeTab === 5 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Antenatal Care (ANC) & Obstetric Profile
@@ -1290,8 +1567,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 5: ALLERGIES & CLINICAL ALERTS REGISTRY ─────────────── */}
-              {activeTab === 5 && (
+              {/* ── TAB 6: ALLERGIES & CLINICAL ALERTS REGISTRY ─────────────── */}
+              {activeTab === 6 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Documented Allergies & Active Clinical Alerts

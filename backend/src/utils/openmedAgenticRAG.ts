@@ -1,3 +1,4 @@
+import './fetchPolyfill.js';
 import { prisma } from '../prisma.js';
 import os from 'os';
 import { formatContextWindow, ConversationContext } from './openmedChatMemory.js';
@@ -121,25 +122,39 @@ ${JSON.stringify(dbContext, null, 2)}`;
 
 export interface AIEngineConfig {
   llmEnabled: boolean;        // Whether quantized Ollama LLM is active
-  ollamaModel: string;        // Active model name, e.g. 'medllama2'
+  ollamaModel: string;        // Active text LLM model name, e.g. 'medllama2'
   nerEnabled: boolean;        // Whether OpenMed NER enrichment is active (always true)
+  geminiApiKey?: string;      // Google Gemini API Key
+  geminiModel?: string;       // Google Gemini Model name/number (e.g. 'gemini-2.5-flash', 'gemini-1.5-flash')
+  visionLocalModel?: string;  // Local Ollama Vision Model (e.g. 'llama3.2-vision', 'llava')
 }
 
 /** Read AI config from DB (falls back to safe defaults if not set) */
 export async function getAIConfig(): Promise<AIEngineConfig> {
   try {
     const rows = await prisma.systemConfig.findMany({
-      where: { key: { in: ['AI_LLM_ENABLED', 'AI_OLLAMA_MODEL', 'AI_NER_ENABLED'] } },
+      where: { key: { in: ['AI_LLM_ENABLED', 'AI_OLLAMA_MODEL', 'AI_NER_ENABLED', 'GEMINI_API_KEY', 'GEMINI_MODEL', 'AI_VISION_MODEL'] } },
     });
     const get = (k: string, def: string) => rows.find(r => r.key === k)?.value ?? def;
+    const rawGeminiKey = get('GEMINI_API_KEY', process.env.GEMINI_API_KEY || '');
     return {
       llmEnabled: get('AI_LLM_ENABLED', 'false') === 'true',
       ollamaModel: get('AI_OLLAMA_MODEL', 'medllama2'),
       nerEnabled: get('AI_NER_ENABLED', 'true') === 'true',
+      geminiApiKey: rawGeminiKey,
+      geminiModel: get('GEMINI_MODEL', process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+      visionLocalModel: get('AI_VISION_MODEL', 'llama3.2-vision'),
     };
   } catch {
     // DB may not have SystemConfig table yet — graceful fallback
-    return { llmEnabled: false, ollamaModel: 'medllama2', nerEnabled: true };
+    return {
+      llmEnabled: false,
+      ollamaModel: 'medllama2',
+      nerEnabled: true,
+      geminiApiKey: process.env.GEMINI_API_KEY || '',
+      geminiModel: 'gemini-2.5-flash',
+      visionLocalModel: 'llama3.2-vision',
+    };
   }
 }
 
@@ -155,6 +170,9 @@ export async function saveAIConfig(config: Partial<AIEngineConfig>): Promise<voi
   if (config.llmEnabled !== undefined) await upsert('AI_LLM_ENABLED', String(config.llmEnabled));
   if (config.ollamaModel !== undefined) await upsert('AI_OLLAMA_MODEL', config.ollamaModel);
   if (config.nerEnabled !== undefined) await upsert('AI_NER_ENABLED', String(config.nerEnabled));
+  if (config.geminiApiKey !== undefined) await upsert('GEMINI_API_KEY', config.geminiApiKey.trim());
+  if (config.geminiModel !== undefined) await upsert('GEMINI_MODEL', config.geminiModel.trim());
+  if (config.visionLocalModel !== undefined) await upsert('AI_VISION_MODEL', config.visionLocalModel.trim());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import { NairaCircleIcon } from '../components/NairaIcon';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
+import { DailyIncomeExpenditureSheet } from '../components/DailyIncomeExpenditureSheet';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -642,6 +643,7 @@ const Finance: React.FC<FinanceProps> = ({ defaultTab = 0, defaultSubTab = 0 }) 
   const [trendsLoading, setTrendsLoading] = useState<boolean>(false);
   const [trendsDeptSearch, setTrendsDeptSearch] = useState<string>('');
   const [trendsDetailModal, setTrendsDetailModal] = useState<{ open: boolean; item: any | null }>({ open: false, item: null });
+  const [incomeExpView, setIncomeExpView] = useState<'daily' | 'trends'>('daily');
 
   // ─── Bank Reconciliation State (FR-REC-001–005) ───────────────────────────
   const [recFormData, setRecFormData] = useState({
@@ -3784,46 +3786,102 @@ const Finance: React.FC<FinanceProps> = ({ defaultTab = 0, defaultSubTab = 0 }) 
 
       {/* ── 18.2.3 Income vs Expenditure Trends (FR-FIN-015–020) ── */}
       <TabPanel value={subTab1} index={2}>
-        {/* Header & Filter Controls Bar */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Stack direction="row" spacing={1.5} alignItems="center">
+        {/* View Switcher: Daily Sheet vs Multi-Period P&L Trajectory */}
+        <Box sx={{ mb: 3 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 2.5, pb: 2, borderBottom: '1px solid #e2e8f0' }}>
+            <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: PRIMARY }}>
-                Income & Expenditure Financial Trajectory (FR-FIN-015–020)
+                Hospital Income & Expenditure Operations (FR-FIN-015–020)
               </Typography>
-              <Chip
-                icon={<CheckCircle sx={{ fontSize: '0.9rem !important' }} />}
-                label={trendsData?.meta?.dataSource || 'PostgreSQL Live Database Feed'}
+              <Typography variant="caption" color="text.secondary">
+                Daily cash ledger reconciliation, departmental expense vouchers, and multi-period P&L financial trajectories
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ bgcolor: '#f1f5f9', p: 0.5, borderRadius: 2 }}>
+              <Button
                 size="small"
-                color="success"
-                variant="outlined"
-                sx={{ fontWeight: 700, fontSize: '0.72rem' }}
-              />
+                variant={incomeExpView === 'daily' ? 'contained' : 'text'}
+                onClick={() => setIncomeExpView('daily')}
+                startIcon={<ReceiptLong />}
+                sx={{
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  fontSize: '0.8rem',
+                  borderRadius: 1.5,
+                  bgcolor: incomeExpView === 'daily' ? PRIMARY : 'transparent',
+                  color: incomeExpView === 'daily' ? '#fff' : 'text.primary',
+                  '&:hover': { bgcolor: incomeExpView === 'daily' ? PRIMARY : '#e2e8f0' }
+                }}
+              >
+                Daily Income & Expenditure Sheet
+              </Button>
+              <Button
+                size="small"
+                variant={incomeExpView === 'trends' ? 'contained' : 'text'}
+                onClick={() => setIncomeExpView('trends')}
+                startIcon={<TrendingUp />}
+                sx={{
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  fontSize: '0.8rem',
+                  borderRadius: 1.5,
+                  bgcolor: incomeExpView === 'trends' ? PRIMARY : 'transparent',
+                  color: incomeExpView === 'trends' ? '#fff' : 'text.primary',
+                  '&:hover': { bgcolor: incomeExpView === 'trends' ? PRIMARY : '#e2e8f0' }
+                }}
+              >
+                P&L Trajectory & Activity Costing
+              </Button>
             </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Real-time Activity-Based Costing (ABC) · Multi-Period P&L Trajectory · Departmental Profitability Yields
-            </Typography>
-          </Box>
+          </Stack>
+        </Box>
 
-          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-            {/* Period Selector Dropdown */}
-            <TextField
-              select
-              size="small"
-              label="Fiscal Period"
-              value={trendsPeriod}
-              onChange={(e) => {
-                const newPeriod = e.target.value;
-                setTrendsPeriod(newPeriod);
-                fetchTrends(newPeriod);
-              }}
-              sx={{ minWidth: 160, bgcolor: '#ffffff', borderRadius: 1 }}
-            >
-              <MenuItem value="FY2026">FY2026 (Full Fiscal Year)</MenuItem>
-              <MenuItem value="Q1-2026">Q1 2026 (Jan – Mar)</MenuItem>
-              <MenuItem value="Q2-2026">Q2 2026 (Apr – Jun)</MenuItem>
-              <MenuItem value="LAST_6_MONTHS">Trailing 6 Months</MenuItem>
-            </TextField>
+        {incomeExpView === 'daily' ? (
+          <Box sx={{ mb: 3 }}>
+            <DailyIncomeExpenditureSheet allowRecordExpense={true} showHeaderTitle={true} elevation={0} />
+          </Box>
+        ) : (
+          <Box>
+            {/* Header & Filter Controls Bar */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: PRIMARY }}>
+                    Income & Expenditure Financial Trajectory
+                  </Typography>
+                  <Chip
+                    icon={<CheckCircle sx={{ fontSize: '0.9rem !important' }} />}
+                    label={trendsData?.meta?.dataSource || 'PostgreSQL Live Database Feed'}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                  />
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  Real-time Activity-Based Costing (ABC) · Multi-Period P&L Trajectory · Departmental Profitability Yields
+                </Typography>
+              </Box>
+
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                {/* Period Selector Dropdown */}
+                <TextField
+                  select
+                  size="small"
+                  label="Fiscal Period"
+                  value={trendsPeriod}
+                  onChange={(e) => {
+                    const newPeriod = e.target.value;
+                    setTrendsPeriod(newPeriod);
+                    fetchTrends(newPeriod);
+                  }}
+                  sx={{ minWidth: 160, bgcolor: '#ffffff', borderRadius: 1 }}
+                >
+                  <MenuItem value="FY2026">FY2026 (Full Fiscal Year)</MenuItem>
+                  <MenuItem value="Q1-2026">Q1 2026 (Jan – Mar)</MenuItem>
+                  <MenuItem value="Q2-2026">Q2 2026 (Apr – Jun)</MenuItem>
+                  <MenuItem value="LAST_6_MONTHS">Trailing 6 Months</MenuItem>
+                </TextField>
 
             {/* Chart Type Selector */}
             <Stack direction="row" spacing={0.5} sx={{ bgcolor: '#f1f5f9', p: 0.5, borderRadius: 2 }}>
@@ -4486,6 +4544,8 @@ const Finance: React.FC<FinanceProps> = ({ defaultTab = 0, defaultSubTab = 0 }) 
             </Button>
           </DialogActions>
         </Dialog>
+          </Box>
+        )}
       </TabPanel>
 
       {/* ── 18.2.4 Accounts Payable & Disbursements ── */}

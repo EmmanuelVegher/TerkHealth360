@@ -306,7 +306,6 @@ const Billing = () => {
   const [kpiReceiptSearch, setKpiReceiptSearch] = useState('');
   const [showExecutiveKPIs, setShowExecutiveKPIs] = useState(false);
 
-  // ─── Dialog States ────────────────────────────────────────────────────────
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -722,6 +721,8 @@ const Billing = () => {
     fetchMonnifyStatus();
     fetchVirtualAccounts();
   }, [fetchAll, fetchWalletPatients, fetchMonnifyStatus, fetchVirtualAccounts]);
+
+
 
   // Refresh wallet patient detail after fund/deduct
   const refreshSelectedWallet = useCallback(async (patientId: string) => {

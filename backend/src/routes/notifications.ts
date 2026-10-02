@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { logAudit } from '../utils/auditHelper.js';
-
+import { chatStore } from '../utils/chatStorage.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -345,6 +345,472 @@ router.post('/groups/:id/messages', (req: Request, res: Response) => {
   grp.messages.push(msg);
   grp.lastMessage = `${msg.sender}: ${msg.text}`;
   res.status(201).json({ success: true, data: msg });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §23.3.1 - WHATSAPP-STYLE HOSPITAL STAFF CHAT & GENERAL GROUP API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Encrypted Message Persistence Store managed via chatStore with AES-256-GCM encryption at rest
+
+// GET /staff-directory - List all hospital staff with active/inactive status
+router.get('/staff-directory', async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        role: { not: 'PATIENT' },
+        NOT: [
+          { username: { startsWith: 'ocr_user_' } },
+          { email: { contains: '@hospital.local' } },
+        ],
+      },
+      include: {
+        staff: true,
+        roles: { include: { role: true } },
+        departments: { include: { department: true } },
+      },
+      orderBy: [
+        { staff: { firstName: 'asc' } },
+        { username: 'asc' }
+      ]
+    });
+
+    const staffList = users.map(u => {
+      const fn = u.staff?.firstName || '';
+      const ln = u.staff?.lastName || '';
+      const fullName = (fn || ln) ? `${fn} ${ln}`.trim() : u.username;
+      const designation = u.staff?.designation || u.roles?.[0]?.role?.name || u.role || 'Staff';
+      const department = u.staff?.department || u.departments?.[0]?.department?.name || 'General';
+      const isStaffActive = u.isActive !== false && u.staff?.isActive !== false;
+
+      return {
+        id: u.id,
+        userId: u.id,
+        username: u.username,
+        email: u.email,
+        firstName: fn,
+        lastName: ln,
+        fullName,
+        employeeId: u.staff?.employeeId || `EMP-${u.id.slice(0, 4).toUpperCase()}`,
+        designation,
+        department,
+        role: u.role,
+        isActive: isStaffActive,
+        profilePicture: u.profilePicture || null,
+        lastSeen: isStaffActive ? 'Online' : 'Inactive',
+      };
+    });
+
+    res.json({ success: true, data: staffList });
+  } catch (error) {
+    console.error('Failed to fetch staff directory for messages:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch staff directory' });
+  }
+});
+
+// POST /profile-picture - Upload / Update user's profile picture
+router.post('/profile-picture', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { profilePicture } = req.body;
+
+    if (!user?.id) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (!profilePicture) {
+      return res.status(400).json({ success: false, message: 'Profile picture data is required' });
+    }
+
+    // Update in database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { profilePicture }
+    });
+
+
+
+    await logAudit({
+      userId: user.id,
+      action: 'UPDATE_PROFILE_PICTURE',
+      resourceType: 'User',
+      resourceId: user.id,
+      changes: { profilePictureUpdated: true }
+    });
+
+    res.json({ success: true, profilePicture });
+  } catch (error) {
+    console.error('Failed to update profile picture:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile picture' });
+  }
+});
+
+// ── Custom Groups Endpoints ──────────────────────────────────────────────────
+// GET /custom-groups - List all custom groups for current user
+router.get('/custom-groups', (req: Request, res: Response) => {
+  try {
+    const currentUserId = (req as any).user?.id;
+    const isSuperAdmin = (req as any).user?.role === 'SUPER_ADMIN' || (req as any).user?.role === 'ADMIN';
+    const groups = chatStore.getCustomGroups(currentUserId, isSuperAdmin);
+    res.json({ success: true, data: groups });
+  } catch (error) {
+    console.error('Failed to list custom groups:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch groups' });
+  }
+});
+
+// POST /custom-groups - Create a new custom group (Admin / Super Admin / Authorized Staff)
+router.post('/custom-groups', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { name, description, members } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Group name is required' });
+    }
+
+    const createdGroup = chatStore.createCustomGroup(
+      name.trim(),
+      description || '',
+      user,
+      Array.isArray(members) ? members : []
+    );
+
+    await logAudit({
+      userId: user?.id,
+      action: 'CREATE_HOSPITAL_CHAT_GROUP',
+      resourceType: 'ChatGroup',
+      resourceId: createdGroup.id,
+      changes: { name: createdGroup.name, membersCount: createdGroup.members.length }
+    });
+
+    res.status(201).json({ success: true, data: createdGroup });
+  } catch (error) {
+    console.error('Failed to create custom group:', error);
+    res.status(500).json({ success: false, message: 'Failed to create group' });
+  }
+});
+
+// GET /custom-groups/:groupId/messages - Get messages in custom group
+router.get('/custom-groups/:groupId/messages', (req: Request, res: Response) => {
+  try {
+    const { groupId } = req.params;
+    const msgs = chatStore.getCustomGroupMessages(groupId);
+    res.json({ success: true, data: msgs });
+  } catch (error) {
+    console.error('Failed to fetch custom group messages:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch messages' });
+  }
+});
+
+// POST /custom-groups/:groupId/messages - Send message to custom group
+router.post('/custom-groups/:groupId/messages', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { groupId } = req.params;
+    const { text, senderName, senderRole, senderAvatar, priority, attachment, replyTo } = req.body;
+
+    if ((!text || !text.trim()) && !attachment) {
+      return res.status(400).json({ success: false, message: 'Message text or attachment is required' });
+    }
+
+    const newMsg = {
+      id: `GMSG-${Date.now().toString()}`,
+      groupId,
+      senderId: user?.id || 'unknown',
+      senderName: senderName || user?.username || 'Staff Member',
+      senderRole: senderRole || user?.role || 'Staff',
+      senderAvatar: senderAvatar || '',
+      text: (text || '').trim(),
+      attachment: attachment || null,
+      replyTo: replyTo || null,
+      priority: priority || 'ROUTINE',
+      timestamp: new Date().toISOString(),
+      isSystem: false,
+      isEdited: false,
+      isDeleted: false
+    };
+
+    const savedMsg = chatStore.addCustomGroupMessage(groupId, newMsg);
+    res.status(201).json({ success: true, data: savedMsg });
+  } catch (error) {
+    console.error('Failed to post custom group message:', error);
+    res.status(500).json({ success: false, message: 'Failed to send message' });
+  }
+});
+
+// POST /custom-groups/:groupId/add-members - Add staff members to group
+router.post('/custom-groups/:groupId/add-members', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { groupId } = req.params;
+    const { members } = req.body;
+
+    if (!Array.isArray(members) || members.length === 0) {
+      return res.status(400).json({ success: false, message: 'Members to add are required' });
+    }
+
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const result = chatStore.addMembersToGroup(groupId, members, user, isSuperAdmin);
+
+    if (!result.success) {
+      return res.status(403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Failed to add group members:', error);
+    res.status(500).json({ success: false, message: 'Failed to add members' });
+  }
+});
+
+// POST /custom-groups/:groupId/remove-member - Remove a staff member from group
+router.post('/custom-groups/:groupId/remove-member', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { groupId } = req.params;
+    const { targetUserId } = req.body;
+
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, message: 'Target user ID is required' });
+    }
+
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const result = chatStore.removeMemberFromGroup(groupId, targetUserId, user, isSuperAdmin);
+
+    if (!result.success) {
+      return res.status(403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Failed to remove group member:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove member' });
+  }
+});
+
+// POST /custom-groups/:groupId/toggle-admin - Make or dismiss a member as Group Admin
+router.post('/custom-groups/:groupId/toggle-admin', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { groupId } = req.params;
+    const { targetUserId } = req.body;
+
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, message: 'Target user ID is required' });
+    }
+
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const result = chatStore.toggleGroupAdminRole(groupId, targetUserId, user, isSuperAdmin);
+
+    if (!result.success) {
+      return res.status(403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, data: result.data, isNowAdmin: result.isNowAdmin });
+  } catch (error) {
+    console.error('Failed to toggle admin role:', error);
+    res.status(500).json({ success: false, message: 'Failed to toggle admin role' });
+  }
+});
+
+// DELETE /custom-groups/:groupId - Delete custom group (Admin / Super Admin / Group Admin)
+router.delete('/custom-groups/:groupId', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { groupId } = req.params;
+
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const result = chatStore.deleteCustomGroup(groupId, user, isSuperAdmin);
+
+    if (!result.success) {
+      return res.status(403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, message: 'Group deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete custom group:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete group' });
+  }
+});
+
+// GET /general-group/messages - Get all general group messages (Decrypted on-the-fly)
+router.get('/general-group/messages', (req: Request, res: Response) => {
+  const msgs = chatStore.getGeneralGroupMessages();
+  res.json({ success: true, data: msgs });
+});
+
+// POST /general-group/messages - Send message to general group with AES-256-GCM encryption at rest
+router.post('/general-group/messages', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { text, senderName, senderRole, senderAvatar, priority, attachment, replyTo } = req.body;
+
+    if ((!text || !text.trim()) && !attachment) {
+      return res.status(400).json({ success: false, message: 'Message text or attachment is required' });
+    }
+
+    const newMsg = {
+      id: `GEN-MSG-${Date.now().toString()}`,
+      senderId: user?.id || 'unknown',
+      senderName: senderName || user?.username || 'Staff Member',
+      senderRole: senderRole || user?.role || 'Staff',
+      senderAvatar: senderAvatar || '',
+      text: (text || '').trim(),
+      attachment: attachment || null,
+      replyTo: replyTo || null,
+      priority: priority || 'ROUTINE',
+      timestamp: new Date().toISOString(),
+      isSystem: false,
+      isEdited: false,
+      isDeleted: false
+    };
+
+    const savedMsg = chatStore.addGeneralGroupMessage(newMsg);
+    res.status(201).json({ success: true, data: savedMsg });
+  } catch (error) {
+    console.error('Failed to post general group message:', error);
+    res.status(500).json({ success: false, message: 'Failed to send message to general group' });
+  }
+});
+
+// GET /direct-messages/summary - Get summary of all direct conversations & unread counts for current user
+router.get('/direct-messages/summary', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = (req as any).user?.id;
+    const myMessages = chatStore.getDirectMessagesSummary(currentUserId);
+    res.json({ success: true, data: myMessages });
+  } catch (error) {
+    console.error('Failed to fetch direct messages summary:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch summary' });
+  }
+});
+
+// GET /direct-messages/:targetUserId - Get 1-on-1 private messages (Decrypted on-the-fly)
+router.get('/direct-messages/:targetUserId', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = (req as any).user?.id;
+    const { targetUserId } = req.params;
+
+    const conversation = chatStore.getConversation(currentUserId, targetUserId);
+    chatStore.markConversationAsRead(currentUserId, targetUserId);
+
+    res.json({ success: true, data: conversation });
+  } catch (error) {
+    console.error('Failed to fetch direct messages:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch messages' });
+  }
+});
+
+// POST /direct-messages/read/:targetUserId - Mark conversation as read
+router.post('/direct-messages/read/:targetUserId', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = (req as any).user?.id;
+    const { targetUserId } = req.params;
+
+    const updatedCount = chatStore.markConversationAsRead(currentUserId, targetUserId);
+    res.json({ success: true, updatedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to mark as read' });
+  }
+});
+
+// POST /direct-messages/:targetUserId - Send 1-on-1 private message with AES-256-GCM encryption at rest
+router.post('/direct-messages/:targetUserId', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = (req as any).user?.id;
+    const { targetUserId } = req.params;
+    const { text, senderName, recipientName, priority, attachment, replyTo } = req.body;
+
+    if ((!text || !text.trim()) && !attachment) {
+      return res.status(400).json({ success: false, message: 'Message text or attachment is required' });
+    }
+
+    // Verify recipient active status in DB
+    const recipientUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { staff: true }
+    });
+
+    if (!recipientUser) {
+      return res.status(404).json({ success: false, message: 'Recipient staff member not found' });
+    }
+
+    const isRecipientActive = recipientUser.isActive !== false && recipientUser.staff?.isActive !== false;
+
+    if (!isRecipientActive) {
+      return res.status(400).json({
+        success: false,
+        isInactive: true,
+        message: 'This staff account is inactive and cannot receive messages.'
+      });
+    }
+
+    const newMsg = {
+      id: `DM-${Date.now().toString()}`,
+      senderId: currentUserId || 'current-user',
+      senderName: senderName || 'You',
+      recipientId: targetUserId,
+      recipientName: recipientName || recipientUser.username,
+      text: (text || '').trim(),
+      attachment: attachment || null,
+      replyTo: replyTo || null,
+      priority: priority || 'ROUTINE',
+      timestamp: new Date().toISOString(),
+      read: false,
+      isEdited: false,
+      isDeleted: false
+    };
+
+    const savedMsg = chatStore.addDirectMessage(newMsg);
+    res.status(201).json({ success: true, data: savedMsg });
+  } catch (error) {
+    console.error('Failed to send direct message:', error);
+    res.status(500).json({ success: false, message: 'Failed to send message' });
+  }
+});
+
+// PATCH /messages/:msgId/edit - Edit sent message (Re-encrypts with AES-256-GCM)
+router.patch('/messages/:msgId/edit', async (req: Request, res: Response) => {
+  try {
+    const { msgId } = req.params;
+    const { text } = req.body;
+    const currentUserId = (req as any).user?.id;
+    const isAdmin = (req as any).user?.role === 'SUPER_ADMIN';
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ success: false, message: 'Updated text cannot be empty' });
+    }
+
+    const result = chatStore.editMessage(msgId, text.trim(), currentUserId, isAdmin);
+    if (!result.success) {
+      return res.status(result.error === 'Message not found' ? 404 : 403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Failed to edit message:', error);
+    res.status(500).json({ success: false, message: 'Failed to edit message' });
+  }
+});
+
+// DELETE /messages/:msgId - Delete sent message (shows "This message was deleted" to receivers)
+router.delete('/messages/:msgId', async (req: Request, res: Response) => {
+  try {
+    const { msgId } = req.params;
+    const currentUserId = (req as any).user?.id;
+    const isAdmin = (req as any).user?.role === 'SUPER_ADMIN';
+
+    const result = chatStore.deleteMessage(msgId, currentUserId, isAdmin);
+    if (!result.success) {
+      return res.status(result.error === 'Message not found' ? 404 : 403).json({ success: false, message: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Failed to delete message:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete message' });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import Header from './Header';
 import { SIDEBAR_W } from './Sidebar';
 import { runBackgroundSync } from '../services/api';
 import { OpenMedFloatingChatWidget } from './OpenMedFloatingChatWidget';
+import { GlobalUrgentMessageAlert } from './GlobalUrgentMessageAlert';
 import { useAuth } from '../contexts/AuthContext';
 import { isUserPharmacyStaff, isUserMorticianStaff, isUserRadiologyStaff, isUserPhysioStaff } from '../utils/roleUtils';
 
@@ -23,42 +24,47 @@ const Layout = () => {
   const isPhysioStaff = !isAdmin && isUserPhysioStaff(user);
 
   useEffect(() => {
+    const p = location.pathname.toLowerCase().replace(/\/$/, '');
+    // Common global pages accessible to all authenticated staff
+    const isGlobalPage =
+      p === '' ||
+      p === '/' ||
+      p.startsWith('/messages') ||
+      p.startsWith('/timesheets') ||
+      p.startsWith('/timesheet') ||
+      p.startsWith('/attendance') ||
+      p.startsWith('/leave') ||
+      p.startsWith('/my-profile');
+
     if (isPharmacyStaff) {
-      const p = location.pathname.toLowerCase().replace(/\/$/, '');
       const isAllowed =
-        p === '' ||
-        p === '/' ||
+        isGlobalPage ||
         p.startsWith('/pharmacy') ||
-        p.startsWith('/inventory');
+        p.startsWith('/inventory') ||
+        p.startsWith('/reports');
 
       if (!isAllowed) {
         navigate('/pharmacy', { replace: true });
       }
     } else if (isMorticianStaff) {
-      const p = location.pathname.toLowerCase().replace(/\/$/, '');
       const isAllowed =
-        p === '' ||
-        p === '/' ||
+        isGlobalPage ||
         p.startsWith('/mortuary');
 
       if (!isAllowed) {
         navigate('/mortuary', { replace: true });
       }
     } else if (isRadiologyStaff) {
-      const p = location.pathname.toLowerCase().replace(/\/$/, '');
       const isAllowed =
-        p === '' ||
-        p === '/' ||
+        isGlobalPage ||
         p.startsWith('/radiology');
 
       if (!isAllowed) {
         navigate('/radiology/orders', { replace: true });
       }
     } else if (isPhysioStaff) {
-      const p = location.pathname.toLowerCase().replace(/\/$/, '');
       const isAllowed =
-        p === '' ||
-        p === '/' ||
+        isGlobalPage ||
         p.startsWith('/rehabilitation') ||
         p.startsWith('/physiotherapy');
 
@@ -189,6 +195,9 @@ const Layout = () => {
           </Button>
         </Paper>
       )}
+
+      {/* Global Urgent Message Clinical Audio & Dialog Alert */}
+      <GlobalUrgentMessageAlert />
 
       {/* Global OpenMed Agentic RAG Floating Chat Widget (Commented out per user request) */}
       {/* <OpenMedFloatingChatWidget /> */}

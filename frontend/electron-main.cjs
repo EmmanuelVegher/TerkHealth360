@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, shell, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
@@ -148,7 +148,13 @@ async function ensureBackendRunning() {
   }
 
   try {
-    // spawn() correctly handles ES Modules ("type":"module" in backend/package.json)
+    const logPath = path.join(app.getPath('userData'), 'backend.log');
+    let logStream = null;
+    try {
+      logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    } catch (_) {}
+
+    // spawn() with ['ignore', 'pipe', 'pipe'] is safe in Windows GUI subsystem (no console window)
     backendProcess = spawn(nodeBin, [backendEntryPath], {
       cwd: backendDir,
       env: {
@@ -156,20 +162,56 @@ async function ensureBackendRunning() {
         ...envFromFile,   // .env values take priority
         PORT: String(BACKEND_PORT),
         NODE_ENV: 'production',
+        // Path to the frontend dist so the backend can serve it for LAN/tablet access.
+        // IMPORTANT: The backend is a plain Node.js process — it CANNOT read inside
+        // the .asar archive.  We use the extraResource copy at resources/frontend-dist/
+        // which is a real filesystem directory accessible to any process.
+        FRONTEND_DIST_PATH: app.isPackaged
+          ? path.join(process.resourcesPath, 'frontend-dist')
+          : path.join(__dirname, 'dist'),
       },
-      stdio: 'inherit'
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
     });
+
+    if (backendProcess.stdout) {
+      backendProcess.stdout.on('data', (chunk) => {
+        const str = chunk.toString();
+        console.log('[Backend]', str);
+        if (logStream) try { logStream.write(`[${new Date().toISOString()}] ${str}`); } catch (_) {}
+      });
+    }
+
+    if (backendProcess.stderr) {
+      backendProcess.stderr.on('data', (chunk) => {
+        const str = chunk.toString();
+        console.error('[Backend ERR]', str);
+        if (logStream) try { logStream.write(`[${new Date().toISOString()} ERR] ${str}`); } catch (_) {}
+      });
+    }
 
     backendProcess.on('error', (err) => {
       console.error('[Electron] Failed to start backend process:', err);
+      if (logStream) try { logStream.write(`[ERROR] ${err.stack || err.message}\n`); } catch (_) {}
     });
 
     backendProcess.on('exit', (code, signal) => {
       console.log(`[Electron] Backend process exited with code ${code}, signal ${signal}`);
+      if (logStream) try { logStream.write(`[EXIT] code=${code} signal=${signal}\n`); } catch (_) {}
       backendProcess = null;
     });
 
     console.log('[Electron] Backend spawned — PID:', backendProcess.pid, '| node:', nodeBin);
+
+    // Wait up to 8 seconds for backend to become responsive
+    for (let i = 0; i < 16; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const healthy = await checkBackendHealth(BACKEND_PORT);
+      if (healthy) {
+        console.log('[Electron] Backend health check passed.');
+        break;
+      }
+    }
   } catch (err) {
     console.warn('[Electron] Could not spawn backend:', err.message);
   }
@@ -224,7 +266,7 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       preload: path.join(__dirname, 'electron-preload.cjs')
     }
   });
@@ -257,46 +299,52 @@ function createMainWindow() {
         console.log('[Electron] Loading dev server from:', devUrl);
         mainWindow.loadURL(devUrl).catch(() => {
           console.log('[Electron] loadURL failed, loading local build file...');
-          loadDistFile();
+          loadDistFile(mainWindow);
         });
       } else {
         console.log('[Electron] Dev server not available, loading local build file...');
-        loadDistFile();
+        loadDistFile(mainWindow);
       }
     });
   } else {
     // In production: load the frontend immediately, backend starts concurrently
-    loadDistFile();
-  }
-
-  function loadDistFile() {
-    // In a packaged asar, app.getAppPath() points inside the asar — check there first
-    const possiblePaths = [
-      path.join(app.getAppPath(), 'dist', 'index.html'),
-      path.join(app.getAppPath(), 'index.html'),
-      path.join(__dirname, 'dist', 'index.html'),
-      path.join(__dirname, 'index.html'),
-    ];
-
-    console.log('[Electron] Searching for index.html in:');
-    possiblePaths.forEach(p => {
-      const exists = (() => { try { return fs.existsSync(p); } catch { return false; } })();
-      console.log(`  [${exists ? 'FOUND' : '    '}] ${p}`);
-    });
-
-    const validPath = possiblePaths.find((p) => {
-      try { return fs.existsSync(p); } catch (e) { return false; }
-    });
-
-    const target = validPath || path.join(app.getAppPath(), 'dist', 'index.html');
-    console.log('[Electron] Loading:', target);
-    mainWindow.loadFile(target).catch((err) => {
-      console.error('[Electron] Failed to load index.html from ' + target, err);
-    });
+    loadDistFile(mainWindow);
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+/**
+ * Find and load the built dist/index.html into the given window.
+ * Works both inside an .asar archive and in an unpacked production build.
+ * @param {BrowserWindow} win
+ * @param {string} [hash] - optional hash fragment e.g. '/login'
+ */
+function loadDistFile(win, hash) {
+  const possiblePaths = [
+    path.join(app.getAppPath(), 'dist', 'index.html'),
+    path.join(app.getAppPath(), 'index.html'),
+    path.join(__dirname, 'dist', 'index.html'),
+    path.join(__dirname, 'index.html'),
+  ];
+
+  console.log('[Electron] Searching for index.html in:');
+  possiblePaths.forEach(p => {
+    const exists = (() => { try { return fs.existsSync(p); } catch { return false; } })();
+    console.log(`  [${exists ? 'FOUND' : '    '}] ${p}`);
+  });
+
+  const validPath = possiblePaths.find((p) => {
+    try { return fs.existsSync(p); } catch (e) { return false; }
+  });
+
+  const target = validPath || path.join(app.getAppPath(), 'dist', 'index.html');
+  console.log('[Electron] Loading:', target, hash ? `#${hash}` : '');
+  const opts = hash ? { hash } : undefined;
+  win.loadFile(target, opts).catch((err) => {
+    console.error('[Electron] Failed to load index.html from ' + target, err);
   });
 }
 
@@ -400,6 +448,23 @@ app.whenReady().then(async () => {
   createMenu();
   await ensureBackendRunning();
   createMainWindow();
+
+  // Handle renderer request to fully navigate to the login page after logout.
+  // Using loadFile/loadURL (full navigation) rather than just setting the hash
+  // is the ONLY reliable approach in a packaged Electron app: React Router's
+  // ProtectedRoute guard re-evaluates cleanly on a fresh page load.
+  ipcMain.on('reload-to-login', () => {
+    if (!mainWindow) return;
+    console.log('[Electron] reload-to-login: navigating to login page');
+    if (isDev) {
+      mainWindow.loadURL(FRONTEND_DEV_URL + '/#/login').catch((err) => {
+        console.error('[Electron] Dev reload-to-login failed:', err);
+        loadDistFile(mainWindow, '/login');
+      });
+    } else {
+      loadDistFile(mainWindow, '/login');
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

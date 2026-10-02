@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../prisma.js';
 import { logAudit } from '../utils/auditHelper.js';
+import { extractDrugFromImage } from '../utils/drugVisionExtractor.js';
 
 const router = Router();
 
@@ -349,6 +350,112 @@ router.put('/items/:id', authMiddleware, async (req: any, res: Response) => {
     res.json({ success: true, data: item });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /ai-scan-drug - AI Visual Drug Package Analyzer
+router.post('/ai-scan-drug', authMiddleware, async (req: any, res: Response) => {
+  try {
+    const { imageBase64, imageUrl } = req.body;
+    const rawImage = imageBase64 || imageUrl;
+
+    if (!rawImage) {
+      return res.status(400).json({ success: false, message: 'Image data is required for AI drug analysis' });
+    }
+
+    const extracted = await extractDrugFromImage(rawImage);
+    logAudit({ action: 'AI_SCAN_DRUG_PACKAGE', userId: req.user?.id || 'SYSTEM', resourceType: 'PharmacyInventoryItem', resourceId: extracted.code, changes: { scannedName: extracted.name } });
+
+    res.json({ success: true, data: extracted });
+  } catch (error: any) {
+    console.error('Failed to perform AI drug scan:', error);
+    res.status(500).json({ success: false, message: error.message || 'AI drug scanning failed' });
+  }
+});
+
+// POST /ai-auto-create-drug - 1-Click Instant Registration of Scanned Drug into Master Catalogue
+router.post('/ai-auto-create-drug', authMiddleware, async (req: any, res: Response) => {
+  try {
+    const {
+      code,
+      name,
+      genericName,
+      dosageForm,
+      strength,
+      category,
+      uom,
+      valuationPrice,
+      minStock,
+      maxStock,
+      coldChain,
+      tempRange,
+      batchNumber,
+      expiryDate,
+      manufactureDate,
+      manufacturer,
+      initialQuantity,
+      warehouseCode,
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Drug name is required' });
+    }
+
+    const randomCode = code || `MED-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const item = await prisma.pharmacyInventoryItem.upsert({
+      where: { itemCode: randomCode },
+      update: {
+        brandName: name,
+        genericName: genericName || name,
+        classification: category || 'Pharmaceuticals',
+        unitOfMeasure: uom || 'Pack of 100',
+        dosageForm: dosageForm || 'Tablet',
+        strength: strength || 'Standard',
+        manufacturer: manufacturer || 'Approved Manufacturer',
+        price: Number(valuationPrice) || 1000,
+        storageRequirements: coldChain ? tempRange : null,
+      },
+      create: {
+        itemCode: randomCode,
+        brandName: name,
+        genericName: genericName || name,
+        classification: category || 'Pharmaceuticals',
+        unitOfMeasure: uom || 'Pack of 100',
+        dosageForm: dosageForm || 'Tablet',
+        strength: strength || 'Standard',
+        manufacturer: manufacturer || 'Approved Manufacturer',
+        price: Number(valuationPrice) || 1000,
+        storageRequirements: coldChain ? tempRange : null,
+        stockLeft: Number(initialQuantity) || 100,
+        isActive: true,
+      }
+    });
+
+    const wh = await prisma.pharmacyWarehouse.findFirst({
+      where: { code: warehouseCode || 'WH-MAIN' }
+    });
+
+    let createdBatch = null;
+    if (wh && (batchNumber || initialQuantity)) {
+      createdBatch = await prisma.pharmacyStockBatch.create({
+        data: {
+          inventoryItemId: item.id,
+          warehouseId: wh.id,
+          batchNumber: batchNumber || `BN-${Date.now().toString().slice(-6)}`,
+          currentQuantity: Number(initialQuantity) || 100,
+          receivedQuantity: Number(initialQuantity) || 100,
+          expiryDate: expiryDate ? new Date(expiryDate) : new Date(Date.now() + 730 * 24 * 60 * 60 * 1000),
+          purchaseCost: Number(valuationPrice) * 0.75,
+        }
+      }).catch(() => null);
+    }
+
+    logAudit({ action: 'AI_AUTO_CREATE_DRUG', userId: req.user?.id || 'SYSTEM', resourceType: 'PharmacyInventoryItem', resourceId: item.id });
+    res.json({ success: true, data: { item, batch: createdBatch } });
+  } catch (error: any) {
+    console.error('Failed to auto-create drug:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to auto-create drug' });
   }
 });
 

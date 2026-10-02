@@ -149,6 +149,12 @@ async function ensureBackendRunning() {
   }
 
   try {
+    const logPath = path.join(app.getPath('userData'), 'backend.log');
+    let logStream = null;
+    try {
+      logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    } catch (_) {}
+
     backendProcess = spawn(nodeBin, [backendEntryPath], {
       cwd: backendDir,
       env: {
@@ -157,19 +163,48 @@ async function ensureBackendRunning() {
         PORT: String(BACKEND_PORT),
         NODE_ENV: 'production',
       },
-      stdio: 'inherit'
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
     });
+
+    if (backendProcess.stdout) {
+      backendProcess.stdout.on('data', (chunk) => {
+        const str = chunk.toString();
+        console.log('[Backend]', str);
+        if (logStream) try { logStream.write(`[${new Date().toISOString()}] ${str}`); } catch (_) {}
+      });
+    }
+
+    if (backendProcess.stderr) {
+      backendProcess.stderr.on('data', (chunk) => {
+        const str = chunk.toString();
+        console.error('[Backend ERR]', str);
+        if (logStream) try { logStream.write(`[${new Date().toISOString()} ERR] ${str}`); } catch (_) {}
+      });
+    }
 
     backendProcess.on('error', (err) => {
       console.error('[Electron] Failed to start backend process:', err);
+      if (logStream) try { logStream.write(`[ERROR] ${err.stack || err.message}\n`); } catch (_) {}
     });
 
     backendProcess.on('exit', (code, signal) => {
       console.log(`[Electron] Backend process exited with code ${code}, signal ${signal}`);
+      if (logStream) try { logStream.write(`[EXIT] code=${code} signal=${signal}\n`); } catch (_) {}
       backendProcess = null;
     });
 
     console.log('[Electron] Backend spawned — PID:', backendProcess.pid, '| node:', nodeBin);
+
+    // Wait up to 8 seconds for backend to become responsive
+    for (let i = 0; i < 16; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const healthy = await checkBackendHealth(BACKEND_PORT);
+      if (healthy) {
+        console.log('[Electron] Backend health check passed.');
+        break;
+      }
+    }
   } catch (err) {
     console.warn('[Electron] Could not spawn backend:', err.message);
   }

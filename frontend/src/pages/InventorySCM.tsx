@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, Grid, Card, CardContent, Typography, Tabs, Tab, Button, TextField, Autocomplete,
@@ -17,12 +17,14 @@ import {
   Timeline, Group, RequestPage, Thermostat, Autorenew, AccountBalance,
   WarningAmber, FileDownload, Edit, Delete, ViewModule, ViewList, Block,
   Verified, TrendingDown, AccessTime, QrCode, LocalPharmacy, MedicalServices,
-  Assessment, Assignment
+  Assessment, Assignment, PhotoCamera, FlipCameraIos, CameraAlt, AutoAwesome,
+  Bolt, Check, Close, CloudUpload, CheckCircleOutline, Science
 } from '@mui/icons-material';
 import { api } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkImportExport } from '../components/BulkImportExport';
+import { compressImage } from '../utils/imageCompressor';
 
 // ─── Design Tokens & Theme Formatting ────────────────────────────────────────
 const PRIMARY = '#1e3a8a';
@@ -108,6 +110,10 @@ const PHARMACEUTICAL_DATA_DICTIONARY = [
   { name: 'Vancomycin 500mg Injection', genericName: 'Vancomycin HCl', category: 'Pharmaceuticals', uom: 'Vial', unitPrice: 6000, coldChain: false, code: 'PHA-VAN-500' },
 
   // Analgesics & Pain Management
+  { name: 'LOFNAC 100 Tablets 100mg (Diclofenac Sodium)', genericName: 'Diclofenac Sodium', category: 'Pharmaceuticals', uom: 'Pack of 10', unitPrice: 1200, coldChain: false, code: 'PHA-LOF-100' },
+  { name: 'Diclofenac Sodium 100mg Extended-Release Tablets (Lofenac / Voltaren)', genericName: 'Diclofenac Sodium', category: 'Pharmaceuticals', uom: 'Pack of 100', unitPrice: 2400, coldChain: false, code: 'PHA-DIC-100' },
+  { name: 'Diclofenac Sodium 50mg Tablets', genericName: 'Diclofenac Sodium', category: 'Pharmaceuticals', uom: 'Pack of 100', unitPrice: 1200, coldChain: false, code: 'PHA-DIC-50' },
+  { name: 'Diclofenac Potassium 50mg Tablets (Cataflam)', genericName: 'Diclofenac Potassium', category: 'Pharmaceuticals', uom: 'Pack of 20', unitPrice: 1800, coldChain: false, code: 'PHA-CAT-50' },
   { name: 'Paracetamol 500mg Tablet (Panadol)', genericName: 'Acetaminophen', category: 'Pharmaceuticals', uom: 'Pack of 100', unitPrice: 300, coldChain: false, code: 'PHA-PCM-500' },
   { name: 'Paracetamol 1g/100ml IV Infusion (Perfalgan)', genericName: 'Acetaminophen IV', category: 'Pharmaceuticals', uom: '500ml Infusion Bag', unitPrice: 1800, coldChain: false, code: 'PHA-PCM-1GIV' },
   { name: 'Ibuprofen 400mg Tablet', genericName: 'Ibuprofen', category: 'Pharmaceuticals', uom: 'Pack of 100', unitPrice: 500, coldChain: false, code: 'PHA-IBU-400' },
@@ -313,9 +319,72 @@ const InventorySCM = () => {
   const [analytics, setAnalytics] = useState<any>({});
   const [banksList, setBanksList] = useState<string[]>(DEFAULT_NIGERIAN_BANKS);
 
+  // ─── AI Drug Package Scanner States ──────────────────────────────────────
+  const [aiSnapModalOpen, setAiSnapModalOpen] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isAnalyzingDrug, setIsAnalyzingDrug] = useState(false);
+  const [analyzingStep, setAnalyzingStep] = useState<string>('');
+  const [extractedDrug, setExtractedDrug] = useState<any | null>(null);
+  const [isAutoCreating, setIsAutoCreating] = useState(false);
+  const [selectedWarehouseForAi, setSelectedWarehouseForAi] = useState<string>('WH-MAIN');
+  const [initialQtyForAi, setInitialQtyForAi] = useState<number>(100);
+  // Camera permission state machine
+  const [cameraPermission, setCameraPermission] = useState<'unknown' | 'prompt' | 'granted' | 'denied' | 'unavailable'>('unknown');
+  const [cameraPermGuideOpen, setCameraPermGuideOpen] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const drugFileInputRef = useRef<HTMLInputElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // ─── Device / HTTPS Helpers ──────────────────────────────────────────────
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  const isMobile = isIOS || isAndroid;
+  const isSecureContext = window.isSecureContext; // false on plain HTTP (non-localhost)
+
   // ─── Dialogue States ───────────────────────────────────────────────────────
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [centralDictionaryConcepts, setCentralDictionaryConcepts] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get('/terminology/concepts?category=PHARMACY&limit=300').then(res => {
+      if (res.data?.data) {
+        setCentralDictionaryConcepts(res.data.data);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const combinedDictionary = useMemo(() => {
+    const centralFormatted = centralDictionaryConcepts.map((c: any) => {
+      const rawDisplay = c.display || '';
+      const cleanGeneric = rawDisplay.replace(/\s*\([^)]*\)/g, '').trim();
+      const cleanBrand = rawDisplay.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'MED';
+      const strengthDigits = rawDisplay.replace(/[^0-9]/g, '').slice(0, 4) || (c.code || '100').slice(0, 4);
+      const code = `PHA-${cleanBrand}-${strengthDigits}`;
+
+      return {
+        name: rawDisplay,
+        genericName: cleanGeneric || rawDisplay,
+        category: c.category === 'PHARMACY' ? 'Pharmaceuticals' : (c.category || 'Pharmaceuticals'),
+        uom: rawDisplay.toLowerCase().includes('inj') ? 'Ampoule 2ml' : rawDisplay.toLowerCase().includes('infusion') ? '500ml Infusion Bag' : 'Pack of 100',
+        unitPrice: 1200,
+        coldChain: Boolean(rawDisplay.toLowerCase().includes('insulin') || rawDisplay.toLowerCase().includes('vaccine') || rawDisplay.toLowerCase().includes('oxytocin')),
+        code,
+        isCentral: true,
+        system: c.system || 'RXNORM',
+        conceptCode: c.code,
+      };
+    });
+
+    const existingNames = new Set(PHARMACEUTICAL_DATA_DICTIONARY.map(d => d.name.toLowerCase()));
+    const uniqueCentral = centralFormatted.filter(c => !existingNames.has(c.name.toLowerCase()));
+
+    return [...PHARMACEUTICAL_DATA_DICTIONARY, ...uniqueCentral];
+  }, [centralDictionaryConcepts]);
+
   const [itemForm, setItemForm] = useState({
     code: '',
     name: '',
@@ -371,14 +440,16 @@ const InventorySCM = () => {
   const handleSelectDictionaryItem = (dictItem: any) => {
     if (!dictItem) return;
     const selectedName = typeof dictItem === 'string' ? dictItem : dictItem.name;
-    const match = typeof dictItem === 'object' && dictItem.name ? dictItem : PHARMACEUTICAL_DATA_DICTIONARY.find(d => d.name.toLowerCase() === selectedName.toLowerCase());
+    const match = typeof dictItem === 'object' && dictItem.name ? dictItem : combinedDictionary.find(d => d.name.toLowerCase() === selectedName.toLowerCase());
 
     if (match) {
       const isCold = Boolean(match.coldChain);
-      const generatedCode = match.code || `PHA-${match.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+      const cleanBrand = match.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'PHA';
+      const strengthDigits = match.name.replace(/[^0-9]/g, '').slice(0, 4) || '100';
+      const generatedCode = match.code || `PHA-${cleanBrand}-${strengthDigits}`;
       setItemForm(prev => ({
         ...prev,
-        code: prev.code || generatedCode,
+        code: prev.code && !prev.code.startsWith('MED-') ? prev.code : generatedCode,
         name: match.name,
         genericName: match.genericName || match.name,
         category: match.category || 'Pharmaceuticals',
@@ -547,6 +618,240 @@ const InventorySCM = () => {
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.error || `Failed to ${editingItem ? 'update' : 'create'} item`, { variant: 'error' });
     }
+  };
+
+  // ─── AI Drug Package Scanner Methods ─────────────────────────────────────
+
+  /** Check current browser camera permission state without triggering a prompt */
+  const checkCameraPermission = async (): Promise<'granted' | 'denied' | 'prompt' | 'unavailable'> => {
+    // mediaDevices not available on plain HTTP in mobile browsers
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return 'unavailable';
+    if ('permissions' in navigator) {
+      try {
+        const result = await (navigator as any).permissions.query({ name: 'camera' });
+        return result.state as 'granted' | 'denied' | 'prompt';
+      } catch { /* iOS Safari doesn't support camera query — fall through */ }
+    }
+    // iOS Safari: permissions API not available, assume 'prompt'
+    return 'prompt';
+  };
+
+  /** Directly request camera stream (triggers native browser permission dialog) */
+  const startCamera = async (mode = facingMode) => {
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: mode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      mediaStreamRef.current = stream;
+      setCameraPermission('granted');
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        // onloadedmetadata ensures the video element is ready before play()
+        // This fixes blank/black feed on mobile browsers (same pattern as physio page)
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(e => console.warn('[DrugScanner] video play error:', e));
+        };
+        await videoRef.current.play().catch(() => {});
+      }
+      setCameraActive(true);
+    } catch (err: any) {
+      console.warn('Camera access error:', err);
+      const isNotAllowed = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      const isNotFound = err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError';
+      if (isNotAllowed) {
+        setCameraPermission('denied');
+      } else if (isNotFound) {
+        setCameraPermission('unavailable');
+        enqueueSnackbar('No camera found on this device — please upload a photo instead', { variant: 'info' });
+      } else {
+        enqueueSnackbar('Camera error — please try uploading a photo instead', { variant: 'warning' });
+      }
+      setCameraActive(false);
+    }
+  };
+
+  /**
+   * Reactive camera init — watches aiSnapModalOpen.
+   * Checks permission state first:
+   *  • granted  → start camera immediately
+   *  • prompt   → show pre-permission guide dialog (esp. important on mobile)
+   *  • denied   → show recovery instructions
+   *  • unavailable → skip camera, show upload-only UI
+   */
+  useEffect(() => {
+    if (!aiSnapModalOpen) {
+      stopCamera();
+      setCameraPermission('unknown');
+      return;
+    }
+    (async () => {
+      // Non-HTTPS on mobile → camera API blocked by browser entirely
+      if (!isSecureContext && isMobile) {
+        setCameraPermission('unavailable');
+        enqueueSnackbar(
+          '⚠️ Camera requires a secure HTTPS connection on mobile browsers. Use Upload Photo instead.',
+          { variant: 'warning', autoHideDuration: 6000 }
+        );
+        return;
+      }
+      const perm = await checkCameraPermission();
+      setCameraPermission(perm);
+      if (perm === 'granted') {
+        // Permission already granted — start immediately after Dialog mounts
+        requestAnimationFrame(() => startCamera(facingMode));
+      } else if (perm === 'prompt') {
+        // On mobile show our friendly guide dialog first, then the native prompt
+        // On desktop just trigger getUserMedia directly (browser will prompt)
+        if (isMobile) {
+          setCameraPermGuideOpen(true);
+        } else {
+          requestAnimationFrame(() => startCamera(facingMode));
+        }
+      } else if (perm === 'denied') {
+        // Show recovery UI — permission was previously denied
+        setCameraPermission('denied');
+      }
+    })();
+    return () => {
+      stopCamera();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSnapModalOpen]);
+
+  const stopCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  const handleCapturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      stopCamera();
+      setCapturedImage(dataUrl);
+      handleAnalyzeDrug(dataUrl);
+    }
+  };
+
+  const handleFileDropOrSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.85,
+        outputType: 'image/jpeg'
+      });
+      stopCamera();
+      setCapturedImage(compressed.dataUrl);
+      handleAnalyzeDrug(compressed.dataUrl);
+    } catch (err) {
+      enqueueSnackbar('Failed to process selected image', { variant: 'error' });
+    }
+  };
+
+  const handleAnalyzeDrug = async (imageData: string) => {
+    setIsAnalyzingDrug(true);
+    setAnalyzingStep('Scanning Drug Packaging & OCR Text...');
+
+    try {
+      setTimeout(() => setAnalyzingStep('AI Vision recognizing Active Ingredients & Formulation...'), 500);
+      setTimeout(() => setAnalyzingStep('Verifying Pharmacopeia, Dosage & Storage Parameters...'), 1000);
+
+      const res = await api.post('/inventory/ai-scan-drug', { imageBase64: imageData });
+
+      if (res.data?.success && res.data.data) {
+        setExtractedDrug(res.data.data);
+        enqueueSnackbar(`AI Identified: ${res.data.data.name} (${res.data.data.confidenceScore}% Confidence)`, { variant: 'success' });
+      } else {
+        throw new Error(res.data?.message || 'Failed to extract drug metadata');
+      }
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || err.message || 'AI drug analysis failed', { variant: 'error' });
+    } finally {
+      setIsAnalyzingDrug(false);
+      setAnalyzingStep('');
+    }
+  };
+
+  const handle1ClickAutoCreate = async () => {
+    if (!extractedDrug) return;
+    setIsAutoCreating(true);
+    try {
+      const payload = {
+        code: extractedDrug.code,
+        name: extractedDrug.name,
+        genericName: extractedDrug.genericName,
+        dosageForm: extractedDrug.dosageForm,
+        strength: extractedDrug.strength,
+        category: extractedDrug.category,
+        uom: extractedDrug.uom,
+        valuationPrice: Number(extractedDrug.valuationPrice) || 0,
+        minStock: extractedDrug.minStock,
+        maxStock: extractedDrug.maxStock,
+        coldChain: extractedDrug.coldChain,
+        tempRange: extractedDrug.tempRange,
+        batchNumber: extractedDrug.batchNumber,
+        expiryDate: extractedDrug.expiryDate,
+        manufactureDate: extractedDrug.manufactureDate,
+        manufacturer: extractedDrug.manufacturer,
+        initialQuantity: initialQtyForAi,
+        warehouseCode: selectedWarehouseForAi,
+      };
+
+      const res = await api.post('/inventory/ai-auto-create-drug', payload);
+      if (res.data?.success) {
+        enqueueSnackbar(`🎉 "${extractedDrug.name}" automatically registered into Master Catalogue with ${initialQtyForAi} ${extractedDrug.uom}!`, { variant: 'success' });
+        setAiSnapModalOpen(false);
+        setCapturedImage(null);
+        setExtractedDrug(null);
+        fetchData();
+      }
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to auto-create drug', { variant: 'error' });
+    } finally {
+      setIsAutoCreating(false);
+    }
+  };
+
+  const handlePopulateIntoManualForm = () => {
+    if (!extractedDrug) return;
+    setItemForm({
+      code: extractedDrug.code || `MED-${Math.floor(100000 + Math.random() * 900000)}`,
+      name: extractedDrug.name || '',
+      genericName: extractedDrug.genericName || '',
+      category: extractedDrug.category || 'Pharmaceuticals',
+      uom: extractedDrug.uom || 'Pack of 100',
+      valuationPrice: String(extractedDrug.valuationPrice || '1000'),
+      minStock: String(extractedDrug.minStock || '10'),
+      maxStock: String(extractedDrug.maxStock || '100'),
+      coldChain: extractedDrug.coldChain ? 'true' : 'false',
+      tempRange: extractedDrug.tempRange || '15–25°C (Ambient / Room Temp)',
+      donorFunded: 'false',
+      donorProgramme: 'None (Hospital Funded / General)',
+    });
+    setEditingItem(null);
+    setAiSnapModalOpen(false);
+    setItemDialogOpen(true);
   };
 
   const handleAddWarehouse = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1442,10 +1747,35 @@ const InventorySCM = () => {
               Master Inventory Registry across all configured Warehouses, Dispensaries & Store Depots
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} alignItems="center">
             <TextField size="small" placeholder="Search catalogue..." value={itemSearch} onChange={e => setItemSearch(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }} />
-            <Button variant="contained" startIcon={<Add />} onClick={() => setItemDialogOpen(true)} sx={{ bgcolor: PRIMARY }}>Add Catalogue Item</Button>
+            <Button
+              variant="contained"
+              startIcon={<CameraAlt />}
+              onClick={() => {
+                setCapturedImage(null);
+                setExtractedDrug(null);
+                setFacingMode('environment');
+                // Simply open the modal — the useEffect above handles camera start
+                setAiSnapModalOpen(true);
+              }}
+              sx={{
+                bgcolor: '#059669',
+                color: '#ffffff',
+                fontWeight: 800,
+                textTransform: 'none',
+                borderRadius: 2,
+                px: 2,
+                boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)',
+                '&:hover': { bgcolor: '#047857' }
+              }}
+            >
+              📸 AI Drug Package Scanner & Auto-Fill
+            </Button>
+            <Button variant="contained" startIcon={<Add />} onClick={() => setItemDialogOpen(true)} sx={{ bgcolor: PRIMARY, fontWeight: 700, borderRadius: 2 }}>
+              Add Catalogue Item
+            </Button>
           </Stack>
         </Box>
 
@@ -3301,7 +3631,7 @@ const InventorySCM = () => {
                   fullWidth
                   size="small"
                   freeSolo
-                  options={PHARMACEUTICAL_DATA_DICTIONARY}
+                  options={combinedDictionary}
                   getOptionLabel={(option: any) => typeof option === 'string' ? option : `${option.name} (${option.category})`}
                   value={itemForm.name}
                   onChange={(_, newValue: any) => handleSelectDictionaryItem(newValue)}
@@ -3314,14 +3644,20 @@ const InventorySCM = () => {
                       size="small"
                       fullWidth
                       required
-                      placeholder="Type to search pharmaceutical dictionary..."
+                      placeholder="Type drug name (e.g. Lofnac, Diclofenac)..."
+                      helperText="Searches Formulary & Central Data Dictionary (/data-dictionary)"
                     />
                   )}
                   renderOption={(props, option: any) => (
                     <Box component="li" {...props} key={option.code || option.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.8, px: 1.5, borderBottom: '1px dotted rgba(0,0,0,0.06)' }}>
                       <Box sx={{ pr: 1 }}>
-                        <Typography variant="body2" fontWeight={700}>{option.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">Generic: {option.genericName} · UOM: {option.uom}</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {option.name}
+                          {option.isCentral && (
+                            <Chip label={option.system || 'RXNORM'} size="small" color="primary" sx={{ fontSize: '0.62rem', height: 16, fontWeight: 800 }} />
+                          )}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Generic: {option.genericName} · Code: {option.code} · UOM: {option.uom}</Typography>
                       </Box>
                       <Chip label={option.category} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18, fontWeight: 700 }} />
                     </Box>
@@ -4901,6 +5237,725 @@ const InventorySCM = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* 📸 AI DRUG PACKAGE SCANNER & AUTO-FILL MODAL                          */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog
+        open={aiSnapModalOpen}
+        onClose={() => {
+          stopCamera();
+          setAiSnapModalOpen(false);
+        }}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(135deg, #065f46 0%, #059669 50%, #10b981 100%)',
+            color: '#ffffff',
+            py: 2.2,
+            px: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 44, height: 44 }}>
+              <AutoAwesome sx={{ color: '#ffffff', fontSize: 26 }} />
+            </Avatar>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
+                📸 AI Drug Package Scanner & Intelligent Auto-Fill
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
+                Instant Optical Detection · Pharmacopeia Recognition · Active Ingredients & Automated Inventory Ingestion
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton
+            onClick={() => {
+              stopCamera();
+              setAiSnapModalOpen(false);
+            }}
+            sx={{ color: '#ffffff', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, bgcolor: '#f8fafc' }}>
+          <Grid container spacing={3}>
+            {/* ── Left Column: Live Camera / Photo Preview ── */}
+            <Grid item xs={12} md={5}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  bgcolor: '#ffffff',
+                  borderRadius: 2.5,
+                  border: '1px solid #e2e8f0',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PhotoCamera fontSize="small" sx={{ color: '#059669' }} />
+                  Drug Packaging Camera Feed
+                </Typography>
+
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: '100%',
+                    height: 250,
+                    bgcolor: '#0f172a',
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px dashed #cbd5e1',
+                  }}
+                >
+                  {capturedImage ? (
+                    <Box
+                      component="img"
+                      src={capturedImage}
+                      alt="Scanned Drug Package"
+                      sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#000000' }}
+                    />
+                  ) : (
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      {/* Scanner Reticle Overlay — only show when camera is live */}
+                      {cameraActive && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: '15%',
+                            left: '10%',
+                            right: '10%',
+                            bottom: '15%',
+                            border: '2px solid rgba(16, 185, 129, 0.8)',
+                            borderRadius: 2,
+                            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.4)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      )}
+
+                      {/* Permission Denied Overlay */}
+                      {cameraPermission === 'denied' && (
+                        <Box sx={{
+                          position: 'absolute', inset: 0,
+                          bgcolor: 'rgba(15,23,42,0.93)',
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center',
+                          gap: 1.5, px: 3, textAlign: 'center', zIndex: 9,
+                        }}>
+                          <Avatar sx={{ bgcolor: '#fef2f2', width: 56, height: 56 }}>
+                            <span style={{ fontSize: 28 }}>🚫</span>
+                          </Avatar>
+                          <Typography variant="subtitle1" sx={{ color: '#ffffff', fontWeight: 800 }}>
+                            Camera Access Blocked
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#94a3b8', lineHeight: 1.6 }}>
+                            {isIOS
+                              ? 'On iPhone/iPad: go to Settings → Safari (or Chrome) → Camera → Allow for this site.'
+                              : isAndroid
+                              ? 'On Android: tap the lock icon in the address bar → Permissions → Camera → Allow, then refresh.'
+                              : 'Click the camera/lock icon in your browser address bar, set Camera to "Allow", then refresh.'}
+                          </Typography>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => window.location.reload()}
+                            sx={{ color: '#10b981', borderColor: '#10b981', textTransform: 'none', fontWeight: 700, mt: 0.5 }}
+                          >
+                            Refresh After Allowing
+                          </Button>
+                          <Button
+                            variant="text"
+                            size="small"
+                            startIcon={<CloudUpload />}
+                            onClick={() => drugFileInputRef.current?.click()}
+                            sx={{ color: '#94a3b8', textTransform: 'none', fontWeight: 600 }}
+                          >
+                            Upload Photo Instead
+                          </Button>
+                        </Box>
+                      )}
+
+                      {/* Camera Unavailable Overlay */}
+                      {cameraPermission === 'unavailable' && (
+                        <Box sx={{
+                          position: 'absolute', inset: 0,
+                          bgcolor: 'rgba(15,23,42,0.95)',
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center',
+                          gap: 1.5, px: 3, textAlign: 'center', zIndex: 9,
+                        }}>
+                          <Avatar sx={{ bgcolor: !isSecureContext ? 'rgba(239, 68, 68, 0.15)' : '#fefce8', width: 56, height: 56, border: !isSecureContext ? '2px solid rgba(239, 68, 68, 0.4)' : 'none' }}>
+                            <span style={{ fontSize: 26 }}>{!isSecureContext ? '🔒' : '📵'}</span>
+                          </Avatar>
+                          <Typography variant="subtitle1" sx={{ color: '#ffffff', fontWeight: 800 }}>
+                            {!isSecureContext ? 'HTTPS Required for Camera' : 'Camera Not Available'}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#94a3b8', lineHeight: 1.5, maxWidth: 360 }}>
+                            {!isSecureContext
+                              ? 'Mobile and tablet browsers (Chrome, Safari) strictly require HTTPS to access the camera.'
+                              : 'No camera detected. Please upload a drug package photo instead.'}
+                          </Typography>
+
+                          {!isSecureContext && window.location.protocol === 'http:' && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%', maxWidth: 280, mt: 0.5 }}>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<Refresh />}
+                                onClick={() => {
+                                  window.location.href = window.location.href.replace(/^http:/, 'https:');
+                                }}
+                                sx={{
+                                  bgcolor: '#2563eb',
+                                  color: '#fff',
+                                  textTransform: 'none',
+                                  fontWeight: 700,
+                                  py: 1,
+                                  '&:hover': { bgcolor: '#1d4ed8' },
+                                }}
+                              >
+                                Switch to HTTPS & Reload
+                              </Button>
+                              <Typography variant="caption" sx={{ color: '#64748b', fontSize: 11 }}>
+                                (If your browser warns about the certificate, tap <b>Advanced → Proceed</b>)
+                              </Typography>
+                            </Box>
+                          )}
+
+                          <Button
+                            variant={!isSecureContext ? "outlined" : "contained"}
+                            size="small"
+                            startIcon={<CloudUpload />}
+                            onClick={() => drugFileInputRef.current?.click()}
+                            sx={{
+                              bgcolor: isSecureContext ? '#059669' : 'transparent',
+                              color: isSecureContext ? '#fff' : '#94a3b8',
+                              borderColor: '#475569',
+                              textTransform: 'none',
+                              fontWeight: 700,
+                              mt: 0.5,
+                              '&:hover': { bgcolor: isSecureContext ? '#047857' : 'rgba(255,255,255,0.05)', borderColor: '#64748b' }
+                            }}
+                          >
+                            Upload Drug Photo Instead
+                          </Button>
+                        </Box>
+                      )}
+
+                      {/* Waiting for permission (mobile prompt state) */}
+                      {cameraPermission === 'prompt' && !cameraActive && (
+                        <Box sx={{
+                          position: 'absolute', inset: 0,
+                          bgcolor: 'rgba(15,23,42,0.88)',
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center',
+                          gap: 1.5, px: 3, textAlign: 'center', zIndex: 9,
+                        }}>
+                          <CircularProgress size={36} sx={{ color: '#10b981' }} />
+                          <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 700 }}>
+                            Waiting for camera permission...
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                            Please tap &quot;Allow&quot; on the permission popup
+                          </Typography>
+                        </Box>
+                      )}
+                    </>
+                  )}
+
+                  {isAnalyzingDrug && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        bgcolor: 'rgba(15, 23, 42, 0.8)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1.5,
+                        zIndex: 10,
+                        px: 2,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <CircularProgress size={44} sx={{ color: '#10b981' }} />
+                      <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 700 }}>
+                        {analyzingStep || 'Analyzing Drug Packaging with Multimodal AI...'}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Controls */}
+                <Stack spacing={1.5} sx={{ mt: 2 }}>
+                  {!capturedImage ? (
+                    <>
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        startIcon={<CameraAlt />}
+                        onClick={handleCapturePhoto}
+                        disabled={isAnalyzingDrug}
+                        sx={{
+                          bgcolor: '#059669',
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          py: 1.2,
+                          borderRadius: 2,
+                          '&:hover': { bgcolor: '#047857' },
+                          boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)',
+                        }}
+                      >
+                        Capture & AI Analyze
+                      </Button>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          startIcon={<FlipCameraIos />}
+                          onClick={() => {
+                            const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+                            setFacingMode(nextMode);
+                            startCamera(nextMode);
+                          }}
+                          sx={{ textTransform: 'none', fontWeight: 700, borderColor: '#cbd5e1', color: '#334155' }}
+                        >
+                          Flip Camera
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          startIcon={<CloudUpload />}
+                          onClick={() => drugFileInputRef.current?.click()}
+                          sx={{ textTransform: 'none', fontWeight: 700, borderColor: '#cbd5e1', color: '#334155' }}
+                        >
+                          Upload Photo
+                        </Button>
+                      </Stack>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<Refresh />}
+                      onClick={() => {
+                        setCapturedImage(null);
+                        setExtractedDrug(null);
+                        startCamera();
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        borderColor: '#cbd5e1',
+                        color: '#334155',
+                        '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' },
+                      }}
+                    >
+                      Retake / Snap Another Drug
+                    </Button>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={drugFileInputRef}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleFileDropOrSelect}
+                  />
+                </Stack>
+              </Paper>
+            </Grid>
+
+            {/* ── Right Column: AI Extracted Details & Action Cards ── */}
+            <Grid item xs={12} md={7}>
+              {extractedDrug ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.5,
+                    bgcolor: '#ffffff',
+                    borderRadius: 2.5,
+                    border: '1px solid #10b981',
+                    boxShadow: '0 4px 20px rgba(16, 185, 129, 0.12)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Chip
+                      icon={<Verified sx={{ fontSize: 16, color: '#059669 !important' }} />}
+                      label={`AI Verified (${extractedDrug.confidenceScore || 98}% Confidence)`}
+                      size="small"
+                      sx={{ bgcolor: '#ecfdf5', color: '#065f46', fontWeight: 800, border: '1px solid #a7f3d0' }}
+                    />
+                    <Chip
+                      label={extractedDrug.source === 'VISION_MODEL' ? '✨ Multimodal Gemini Vision' : '🧠 Pharmacopeia Engine'}
+                      size="small"
+                      sx={{ bgcolor: '#f1f5f9', color: '#475569', fontWeight: 700, fontSize: '0.72rem' }}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 2 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Drug Brand Name *"
+                      value={extractedDrug.name || ''}
+                      onChange={e => setExtractedDrug((prev: any) => ({ ...prev, name: e.target.value }))}
+                      sx={{ mb: 1, '& .MuiInputBase-input': { fontWeight: 800, fontSize: '1rem', color: '#0f172a' } }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Active Generic Name"
+                      value={extractedDrug.genericName || ''}
+                      onChange={e => setExtractedDrug((prev: any) => ({ ...prev, genericName: e.target.value }))}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, color: '#059669' } }}
+                    />
+                  </Box>
+
+                  <Grid container spacing={1.5} sx={{ mb: 2 }}>
+                    {/* Editable Valuation Unit Price (Amount) */}
+                    <Grid item xs={12} sm={6}>
+                      <Paper sx={{ p: 1.5, bgcolor: '#ecfdf5', border: '1.5px solid #10b981', borderRadius: 2 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                          <span>VALUATION / UNIT PRICE (₦) *</span>
+                          <Chip label="EDITABLE AMOUNT" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#059669', color: '#fff' }} />
+                        </Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          type="number"
+                          placeholder="e.g. 1500"
+                          value={extractedDrug.valuationPrice !== undefined && extractedDrug.valuationPrice !== null ? extractedDrug.valuationPrice : ''}
+                          onChange={e => {
+                            const val = e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0);
+                            setExtractedDrug((prev: any) => ({ ...prev, valuationPrice: val }));
+                          }}
+                          InputProps={{
+                            startAdornment: <InputAdornment position="start"><Typography fontWeight={800} color="#047857">₦</Typography></InputAdornment>,
+                            sx: { fontWeight: 800, color: '#047857', fontSize: '1.05rem', bgcolor: '#ffffff' }
+                          }}
+                        />
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={6} sm={3}>
+                      <Paper sx={{ p: 1.2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5, height: '100%' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>DOSAGE FORM</Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          variant="standard"
+                          value={extractedDrug.dosageForm || 'Tablet'}
+                          onChange={e => setExtractedDrug((prev: any) => ({ ...prev, dosageForm: e.target.value }))}
+                          InputProps={{ disableUnderline: false, sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={6} sm={3}>
+                      <Paper sx={{ p: 1.2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5, height: '100%' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>STRENGTH</Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          variant="standard"
+                          value={extractedDrug.strength || '100mg'}
+                          onChange={e => setExtractedDrug((prev: any) => ({ ...prev, strength: e.target.value }))}
+                          InputProps={{ disableUnderline: false, sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={6} sm={4}>
+                      <Paper sx={{ p: 1.2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>UNIT OF MEASURE</Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          variant="standard"
+                          value={extractedDrug.uom || 'Pack of 10'}
+                          onChange={e => setExtractedDrug((prev: any) => ({ ...prev, uom: e.target.value }))}
+                          InputProps={{ disableUnderline: false, sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={6} sm={4}>
+                      <Paper sx={{ p: 1.2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>BATCH / LOT NUMBER</Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          variant="standard"
+                          value={extractedDrug.batchNumber || ''}
+                          onChange={e => setExtractedDrug((prev: any) => ({ ...prev, batchNumber: e.target.value }))}
+                          InputProps={{ disableUnderline: false, sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <Paper sx={{ p: 1.2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>EXPIRY DATE</Typography>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          type="date"
+                          variant="standard"
+                          value={extractedDrug.expiryDate || '2028-12-31'}
+                          onChange={e => setExtractedDrug((prev: any) => ({ ...prev, expiryDate: e.target.value }))}
+                          InputProps={{ disableUnderline: false, sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Paper>
+                    </Grid>
+                  </Grid>
+
+                  {/* Destination Location & Quantity Setting */}
+                  <Paper sx={{ p: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2, mb: 2 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#166534', textTransform: 'uppercase', display: 'block', mb: 1 }}>
+                      ⚡ Instant Auto-Intake Destination & Quantity
+                    </Typography>
+                    <Grid container spacing={1.5} alignItems="center">
+                      <Grid item xs={7}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel sx={{ fontSize: '0.8rem', fontWeight: 700 }}>Intake Warehouse / Depot</InputLabel>
+                          <Select
+                            value={selectedWarehouseForAi}
+                            label="Intake Warehouse / Depot"
+                            onChange={e => setSelectedWarehouseForAi(e.target.value)}
+                            sx={{ bgcolor: '#ffffff', fontSize: '0.85rem', fontWeight: 700 }}
+                          >
+                            <MenuItem value="WH-MAIN">Central Warehouse (WH-MAIN)</MenuItem>
+                            <MenuItem value="DISP-MAIN">Main Pharmacy Dispensary (DISP-MAIN)</MenuItem>
+                            {warehouses.map(w => (
+                              <MenuItem key={w.id || w.code} value={w.code || w.id}>{w.name} ({w.code})</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={5}>
+                        <TextField
+                          size="small"
+                          label="Initial Inflow Stock"
+                          type="number"
+                          value={initialQtyForAi}
+                          onChange={e => setInitialQtyForAi(Math.max(1, Number(e.target.value)))}
+                          fullWidth
+                          sx={{ bgcolor: '#ffffff' }}
+                          InputProps={{ sx: { fontWeight: 700, fontSize: '0.85rem' } }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Paper>
+
+                  {/* Actions */}
+                  <Stack spacing={1}>
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      startIcon={isAutoCreating ? <CircularProgress size={18} color="inherit" /> : <Bolt />}
+                      onClick={handle1ClickAutoCreate}
+                      disabled={isAutoCreating}
+                      sx={{
+                        bgcolor: '#059669',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        py: 1.3,
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
+                        '&:hover': { bgcolor: '#047857' }
+                      }}
+                    >
+                      {isAutoCreating ? 'Registering Drug into Inventory...' : `⚡ 1-Click Auto-Create & Register Stock in ${selectedWarehouseForAi}`}
+                    </Button>
+
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<Edit />}
+                      onClick={handlePopulateIntoManualForm}
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: 'none',
+                        borderRadius: 2,
+                        borderColor: '#94a3b8',
+                        color: '#334155',
+                        '&:hover': { borderColor: '#64748b', bgcolor: '#f8fafc' }
+                      }}
+                    >
+                      ✏️ Review & Customize in Item Form
+                    </Button>
+                  </Stack>
+                </Paper>
+              ) : (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    bgcolor: '#ffffff',
+                    borderRadius: 2.5,
+                    border: '1px dashed #cbd5e1',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                  }}
+                >
+                  <Avatar sx={{ bgcolor: '#ecfdf5', width: 64, height: 64, mb: 2 }}>
+                    <Science sx={{ color: '#059669', fontSize: 36 }} />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#1e293b', mb: 0.5 }}>
+                    Position Drug Package in Camera View
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360, mb: 2 }}>
+                    Point your camera or upload an image of a medication box, vial, or blister pack. The AI will recognize the brand name, active ingredients, dosage form, batch number, and NAFDAC details automatically.
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Chip label="✓ OCR Active Ingredients" size="small" sx={{ bgcolor: '#f1f5f9', fontWeight: 700 }} />
+                    <Chip label="✓ Pharmacopeia Matching" size="small" sx={{ bgcolor: '#f1f5f9', fontWeight: 700 }} />
+                    <Chip label="✓ 1-Click Intake" size="small" sx={{ bgcolor: '#f1f5f9', fontWeight: 700 }} />
+                  </Stack>
+                </Paper>
+              )}
+            </Grid>
+          </Grid>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+           CAMERA PERMISSION GUIDE DIALOG
+           Shown on mobile before the native browser permission prompt fires.
+           Gives users a clear understanding of WHY the camera is needed.
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog
+        open={cameraPermGuideOpen}
+        onClose={() => setCameraPermGuideOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
+      >
+        {/* Gradient header */}
+        <Box sx={{
+          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+          py: 3, px: 3, textAlign: 'center',
+        }}>
+          <Box sx={{ fontSize: 48, mb: 0.5 }}>📸</Box>
+          <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 800 }}>
+            Camera Access Needed
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+            TerkHealth360 needs your camera to scan drug packages
+          </Typography>
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 2.5 }}>
+          <Stack spacing={2}>
+            {[{
+              icon: '1️⃣',
+              text: 'Tap "Allow" on the camera permission popup that will appear'
+            }, {
+              icon: '2️⃣',
+              text: 'Point your camera at the drug packaging, vial, or blister pack'
+            }, {
+              icon: '3️⃣',
+              text: 'Tap "Capture & AI Analyze" — fields are filled automatically'
+            }].map((step, i) => (
+              <Box key={i} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                <Typography sx={{ fontSize: 20, lineHeight: 1 }}>{step.icon}</Typography>
+                <Typography variant="body2" sx={{ color: '#334155', lineHeight: 1.6 }}>
+                  {step.text}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+
+          {isIOS && (
+            <Alert severity="info" sx={{ mt: 2, borderRadius: 2, fontSize: '0.78rem' }}>
+              <strong>iPhone / iPad tip:</strong> If you tap &quot;Don&apos;t Allow&quot;, go to{' '}
+              <strong>Settings → Safari → Camera</strong> and set it to <strong>Allow</strong>.
+            </Alert>
+          )}
+          {isAndroid && (
+            <Alert severity="info" sx={{ mt: 2, borderRadius: 2, fontSize: '0.78rem' }}>
+              <strong>Android tip:</strong> If you deny, tap the <strong>🔒 lock icon</strong> in
+              the address bar → Permissions → Camera → Allow.
+            </Alert>
+          )}
+
+          <Box sx={{ mt: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              🔒 <strong>Privacy:</strong> Camera is only active while this scanner is open.
+              Images are processed by AI and never stored.
+            </Typography>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setCameraPermGuideOpen(false);
+              drugFileInputRef.current?.click();
+            }}
+            sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderColor: '#cbd5e1', color: '#64748b' }}
+          >
+            Upload Photo Instead
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setCameraPermGuideOpen(false);
+              // This triggers the native browser permission popup
+              requestAnimationFrame(() => startCamera(facingMode));
+            }}
+            startIcon={<CameraAlt />}
+            sx={{
+              flex: 1.5,
+              textTransform: 'none',
+              fontWeight: 800,
+              bgcolor: '#059669',
+              '&:hover': { bgcolor: '#047857' },
+              boxShadow: '0 4px 12px rgba(5,150,105,0.35)',
+            }}
+          >
+            Allow Camera Access
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 };

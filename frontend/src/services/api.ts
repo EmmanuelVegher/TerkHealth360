@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-// Detect Electron environment
-const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI?.isElectron;
+// Detect Electron environment reliably across preload, file:// protocol, and user-agent
+export const isElectron = typeof window !== 'undefined' && (
+  !!(window as any).electronAPI?.isElectron ||
+  window.location.protocol === 'file:' ||
+  /electron/i.test(navigator.userAgent)
+);
 
 // Single source of truth for the API base URL (local backend in Electron, VITE_API_URL in web)
 export const API_BASE_URL = isElectron
@@ -10,7 +14,7 @@ export const API_BASE_URL = isElectron
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 12000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,13 +27,9 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // If browser is offline and it's a mutating request, reject immediately to trigger offline queueing
-    if (!navigator.onLine && ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '')) {
-      const offlineError = new Error('Browser is offline');
-      (offlineError as any).isOfflineTrigger = true;
-      (offlineError as any).config = config;
-      return Promise.reject(offlineError);
-    }
+    // NOTE: In local hospital intranet/LAN setups, the server is on localhost or LAN IP.
+    // We NEVER reject requests prematurely based on navigator.onLine, because local network
+    // communication to the local server succeeds even when there is no public Internet connection.
 
     return config;
   },
@@ -41,16 +41,36 @@ api.interceptors.response.use(
   (error) => {
     const config = error.config;
     
-    // Check if it's a mutating request that failed due to network / offline
+    // Check if this endpoint should NEVER be intercepted into the offline queue:
+    // 1. Authentication endpoints (login must always validate against database/server)
+    // 2. AI folder extraction / computer vision analysis (analytical query, not a syncable write)
+    // 3. Requests with explicit skipOfflineQueue flag
+    // 4. Request timeouts (ECONNABORTED)
+    const url = (config?.url || '').toLowerCase();
+    const isExcludedFromOfflineQueue =
+      (config as any)?.skipOfflineQueue ||
+      url.includes('/auth/') ||
+      url.includes('/records-migration/extract-folder') ||
+      url.includes('/records-migration/check-patient-match') ||
+      url.includes('/medgemma') ||
+      url.includes('/openmed') ||
+      error.code === 'ECONNABORTED';
+
+    // Check if it's a mutating request that failed due to real network disconnect
     const isMutation = ['post', 'put', 'patch', 'delete'].includes(config?.method?.toLowerCase() || '');
     const isOfflineOrNetworkError = 
       error.isOfflineTrigger ||
-      !navigator.onLine ||
       error.message === 'Network Error' ||
       !error.response ||
       [502, 503, 504].includes(error.response?.status);
 
-    if (isMutation && isOfflineOrNetworkError) {
+    if (isMutation && isOfflineOrNetworkError && !isExcludedFromOfflineQueue) {
+      // Do not store massive file/image payloads in localStorage offline queue (exceeds 5MB localStorage limit)
+      const dataStr = typeof config?.data === 'string' ? config.data : JSON.stringify(config?.data || {});
+      if (dataStr.length > 100000) {
+        return Promise.reject(error);
+      }
+
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       let reqData = config.data;
       try {
@@ -90,16 +110,15 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      localStorage.removeItem('cached_user');
+      window.dispatchEvent(new CustomEvent('auth-unauthorized'));
     }
     return Promise.reject(error);
   }
 );
 
 export const fhirApi = axios.create({
-  baseURL: '/fhir',
+  baseURL: isElectron ? 'http://localhost:3000/fhir' : '/fhir',
   headers: {
     'Content-Type': 'application/fhir+json',
   },

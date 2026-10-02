@@ -89,7 +89,23 @@ export let chargeMasterItems: any[] = [
   { id: 'MOR005', code: 'TRANS-AMBULANCE', name: 'Hospital Ambulance Transport & Inter-Facility Transfer', category: 'Logistics', basePrice: 25000, nhiaPrice: 18000, hmoPrice: 20000, isActive: true, vat: 0, unit: 'Per Trip', effectiveDate: '2026-01-01' },
   { id: 'MOR006', code: 'DEATH-CERT', name: 'Statutory Clinical Death Certification & Release Clearance', category: 'Mortuary', basePrice: 5000, nhiaPrice: 3000, hmoPrice: 4000, isActive: true, vat: 0, unit: 'Per Clearance', effectiveDate: '2026-01-01' },
   { id: 'ART001', code: 'ART-CONSULT', name: 'ART Clinic Consultation (CDC/CARITAS Funded)', category: 'ART Programme', basePrice: 0, nhiaPrice: 0, hmoPrice: 0, isActive: true, vat: 0, unit: 'Per Visit', effectiveDate: '2026-01-01', donorFunded: true, donorProgramme: 'CDC/CARITAS' },
-  ...RADIOLOGY_CHARGE_MASTER_ITEMS
+  ...RADIOLOGY_CHARGE_MASTER_ITEMS,
+  { id: 'DENT-D0120', code: 'D0120', name: 'Periodic Oral Evaluation', category: 'Dental', basePrice: 10000, nhiaPrice: 7000, hmoPrice: 8500, isActive: true, vat: 0, unit: 'Per Exam', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D0150', code: 'D0150', name: 'Comprehensive Oral Exam & Odontogram', category: 'Dental', basePrice: 15000, nhiaPrice: 10000, hmoPrice: 12000, isActive: true, vat: 0, unit: 'Per Exam', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D0210', code: 'D0210', name: 'Intraoral Full Mouth Radiographs', category: 'Dental', basePrice: 25000, nhiaPrice: 17500, hmoPrice: 21000, isActive: true, vat: 7.5, unit: 'Per Study', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D0330', code: 'D0330', name: 'Panoramic Radiographic Image (OPG)', category: 'Dental', basePrice: 30000, nhiaPrice: 21000, hmoPrice: 25500, isActive: true, vat: 7.5, unit: 'Per Study', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D1110', code: 'D1110', name: 'Prophylaxis / Dental Scaling & Polishing', category: 'Dental', basePrice: 20000, nhiaPrice: 14000, hmoPrice: 17000, isActive: true, vat: 0, unit: 'Per Session', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D2140', code: 'D2140', name: 'Amalgam Restoration - 1 Surface', category: 'Dental', basePrice: 18000, nhiaPrice: 12500, hmoPrice: 15000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D2391', code: 'D2391', name: 'Resin-Based Composite - 1 Surface, Posterior', category: 'Dental', basePrice: 25000, nhiaPrice: 17500, hmoPrice: 21000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D2392', code: 'D2392', name: 'Resin-Based Composite - 2 Surfaces, Posterior', category: 'Dental', basePrice: 35000, nhiaPrice: 24500, hmoPrice: 29500, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D2740', code: 'D2740', name: 'Crown - Porcelain / Ceramic Substrate', category: 'Dental', basePrice: 95000, nhiaPrice: 65000, hmoPrice: 80000, isActive: true, vat: 0, unit: 'Per Unit', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D2750', code: 'D2750', name: 'Crown - Porcelain Fused to High Noble Metal', category: 'Dental', basePrice: 110000, nhiaPrice: 75000, hmoPrice: 92000, isActive: true, vat: 0, unit: 'Per Unit', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D3310', code: 'D3310', name: 'Endodontic Therapy - Anterior Tooth (RCT)', category: 'Dental', basePrice: 65000, nhiaPrice: 45000, hmoPrice: 55000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D3330', code: 'D3330', name: 'Endodontic Therapy - Molar Tooth (RCT)', category: 'Dental', basePrice: 90000, nhiaPrice: 62000, hmoPrice: 75000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D4341', code: 'D4341', name: 'Periodontal Scaling & Root Planing (per quad)', category: 'Dental', basePrice: 40000, nhiaPrice: 28000, hmoPrice: 34000, isActive: true, vat: 0, unit: 'Per Quad', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D7140', code: 'D7140', name: 'Extraction, Erupted Tooth / Exposed Root', category: 'Dental', basePrice: 25000, nhiaPrice: 17500, hmoPrice: 21000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D7210', code: 'D7210', name: 'Surgical Extraction / Impacted Molar Removal', category: 'Dental', basePrice: 75000, nhiaPrice: 52000, hmoPrice: 63000, isActive: true, vat: 0, unit: 'Per Tooth', effectiveDate: '2026-01-01' },
+  { id: 'DENT-D6010', code: 'D6010', name: 'Surgical Placement of Implant Body', category: 'Dental', basePrice: 350000, nhiaPrice: 240000, hmoPrice: 290000, isActive: true, vat: 0, unit: 'Per Implant', effectiveDate: '2026-01-01' }
 ];
 
 let invoiceSeq = 1000;
@@ -624,7 +640,8 @@ export async function fetchAllInvoices(query: any = {}) {
     outstanding: inv.total - (inv.amountPaid || 0),
     status: inv.status === 'ISSUED' ? 'UNPAID' : inv.status,
     createdAt: inv.createdAt,
-    source: 'DATABASE',
+    source: (inv.fhirId?.startsWith('DENT-') || inv.reasonText?.toLowerCase().includes('dental')) ? 'DENTAL' : 'DATABASE',
+    sourceType: (inv.fhirId?.startsWith('DENT-') || inv.reasonText?.toLowerCase().includes('dental')) ? 'DENTAL' : 'DATABASE',
   }));
 
   // ── Step 7: Filter in-memory invoices ─────────────────────────────────────

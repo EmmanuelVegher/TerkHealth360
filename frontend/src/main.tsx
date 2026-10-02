@@ -2,8 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, BrowserRouter } from 'react-router-dom';
 
+import { isElectron } from './services/api';
 // Use HashRouter in Electron (file:// protocol) and BrowserRouter in web
-const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI?.isElectron;
 const Router = isElectron ? HashRouter : BrowserRouter;
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ThemeProvider, createTheme, alpha } from '@mui/material/styles';
@@ -266,22 +266,26 @@ const theme = createTheme({
 });
 
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <SnackbarProvider
-            maxSnack={3}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          >
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </SnackbarProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <SnackbarProvider
+              maxSnack={3}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </SnackbarProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </Router>
+    </ErrorBoundary>
   </React.StrictMode>
 );

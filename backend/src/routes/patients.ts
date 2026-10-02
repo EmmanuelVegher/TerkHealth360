@@ -188,10 +188,42 @@ router.get('/duplicate-candidates', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Get all patients
+// Get patients (supports limit, search/query, and relations)
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
+    const { limit, search, query } = req.query;
+    const l = limit ? parseInt(limit as string, 10) : undefined;
+    const q = ((search || query || '') as string).trim();
+
+    const where: any = {};
+    if (q) {
+      const words = q.split(/\s+/).filter(Boolean);
+      if (words.length > 1) {
+        where.AND = words.map(w => ({
+          OR: [
+            { patientNumber: { contains: w, mode: 'insensitive' } },
+            { nin: { contains: w, mode: 'insensitive' } },
+            { firstName: { contains: w, mode: 'insensitive' } },
+            { lastName: { contains: w, mode: 'insensitive' } },
+            { middleName: { contains: w, mode: 'insensitive' } },
+            { telecoms: { some: { value: { contains: w, mode: 'insensitive' } } } },
+          ]
+        }));
+      } else {
+        where.OR = [
+          { patientNumber: { contains: q, mode: 'insensitive' } },
+          { nin: { contains: q, mode: 'insensitive' } },
+          { firstName: { contains: q, mode: 'insensitive' } },
+          { lastName: { contains: q, mode: 'insensitive' } },
+          { middleName: { contains: q, mode: 'insensitive' } },
+          { telecoms: { some: { value: { contains: q, mode: 'insensitive' } } } },
+        ];
+      }
+    }
+
     const patients = await prisma.patient.findMany({
+      where,
+      take: l || (q ? 50 : undefined),
       include: {
         telecoms: true,
         triageRecords: { orderBy: { createdAt: 'desc' }, take: 1 },
