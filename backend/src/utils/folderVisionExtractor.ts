@@ -386,6 +386,7 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
             console.warn(`[FolderVision] Windows Ollama update recommended: Run OllamaSetup.exe to update Ollama on Windows so it recognizes the '${model}' (mllama) architecture.`);
           }
         }
+      } catch (ollamaErr: any) {
         const code = ollamaErr?.cause?.code || '';
         if (code === 'ECONNREFUSED' || ollamaErr?.message?.includes('ECONNREFUSED')) {
           console.log('[FolderVision] Ollama not running. Falling through to Gemini cloud.');
