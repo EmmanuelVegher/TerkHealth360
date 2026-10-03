@@ -125,7 +125,9 @@ export interface AIEngineConfig {
   ollamaModel: string;        // Active text LLM model name, e.g. 'medllama2'
   nerEnabled: boolean;        // Whether OpenMed NER enrichment is active (always true)
   geminiApiKey?: string;      // Google Gemini API Key
-  geminiModel?: string;       // Google Gemini Model name/number (e.g. 'gemini-2.5-flash', 'gemini-1.5-flash')
+  geminiModel?: string;       // Primary Google Gemini Model (e.g. 'gemini-3.6-flash')
+  geminiModelSecondary?: string; // Secondary Google Gemini Model (Automatic Failover 1)
+  geminiModelTertiary?: string;  // Tertiary Google Gemini Model (Automatic Failover 2)
   visionLocalModel?: string;  // Local Ollama Vision Model (e.g. 'llama3.2-vision', 'llava')
 }
 
@@ -133,7 +135,7 @@ export interface AIEngineConfig {
 export async function getAIConfig(): Promise<AIEngineConfig> {
   try {
     const rows = await prisma.systemConfig.findMany({
-      where: { key: { in: ['AI_LLM_ENABLED', 'AI_OLLAMA_MODEL', 'AI_NER_ENABLED', 'GEMINI_API_KEY', 'GEMINI_MODEL', 'AI_VISION_MODEL'] } },
+      where: { key: { in: ['AI_LLM_ENABLED', 'AI_OLLAMA_MODEL', 'AI_NER_ENABLED', 'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_MODEL_SECONDARY', 'GEMINI_MODEL_TERTIARY', 'AI_VISION_MODEL'] } },
     });
     const get = (k: string, def: string) => rows.find(r => r.key === k)?.value ?? def;
     const rawGeminiKey = get('GEMINI_API_KEY', process.env.GEMINI_API_KEY || '');
@@ -142,7 +144,9 @@ export async function getAIConfig(): Promise<AIEngineConfig> {
       ollamaModel: get('AI_OLLAMA_MODEL', 'medllama2'),
       nerEnabled: get('AI_NER_ENABLED', 'true') === 'true',
       geminiApiKey: rawGeminiKey,
-      geminiModel: get('GEMINI_MODEL', process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+      geminiModel: get('GEMINI_MODEL', process.env.GEMINI_MODEL || 'gemini-3.6-flash'),
+      geminiModelSecondary: get('GEMINI_MODEL_SECONDARY', process.env.GEMINI_MODEL_SECONDARY || 'gemini-2.5-flash'),
+      geminiModelTertiary: get('GEMINI_MODEL_TERTIARY', process.env.GEMINI_MODEL_TERTIARY || 'gemini-2.5-pro'),
       visionLocalModel: get('AI_VISION_MODEL', 'llama3.2-vision'),
     };
   } catch {
@@ -152,7 +156,9 @@ export async function getAIConfig(): Promise<AIEngineConfig> {
       ollamaModel: 'medllama2',
       nerEnabled: true,
       geminiApiKey: process.env.GEMINI_API_KEY || '',
-      geminiModel: 'gemini-2.5-flash',
+      geminiModel: 'gemini-3.6-flash',
+      geminiModelSecondary: 'gemini-2.5-flash',
+      geminiModelTertiary: 'gemini-2.5-pro',
       visionLocalModel: 'llama3.2-vision',
     };
   }
@@ -172,6 +178,8 @@ export async function saveAIConfig(config: Partial<AIEngineConfig>): Promise<voi
   if (config.nerEnabled !== undefined) await upsert('AI_NER_ENABLED', String(config.nerEnabled));
   if (config.geminiApiKey !== undefined) await upsert('GEMINI_API_KEY', config.geminiApiKey.trim());
   if (config.geminiModel !== undefined) await upsert('GEMINI_MODEL', config.geminiModel.trim());
+  if (config.geminiModelSecondary !== undefined) await upsert('GEMINI_MODEL_SECONDARY', config.geminiModelSecondary.trim());
+  if (config.geminiModelTertiary !== undefined) await upsert('GEMINI_MODEL_TERTIARY', config.geminiModelTertiary.trim());
   if (config.visionLocalModel !== undefined) await upsert('AI_VISION_MODEL', config.visionLocalModel.trim());
 }
 

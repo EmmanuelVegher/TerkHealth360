@@ -1044,7 +1044,7 @@ router.get('/treatment-plans/consumables', authMiddleware, async (req: Request, 
       select: { procedureName: true, cdtCode: true }
     });
 
-    const consumables = computeDentalConsumables(items);
+    const consumables = computeDentalConsumables(items.map(it => ({ procedureName: it.procedureName, cdtCode: it.cdtCode || undefined })));
     return res.json({ success: true, data: consumables, count: consumables.length, source: 'Calculated from Active Treatment Plans' });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });

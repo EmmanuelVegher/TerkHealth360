@@ -523,10 +523,13 @@ const Settings = () => {
 
   // Gemini & Multimodal Vision Configuration
   const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash');
+  const [geminiModel, setGeminiModel] = useState('gemini-3.6-flash');
+  const [geminiModelSecondary, setGeminiModelSecondary] = useState('gemini-2.5-flash');
+  const [geminiModelTertiary, setGeminiModelTertiary] = useState('gemini-2.5-pro');
   const [visionLocalModel, setVisionLocalModel] = useState('llama3.2-vision');
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [testingGemini, setTestingGemini] = useState(false);
+  const [testingModelTarget, setTestingModelTarget] = useState<string>('');
   const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Per-model download state: { [modelValue]: { progress: 0-100, status: 'idle'|'pulling'|'done'|'error', statusText: string } }
@@ -553,6 +556,8 @@ const Settings = () => {
         setAiOllamaModel(res.data.data.ollamaModel ?? 'medllama2');
         if (res.data.data.geminiApiKey) setGeminiApiKey(res.data.data.geminiApiKey);
         if (res.data.data.geminiModel) setGeminiModel(res.data.data.geminiModel);
+        if (res.data.data.geminiModelSecondary) setGeminiModelSecondary(res.data.data.geminiModelSecondary);
+        if (res.data.data.geminiModelTertiary) setGeminiModelTertiary(res.data.data.geminiModelTertiary);
         if (res.data.data.visionLocalModel) setVisionLocalModel(res.data.data.visionLocalModel);
       }
     }).catch(() => {});
@@ -603,31 +608,34 @@ const Settings = () => {
     }
   };
 
-  const handleTestGemini = async () => {
+  const handleTestGemini = async (modelToTest?: string | any) => {
     if (!geminiApiKey.trim()) {
       enqueueSnackbar('Please enter a Google Gemini API Key to test connection', { variant: 'warning' });
       return;
     }
+    const targetModel = (typeof modelToTest === 'string' && modelToTest.trim() ? modelToTest : geminiModel || 'gemini-3.6-flash').trim();
     setTestingGemini(true);
+    setTestingModelTarget(targetModel);
     setGeminiTestResult(null);
     try {
       const res = await api.post('/openmed/test-gemini', {
         apiKey: geminiApiKey.trim(),
-        model: geminiModel.trim()
+        model: targetModel
       });
       if (res.data?.success) {
-        setGeminiTestResult({ success: true, message: res.data.message });
-        enqueueSnackbar(res.data.message, { variant: 'success' });
+        setGeminiTestResult({ success: true, message: `✓ Connected to ${targetModel} successfully (Status 200 OK)` });
+        enqueueSnackbar(`✓ Connected to ${targetModel} successfully!`, { variant: 'success' });
       } else {
         setGeminiTestResult({ success: false, message: res.data?.message || 'Connection test failed' });
         enqueueSnackbar(res.data?.message || 'Connection test failed', { variant: 'error' });
       }
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Failed to ping Google Gemini API';
-      setGeminiTestResult({ success: false, message: msg });
+      const msg = err.response?.data?.message || err.message || `Failed to ping ${targetModel}`;
+      setGeminiTestResult({ success: false, message: `✗ ${targetModel}: ${msg}` });
       enqueueSnackbar(msg, { variant: 'error' });
     } finally {
       setTestingGemini(false);
+      setTestingModelTarget('');
     }
   };
 
@@ -640,9 +648,11 @@ const Settings = () => {
         nerEnabled: true,
         geminiApiKey: geminiApiKey.trim(),
         geminiModel: geminiModel.trim(),
+        geminiModelSecondary: geminiModelSecondary.trim(),
+        geminiModelTertiary: geminiModelTertiary.trim(),
         visionLocalModel: visionLocalModel.trim()
       });
-      enqueueSnackbar('AI Engine, Google Gemini & Vision configurations saved to database successfully!', { variant: 'success' });
+      enqueueSnackbar('AI Engine, Google Gemini 3-Tier Multi-Model Failover & Vision configurations saved to database successfully!', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to save AI Engine settings', { variant: 'error' });
     } finally {
@@ -1483,7 +1493,7 @@ const Settings = () => {
                           variant="outlined"
                           size="small"
                           startIcon={testingGemini ? <CircularProgress size={14} color="inherit" /> : <CloudQueue fontSize="small" />}
-                          onClick={handleTestGemini}
+                          onClick={() => handleTestGemini()}
                           disabled={testingGemini || !geminiApiKey.trim()}
                           sx={{
                             borderColor: '#60a5fa',
@@ -1541,7 +1551,7 @@ const Settings = () => {
 
                     <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
                       {/* Gemini API Key */}
-                      <Grid item xs={12} md={6}>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
                           size="small"
@@ -1588,59 +1598,202 @@ const Settings = () => {
                         />
                       </Grid>
 
-                      {/* Gemini Model Number / Name Input (Not hardcoded) */}
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Gemini Model Number / Name *"
-                          placeholder="e.g. gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro..."
-                          value={geminiModel}
-                          onChange={e => setGeminiModel(e.target.value.trim())}
-                          helperText={
-                            <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
-                              Appended to API path: <code style={{ color: '#93c5fd', background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>models/{geminiModel || '{model_number}'}:generateContent</code>
-                            </span>
-                          }
-                          sx={{
-                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                            '& .MuiOutlinedInput-root': {
-                              color: '#fff',
-                              bgcolor: 'rgba(0,0,0,0.3)',
-                              '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
-                              '&:hover fieldset': { borderColor: '#60a5fa' },
-                              '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
-                            }
-                          }}
-                        />
+                      {/* 3-Tier Multi-Model Failover Hierarchy Header */}
+                      <Grid item xs={12}>
+                        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#93c5fd', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>⚡ Multi-Model Traffic Spike Failover Cascade (Primary → Secondary → Tertiary)</span>
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', display: 'block', mt: 0.5 }}>
+                            Configures 3 models in the PostgreSQL database. When performing document OCR or Clinical AI queries, the system attempts the <strong>Primary Model</strong>. If Google returns a demand spike (HTTP 503 / 429), it instantly and automatically routes to the <strong>Secondary Model</strong>. If that model is also busy, it routes to the <strong>Tertiary Model</strong>.
+                          </Typography>
+                        </Box>
+                      </Grid>
 
-                        {/* Quick Suggestion Chips */}
-                        <Stack direction="row" spacing={0.8} mt={1} flexWrap="wrap" gap={0.5} alignItems="center">
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 10.5 }}>Quick fill:</Typography>
-                          {[
-                            'gemini-2.5-flash',
-                            'gemini-2.0-flash',
-                            'gemini-1.5-flash',
-                            'gemini-1.5-pro',
-                            'gemini-2.5-pro'
-                          ].map(modelName => (
-                            <Chip
-                              key={modelName}
-                              label={modelName}
-                              size="small"
-                              onClick={() => setGeminiModel(modelName)}
-                              sx={{
-                                height: 22,
-                                fontSize: 10.5,
-                                cursor: 'pointer',
-                                bgcolor: geminiModel === modelName ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255,255,255,0.08)',
-                                color: geminiModel === modelName ? '#93c5fd' : 'rgba(255,255,255,0.7)',
-                                border: geminiModel === modelName ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
-                                '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.25)' }
-                              }}
-                            />
-                          ))}
-                        </Stack>
+                      {/* 1. Primary Model (Priority 1) */}
+                      <Grid item xs={12} md={4}>
+                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.25)', border: '1px solid rgba(59, 130, 246, 0.4)', height: '100%' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#60a5fa', textTransform: 'uppercase' }}>
+                              Priority 1 (Default)
+                            </Typography>
+                            <Chip label="PRIMARY" size="small" sx={{ bgcolor: 'rgba(59, 130, 246, 0.3)', color: '#93c5fd', fontWeight: 800, fontSize: 10, height: 20 }} />
+                          </Stack>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="1st Priority Model *"
+                            placeholder="e.g. gemini-3.6-flash"
+                            value={geminiModel}
+                            onChange={e => setGeminiModel(e.target.value.trim())}
+                            sx={{
+                              '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                              '& .MuiOutlinedInput-root': {
+                                color: '#fff',
+                                bgcolor: 'rgba(0,0,0,0.3)',
+                                '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                                '&:hover fieldset': { borderColor: '#60a5fa' },
+                                '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
+                              }
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 10.5, display: 'block', mt: 0.8 }}>
+                            Always invoked first for folder OCR & queries.
+                          </Typography>
+                          <Stack direction="row" spacing={0.6} mt={1} flexWrap="wrap" gap={0.5} alignItems="center">
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>Fill:</Typography>
+                            {['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.8-flash'].map(m => (
+                              <Chip
+                                key={m}
+                                label={m}
+                                size="small"
+                                onClick={() => setGeminiModel(m)}
+                                sx={{
+                                  height: 20,
+                                  fontSize: 10,
+                                  cursor: 'pointer',
+                                  bgcolor: geminiModel === m ? 'rgba(59, 130, 246, 0.5)' : 'rgba(255,255,255,0.08)',
+                                  color: geminiModel === m ? '#fff' : 'rgba(255,255,255,0.7)',
+                                  border: '1px solid rgba(255,255,255,0.1)'
+                                }}
+                              />
+                            ))}
+                          </Stack>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={testingGemini}
+                            onClick={() => handleTestGemini(geminiModel)}
+                            sx={{ mt: 1.5, width: '100%', borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93c5fd', textTransform: 'none', fontSize: 11, py: 0.3 }}
+                          >
+                            {testingGemini && testingModelTarget === geminiModel ? <CircularProgress size={12} sx={{ mr: 1, color: '#93c5fd' }} /> : '⚡ '}
+                            Ping Priority 1 Model
+                          </Button>
+                        </Box>
+                      </Grid>
+
+                      {/* 2. Secondary Model (Priority 2 - Failover 1) */}
+                      <Grid item xs={12} md={4}>
+                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.25)', border: '1px solid rgba(234, 179, 8, 0.3)', height: '100%' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase' }}>
+                              Priority 2 (Failover 1)
+                            </Typography>
+                            <Chip label="SPIKE FALLBACK 1" size="small" sx={{ bgcolor: 'rgba(234, 179, 8, 0.25)', color: '#fde047', fontWeight: 800, fontSize: 10, height: 20 }} />
+                          </Stack>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="2nd Priority Model *"
+                            placeholder="e.g. gemini-2.5-flash"
+                            value={geminiModelSecondary}
+                            onChange={e => setGeminiModelSecondary(e.target.value.trim())}
+                            sx={{
+                              '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                              '& .MuiOutlinedInput-root': {
+                                color: '#fff',
+                                bgcolor: 'rgba(0,0,0,0.3)',
+                                '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                                '&:hover fieldset': { borderColor: '#fbbf24' },
+                                '&.Mui-focused fieldset': { borderColor: '#eab308' }
+                              }
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 10.5, display: 'block', mt: 0.8 }}>
+                            Invoked if Priority 1 experiences a 503 / 429 spike.
+                          </Typography>
+                          <Stack direction="row" spacing={0.6} mt={1} flexWrap="wrap" gap={0.5} alignItems="center">
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>Fill:</Typography>
+                            {['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-2.5-pro'].map(m => (
+                              <Chip
+                                key={m}
+                                label={m}
+                                size="small"
+                                onClick={() => setGeminiModelSecondary(m)}
+                                sx={{
+                                  height: 20,
+                                  fontSize: 10,
+                                  cursor: 'pointer',
+                                  bgcolor: geminiModelSecondary === m ? 'rgba(234, 179, 8, 0.4)' : 'rgba(255,255,255,0.08)',
+                                  color: geminiModelSecondary === m ? '#fff' : 'rgba(255,255,255,0.7)',
+                                  border: '1px solid rgba(255,255,255,0.1)'
+                                }}
+                              />
+                            ))}
+                          </Stack>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={testingGemini}
+                            onClick={() => handleTestGemini(geminiModelSecondary)}
+                            sx={{ mt: 1.5, width: '100%', borderColor: 'rgba(234, 179, 8, 0.4)', color: '#fde047', textTransform: 'none', fontSize: 11, py: 0.3 }}
+                          >
+                            {testingGemini && testingModelTarget === geminiModelSecondary ? <CircularProgress size={12} sx={{ mr: 1, color: '#fde047' }} /> : '⚡ '}
+                            Ping Priority 2 Model
+                          </Button>
+                        </Box>
+                      </Grid>
+
+                      {/* 3. Tertiary Model (Priority 3 - Failover 2) */}
+                      <Grid item xs={12} md={4}>
+                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.25)', border: '1px solid rgba(168, 85, 247, 0.3)', height: '100%' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#c084fc', textTransform: 'uppercase' }}>
+                              Priority 3 (Failover 2)
+                            </Typography>
+                            <Chip label="BACKUP SAFETY NET" size="small" sx={{ bgcolor: 'rgba(168, 85, 247, 0.25)', color: '#d8b4fe', fontWeight: 800, fontSize: 10, height: 20 }} />
+                          </Stack>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="3rd Priority Model *"
+                            placeholder="e.g. gemini-2.5-pro"
+                            value={geminiModelTertiary}
+                            onChange={e => setGeminiModelTertiary(e.target.value.trim())}
+                            sx={{
+                              '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                              '& .MuiOutlinedInput-root': {
+                                color: '#fff',
+                                bgcolor: 'rgba(0,0,0,0.3)',
+                                '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                                '&:hover fieldset': { borderColor: '#c084fc' },
+                                '&.Mui-focused fieldset': { borderColor: '#a855f7' }
+                              }
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 10.5, display: 'block', mt: 0.8 }}>
+                            Invoked if Priority 2 also encounters high demand.
+                          </Typography>
+                          <Stack direction="row" spacing={0.6} mt={1} flexWrap="wrap" gap={0.5} alignItems="center">
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>Fill:</Typography>
+                            {['gemini-2.5-pro', 'gemini-3.8-flash', 'gemini-2.5-flash'].map(m => (
+                              <Chip
+                                key={m}
+                                label={m}
+                                size="small"
+                                onClick={() => setGeminiModelTertiary(m)}
+                                sx={{
+                                  height: 20,
+                                  fontSize: 10,
+                                  cursor: 'pointer',
+                                  bgcolor: geminiModelTertiary === m ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255,255,255,0.08)',
+                                  color: geminiModelTertiary === m ? '#fff' : 'rgba(255,255,255,0.7)',
+                                  border: '1px solid rgba(255,255,255,0.1)'
+                                }}
+                              />
+                            ))}
+                          </Stack>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={testingGemini}
+                            onClick={() => handleTestGemini(geminiModelTertiary)}
+                            sx={{ mt: 1.5, width: '100%', borderColor: 'rgba(168, 85, 247, 0.4)', color: '#d8b4fe', textTransform: 'none', fontSize: 11, py: 0.3 }}
+                          >
+                            {testingGemini && testingModelTarget === geminiModelTertiary ? <CircularProgress size={12} sx={{ mr: 1, color: '#d8b4fe' }} /> : '⚡ '}
+                            Ping Priority 3 Model
+                          </Button>
+                        </Box>
                       </Grid>
                     </Grid>
                   </Box>

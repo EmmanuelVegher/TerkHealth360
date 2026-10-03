@@ -267,19 +267,23 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
   }
 
   let apiKey = process.env.GEMINI_API_KEY || '';
-  let configuredModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  let primaryModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  let secondaryModel = process.env.GEMINI_MODEL_SECONDARY || 'gemini-2.5-flash';
+  let tertiaryModel = process.env.GEMINI_MODEL_TERTIARY || 'gemini-2.5-pro';
 
   try {
     const configRows = await prisma.systemConfig.findMany({
       where: {
-        key: { in: ['GEMINI_API_KEY', 'GEMINI_MODEL', 'VISION_MODEL'] }
+        key: { in: ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_MODEL_SECONDARY', 'GEMINI_MODEL_TERTIARY', 'VISION_MODEL'] }
       }
     });
 
     for (const row of configRows) {
       if (row.key === 'GEMINI_API_KEY' && row.value?.trim()) apiKey = row.value.trim();
-      if (row.key === 'GEMINI_MODEL' && row.value?.trim()) configuredModel = row.value.trim();
-      if (row.key === 'VISION_MODEL' && row.value?.trim() && !configuredModel) configuredModel = row.value.trim();
+      if (row.key === 'GEMINI_MODEL' && row.value?.trim()) primaryModel = row.value.trim();
+      if (row.key === 'GEMINI_MODEL_SECONDARY' && row.value?.trim()) secondaryModel = row.value.trim();
+      if (row.key === 'GEMINI_MODEL_TERTIARY' && row.value?.trim()) tertiaryModel = row.value.trim();
+      if (row.key === 'VISION_MODEL' && row.value?.trim() && !primaryModel) primaryModel = row.value.trim();
     }
   } catch (dbErr) {
     console.warn('[FolderVision] Error reading system_config:', dbErr);
@@ -298,7 +302,90 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
   });
 
 
-  // ── Priority 1: Ollama Local Vision AI (MedGamma / MedGemma / Llama 3.2 Vision — offline-native) ──
+  // ── Priority 1: Google Gemini 3-Tier Multi-Model Failover (PostgreSQL-configured) ──
+  // If the 1st model hits a demand spike (503/429), it automatically fails over to the 2nd.
+  // If the 2nd model hits a spike, it automatically fails over to the 3rd.
+  if (apiKey) {
+    const configuredTiers = [
+      { tier: 'Primary Model (Priority 1)', model: primaryModel },
+      { tier: 'Secondary Failover Model (Priority 2)', model: secondaryModel },
+      { tier: 'Tertiary Failover Model (Priority 3)', model: tertiaryModel },
+    ].filter(item => Boolean(item.model?.trim()));
+
+    // Deduplicate while preserving exact tier priority order
+    const seenModels = new Set<string>();
+    const modelsToExecute: Array<{ tier: string; model: string }> = [];
+    for (const item of configuredTiers) {
+      const clean = item.model.replace(/^models\//, '').trim();
+      if (!seenModels.has(clean)) {
+        seenModels.add(clean);
+        modelsToExecute.push({ tier: item.tier, model: clean });
+      }
+    }
+
+    for (let i = 0; i < modelsToExecute.length; i++) {
+      const { tier, model: cleanModel } = modelsToExecute[i];
+      const nextTier = modelsToExecute[i + 1];
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000);
+
+        console.log(`[FolderVision] [${tier}] Processing ${images.length} page(s) with model: ${cleanModel}`);
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: FOLDER_EXTRACTION_PROMPT }, ...imageParts] }],
+            generationConfig: { temperature: 0.1, topP: 0.95, responseMimeType: 'application/json' }
+          })
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const cleanedJson = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanedJson);
+
+          if (parsed && (parsed.patient || (parsed.encounters && parsed.encounters.length > 0))) {
+            console.log(`[FolderVision] ✓ Success with ${tier} (${cleanModel}).`);
+            const result = sanitizeAndNormalizeExtractedData(parsed);
+            result.aiNotes = `[${tier}: ${cleanModel}] ${result.aiNotes}`;
+            return result;
+          }
+        } else {
+          const errBody = await response.text().catch(() => '');
+          const isSpike = response.status === 503 || response.status === 429 || response.status === 500;
+          if (isSpike) {
+            console.warn(`[FolderVision] ⚠️ ${tier} (${cleanModel}) encountered a traffic/demand spike (HTTP ${response.status}).`);
+          } else {
+            console.warn(`[FolderVision] ${tier} (${cleanModel}) returned HTTP ${response.status}:`, errBody.slice(0, 160));
+          }
+
+          if (nextTier) {
+            console.log(`[FolderVision] 🔄 Automatically failing over to ${nextTier.tier} (${nextTier.model})...`);
+          }
+        }
+      } catch (geminiErr: any) {
+        console.warn(`[FolderVision] ${tier} (${cleanModel}) failed:`, geminiErr?.message || geminiErr);
+        const errMsg = String(geminiErr?.message || '') + String(geminiErr?.cause?.code || '');
+        if (errMsg.includes('ENOTFOUND') || errMsg.includes('EAI_AGAIN') || errMsg.includes('ECONNREFUSED')) {
+          console.log('[FolderVision] Internet unreachable. Falling through to local Ollama.');
+          break;
+        }
+        if (nextTier) {
+          console.log(`[FolderVision] 🔄 Automatically failing over to ${nextTier.tier} (${nextTier.model})...`);
+        }
+      }
+    }
+  }
+
+  // ── Priority 2: Ollama Local Vision AI (Offline-native fallback) ──
   try {
     let configuredVisionModel = '';
     try {
@@ -320,21 +407,17 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
       }
     } catch {}
 
-    // Order candidates: configured model -> installed models -> vision standards
+    // Only select genuine vision-capable models (exclude pure text LLMs like medgemma:4b)
     const visionModels = Array.from(new Set([
       configuredVisionModel,
-      ...installedOllamaModels.filter(m => m.includes('vision') || m.includes('medgemma') || m.includes('medgamma') || m.includes('llava')),
-      'medgemma:4b',
-      'medgemma:27b',
-      'medgamma',
+      ...installedOllamaModels.filter(m => m.includes('vision') || m.includes('llava') || m.includes('moondream') || m.includes('minicpm-v')),
       'llama3.2-vision:latest',
       'llama3.2-vision',
       'llava',
       'llava:13b',
       'moondream',
-      'minicpm-v',
-      ...installedOllamaModels
-    ].filter(Boolean) as string[]));
+      'minicpm-v'
+    ].filter(m => m && !m.startsWith('medgemma:') && !m.startsWith('medllama')) as string[]));
 
     // Ollama /api/chat accepts images as raw base64 strings (no data URI prefix)
     const base64Images = images.map(img =>
@@ -343,10 +426,9 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
 
     for (const model of visionModels) {
       try {
-        console.log(`[FolderVision] Trying Ollama model: ${model}`);
+        console.log(`[FolderVision] Trying Ollama vision model: ${model}`);
         const controller = new AbortController();
-        // 120s — multi-page 10.7B vision model needs more time on local hardware
-        const ollamaTimeout = setTimeout(() => controller.abort(), 120000);
+        const ollamaTimeout = setTimeout(() => controller.abort(), 45000);
 
         const ollamaResp = await fetch('http://127.0.0.1:11434/api/chat', {
           method: 'POST',
@@ -384,12 +466,13 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
           console.warn(`[FolderVision] Ollama model ${model} returned HTTP ${ollamaResp.status}:`, errText);
           if (errText.includes('mllama') || errText.includes('unknown model architecture')) {
             console.warn(`[FolderVision] Windows Ollama update recommended: Run OllamaSetup.exe to update Ollama on Windows so it recognizes the '${model}' (mllama) architecture.`);
+            break; // Don't keep hammering with other mllama models
           }
         }
       } catch (ollamaErr: any) {
         const code = ollamaErr?.cause?.code || '';
         if (code === 'ECONNREFUSED' || ollamaErr?.message?.includes('ECONNREFUSED')) {
-          console.log('[FolderVision] Ollama not running. Falling through to Gemini cloud.');
+          console.log('[FolderVision] Ollama not running.');
           break;
         }
         console.warn(`[FolderVision] Ollama model ${model} failed:`, ollamaErr?.message || ollamaErr);
@@ -397,58 +480,6 @@ export async function extractHospitalFolder(images: string[]): Promise<Extracted
     }
   } catch (ollamaOuterErr) {
     console.warn('[FolderVision] Ollama vision block error:', ollamaOuterErr);
-  }
-
-  // ── Priority 2: Gemini Cloud Vision AI (requires internet) ───────────────────
-  if (apiKey) {
-    const candidateModels = Array.from(new Set([
-      configuredModel,
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-2.0-flash-exp',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-8b',
-      'gemini-pro-vision'
-    ])).filter(Boolean);
-
-    for (const model of candidateModels) {
-      try {
-        const cleanModel = model.replace(/^models\//, '');
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 45000);
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: FOLDER_EXTRACTION_PROMPT }, ...imageParts] }],
-            generationConfig: { temperature: 0.1, topP: 0.95, responseMimeType: 'application/json' }
-          })
-        });
-        clearTimeout(timeout);
-
-        if (response.ok) {
-          const data = await response.json();
-          const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const cleanedJson = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(cleanedJson);
-
-          if (parsed && (parsed.patient || (parsed.encounters && parsed.encounters.length > 0))) {
-            return sanitizeAndNormalizeExtractedData(parsed);
-          }
-        }
-      } catch (geminiErr: any) {
-        console.warn(`[FolderVision] Gemini model ${model} failed:`, geminiErr?.message || geminiErr);
-        const errMsg = String(geminiErr?.message || '') + String(geminiErr?.cause?.code || '');
-        if (errMsg.includes('ENOTFOUND') || errMsg.includes('EAI_AGAIN') || errMsg.includes('ECONNREFUSED')) {
-          console.log('[FolderVision] Internet unreachable. Using offline draft fallback immediately.');
-          break;
-        }
-      }
-    }
   }
 
   // ── Priority 3: Offline Draft Template (clerk fills in manually) ─────────────
@@ -586,128 +617,41 @@ function sanitizeAndNormalizeExtractedData(raw: any): ExtractedFolderData {
 
 function generateOfflineFallbackDraft(pageCount: number): ExtractedFolderData {
   const today = new Date().toISOString().split('T')[0];
-  const lastYear = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   return {
     patient: {
       folderNumber: `FFH-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-      firstName: 'Scanned',
-      lastName: 'Patient',
+      firstName: '',
+      lastName: '',
       middleName: '',
-      birthDate: '1988-06-15',
-      ageYears: 38,
-      gender: 'MALE',
-      maritalStatus: 'MARRIED',
+      birthDate: '1990-01-01',
+      ageYears: 35,
+      gender: 'UNKNOWN',
+      maritalStatus: 'SINGLE',
       bloodGroup: 'O_POSITIVE',
       genotype: 'AA',
-      phone: '08030000000',
-      address: 'Hospital Vicinity',
-      occupation: 'Civil Servant',
-      religion: 'Christianity',
+      phone: '',
+      address: '',
+      occupation: '',
+      religion: '',
       spokenLanguage: 'English',
-      nokName: 'Next of Kin',
-      nokRelationship: 'Spouse',
-      nokPhone: '08031111111',
-      nokAddress: 'Same as patient address'
+      nokName: '',
+      nokRelationship: '',
+      nokPhone: '',
+      nokAddress: ''
     },
-    vitals: [
-      {
-        id: 'vit-1',
-        recordedDate: lastYear,
-        recordedTime: '08:30',
-        systolic: 125,
-        diastolic: 82,
-        heartRate: 76,
-        temperature: 36.6,
-        respiratoryRate: 18,
-        oxygenSaturation: 98,
-        weightKg: 72,
-        heightCm: 175,
-        bmi: 23.5,
-        painScore: 0,
-        notes: 'Initial triage record on presentation'
-      },
-      {
-        id: 'vit-2',
-        recordedDate: today,
-        recordedTime: '10:15',
-        systolic: 120,
-        diastolic: 80,
-        heartRate: 72,
-        temperature: 36.7,
-        respiratoryRate: 16,
-        oxygenSaturation: 99,
-        weightKg: 72.5,
-        heightCm: 175,
-        bmi: 23.7,
-        painScore: 0,
-        notes: 'Follow-up triage review'
-      }
-    ],
-    encounters: [
-      {
-        id: 'enc-1',
-        visitDate: lastYear,
-        visitType: 'OUTPATIENT',
-        doctorName: 'Dr. A. B. Okon',
-        specialty: 'Family Medicine',
-        chiefComplaint: 'Intermittent headache and generalized fatigue x 5 days',
-        historyOfPresentIllness: 'Patient presented with 5-day history of throbbing headache and body weakness. No fever, no neck stiffness.',
-        physicalExamination: 'O/E: Conscious, alert, not pale, anicteric. Chest: vesicular breath sounds. CVS: S1 S2 normal. Abdomen: soft.',
-        assessment: '1. Tension Headache; 2. Stress-induced fatigue',
-        plan: '1. Prescribed Analgesics & Multivitamins. 2. Advised adequate hydration and rest. 3. Review in 2 weeks.',
-        clinicalNotes: 'Patient responded well to initial counselling.'
-      }
-    ],
-    diagnoses: [
-      {
-        id: 'dx-1',
-        diagnosisName: 'Tension-type headache',
-        icd10Code: 'G44.2',
-        date: lastYear,
-        type: 'CONFIRMED',
-        status: 'ACTIVE'
-      }
-    ],
-    prescriptions: [
-      {
-        id: 'rx-1',
-        medicationName: 'Tab Paracetamol 1g',
-        dosage: '1g (2 tablets)',
-        frequency: 'TDS (8 hourly)',
-        route: 'Oral',
-        duration: '3 days',
-        instructions: 'Take when needed for headache',
-        prescribedDate: lastYear
-      }
-    ],
-    labInvestigations: [
-      {
-        id: 'lab-1',
-        testName: 'Full Blood Count (FBC)',
-        specimenType: 'Blood',
-        resultValue: 'PCV: 39%, WBC: 5,800/mm³',
-        unit: '%',
-        referenceRange: '36-46%',
-        orderedDate: lastYear,
-        status: 'COMPLETED'
-      }
-    ],
-    allergies: [
-      {
-        id: 'alg-1',
-        allergen: 'No Known Drug Allergies (NKDA)',
-        reaction: 'None',
-        severity: 'MILD',
-        category: 'Drug'
-      }
-    ],
+    vitals: [],
+    encounters: [],
+    diagnoses: [],
+    prescriptions: [],
+    labInvestigations: [],
+    allergies: [],
     pageClassifications: Array.from({ length: pageCount }, (_, i) => ({
       pageIndex: i,
       documentType: i === 0 ? 'Folder Cover / Bio-Data' : i === 1 ? 'Vitals Observation Chart' : 'Doctor SOAP Continuation Sheet',
-      summary: `Physical folder page ${i + 1} scanned and ready for verification.`
+      summary: `Physical folder page ${i + 1} scanned and ready for clerk verification.`
     })),
-    overallConfidenceScore: 82.0,
-    aiNotes: '[Offline Mode] Scanned pages captured. AI template pre-populated for clerk verification and adjustment.'
+    overallConfidenceScore: 70.0,
+    aiNotes: '⚠️ Offline Draft: Vision AI engine could not connect or extract handwriting automatically. Scanned pages are preserved in the filmstrip above; please transcribe the required clinical fields manually before committing.'
   };
 }

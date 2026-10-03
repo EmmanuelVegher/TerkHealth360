@@ -3107,13 +3107,13 @@ router.put('/ai-config', async (req: Request, res: Response, next: any) => {
     if (!adminRoles.includes(user.role)) {
       return res.status(403).json({ success: false, message: 'Admin access required to change AI Engine settings.' });
     }
-    const { llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, visionLocalModel } = req.body;
-    await saveAIConfig({ llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, visionLocalModel });
+    const { llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, geminiModelSecondary, geminiModelTertiary, visionLocalModel } = req.body;
+    await saveAIConfig({ llmEnabled, ollamaModel, nerEnabled, geminiApiKey, geminiModel, geminiModelSecondary, geminiModelTertiary, visionLocalModel });
     await logAudit({
       userId: user.id,
       action: 'openmed.ai_config_update',
       resourceType: 'AIEngine',
-      changes: { llmEnabled, ollamaModel, nerEnabled, geminiModel, visionLocalModel, hasGeminiKey: Boolean(geminiApiKey) },
+      changes: { llmEnabled, ollamaModel, nerEnabled, geminiModel, geminiModelSecondary, geminiModelTertiary, visionLocalModel, hasGeminiKey: Boolean(geminiApiKey) },
     });
     res.json({ success: true, message: 'AI Engine and Vision configuration saved successfully.' });
   } catch (error) {
