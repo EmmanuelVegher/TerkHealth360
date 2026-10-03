@@ -23,7 +23,12 @@ let transcriberPromise: Promise<any> | null = null;
 let activeModel: string | null = null;
 
 export function findLocalWhisperModel(): string | null {
-  for (const name of MODEL_CANDIDATES) {
+  const preferred = process.env.WHISPER_MODEL?.replace(/^Xenova\//, '');
+  const candidates = preferred
+    ? [preferred, ...MODEL_CANDIDATES.filter(m => m !== preferred)]
+    : MODEL_CANDIDATES;
+
+  for (const name of candidates) {
     const dir = path.join(MODELS_ROOT, 'Xenova', name);
     if (
       fs.existsSync(path.join(dir, 'config.json')) &&
