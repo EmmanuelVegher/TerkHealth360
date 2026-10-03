@@ -24,6 +24,7 @@ import { useSnackbar } from 'notistack';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/api';
 import { PhysioReferralModal } from '../components/PhysioReferralModal';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 const API = `${API_BASE_URL}/emergency`;
 
@@ -399,6 +400,8 @@ export default function Emergency() {
   const [voiceReviewText, setVoiceReviewText] = useState('');
   const [voiceReviewTarget, setVoiceReviewTarget] = useState<'COMPLAINT' | 'TAG' | null>(null);
   const voiceRecognitionRef = useRef<any>(null);
+  const triageVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
+  const consultVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
 
   const VOICE_NOISE = /^(switch off|stop|stop dictation|cancel|clear|testing|test|hello|hi|thank you|thanks|okay|ok|never mind)\b/i;
 
@@ -489,82 +492,62 @@ export default function Emergency() {
     }
   };
 
-  const stopVoiceDictation = () => {
-    if (voiceRecognitionRef.current) {
-      try { voiceRecognitionRef.current.stop(); } catch {}
-    }
+  const stopVoiceDictation = async () => {
     setIsListening(false);
     setActiveVoiceTarget(null);
-    const full = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-    interimBufferRef.current = '';
-    if (full.length >= 3 && !isProcessingVoiceRef.current && voiceReviewTarget === 'COMPLAINT') {
-      processVoiceComplaint(full);
-    } else if (full.length >= 3 && !isProcessingVoiceRef.current && voiceReviewTarget === 'TAG') {
-      processVoiceTag(full);
+    if (triageVoiceSessionRef.current) {
+      const session = triageVoiceSessionRef.current;
+      triageVoiceSessionRef.current = null;
+      try {
+        const full = await session.stop();
+        interimBufferRef.current = '';
+        if (full && full.trim().length >= 3 && !isProcessingVoiceRef.current) {
+          if (voiceReviewTarget === 'COMPLAINT') {
+            processVoiceComplaint(full.trim());
+          } else if (voiceReviewTarget === 'TAG') {
+            processVoiceTag(full.trim());
+          }
+        }
+      } catch (e) {
+        console.warn('Triage voice stop error:', e);
+      }
     }
   };
 
-  const startVoiceDictation = (targetField: 'COMPLAINT' | 'TAG') => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice dictation is not supported in this browser. Please use Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
-    if (isListening) { stopVoiceDictation(); return; }
+  const startVoiceDictation = async (targetField: 'COMPLAINT' | 'TAG') => {
+    if (isListening) { await stopVoiceDictation(); return; }
 
     transcriptBufferRef.current = '';
     interimBufferRef.current = '';
     isProcessingVoiceRef.current = false;
     setVoiceReviewTarget(targetField);
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    try { rec.lang = 'en-NG'; } catch { rec.lang = 'en-US'; }
-
-    rec.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          transcriptBufferRef.current += t + ' ';
-        } else {
-          interim += t;
-        }
-      }
-      interimBufferRef.current = interim;
-    };
-
-    rec.onerror = (err: any) => {
-      if (err?.error !== 'no-speech') {
-        setIsListening(false);
-        setActiveVoiceTarget(null);
-      }
-    };
-
-    rec.onend = () => {
+    try {
+      setIsListening(true);
+      setActiveVoiceTarget(targetField);
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          interimBufferRef.current = text;
+        },
+        onFinalText: (text) => {
+          transcriptBufferRef.current = text;
+          interimBufferRef.current = '';
+        },
+        lang: 'en-NG',
+      });
+      triageVoiceSessionRef.current = session;
+      enqueueSnackbar(
+        targetField === 'COMPLAINT'
+          ? '🎙️ Listening (Offline Whisper Ready)… speak presenting complaint. Tap button again to stop & analyse.'
+          : '🎙️ Listening (Offline Whisper Ready)… speak patient name or tag. Tap button again to stop.',
+        { variant: 'info' }
+      );
+    } catch (err) {
+      console.error('Failed to start triage voice dictation:', err);
       setIsListening(false);
       setActiveVoiceTarget(null);
-      const full = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-      if (full.length >= 3 && !isProcessingVoiceRef.current) {
-        if (targetField === 'COMPLAINT') {
-          processVoiceComplaint(full);
-        } else {
-          processVoiceTag(full);
-        }
-      }
-    };
-
-    rec.start();
-    voiceRecognitionRef.current = rec;
-    setIsListening(true);
-    setActiveVoiceTarget(targetField);
-    enqueueSnackbar(
-      targetField === 'COMPLAINT'
-        ? '🎙️ Listening… speak presenting complaint. Tap button again to stop & analyse.'
-        : '🎙️ Listening… speak patient name or tag. Tap button again to stop.',
-      { variant: 'info' }
-    );
+      enqueueSnackbar('🎙️ Could not start microphone.', { variant: 'error' });
+    }
   };
 
   const getHeaders = () => {
@@ -940,86 +923,49 @@ export default function Emergency() {
     }
   };
 
-  const startVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice recognition is not supported in this browser. Please use Google Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
-
-    transcriptBufferRef.current = '';
-    interimBufferRef.current = '';
+  const startVoice = async () => {
     isProcessingVoiceRef.current = false;
     userStoppedVoiceRef.current = false;
     setVoiceTranscript('');
     setInterimTranscript('');
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    try { rec.lang = 'en-US'; } catch {}
-
-    rec.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          transcriptBufferRef.current += t + ' ';
-        } else {
-          interim += t;
-        }
-      }
-      interimBufferRef.current = interim;
-      setInterimTranscript(interim);
-      setVoiceTranscript(transcriptBufferRef.current);
-    };
-
-    rec.onerror = (err: any) => {
-      console.warn('SpeechRecognition error:', err?.error);
-      if (err?.error === 'not-allowed') {
-        enqueueSnackbar('⚠️ Microphone permission blocked. Please allow mic access in browser settings.', { variant: 'error' });
-        userStoppedVoiceRef.current = true;
-        setIsListening(false);
-      }
-    };
-
-    rec.onend = () => {
-      // Keep continuous listening open unless user explicitly clicked Stop
-      if (!userStoppedVoiceRef.current) {
-        try {
-          rec.start();
-          return;
-        } catch {}
-      }
-      setIsListening(false);
-      setInterimTranscript('');
-      const fullText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-      if (fullText.length >= 3 && !isProcessingVoiceRef.current) {
-        processVoiceDictation(fullText);
-      }
-    };
-
     try {
-      rec.start();
-      setRecognitionRef(rec);
       setIsListening(true);
-      enqueueSnackbar('🎙️ Emergency Voice dictation active — speak symptoms & findings. Click Stop Voice when finished.', { variant: 'info' });
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          setInterimTranscript(text);
+          setVoiceTranscript(text);
+        },
+        onFinalText: (text) => {
+          setVoiceTranscript(text);
+          setInterimTranscript('');
+        },
+        lang: 'en-US',
+      });
+      consultVoiceSessionRef.current = session;
+      enqueueSnackbar('🎙️ Emergency Voice dictation active (Offline Whisper Ready) — speak symptoms & findings. Click Stop Voice when finished.', { variant: 'info' });
     } catch (err) {
-      console.error('SpeechRecognition start failed:', err);
+      console.error('Failed to start microphone in Emergency:', err);
+      setIsListening(false);
       enqueueSnackbar('⚠️ Speech recognition could not start. Please check microphone access.', { variant: 'error' });
     }
   };
 
-  const stopVoice = () => {
+  const stopVoice = async () => {
     userStoppedVoiceRef.current = true;
     setIsListening(false);
-    if (recognitionRef) {
-      try { recognitionRef.stop(); } catch {}
-    }
-    const fullText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-    setInterimTranscript('');
-    if (fullText.length >= 3 && !isProcessingVoiceRef.current) {
-      processVoiceDictation(fullText);
+    if (consultVoiceSessionRef.current) {
+      const session = consultVoiceSessionRef.current;
+      consultVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        setInterimTranscript('');
+        if (fullText && fullText.trim().length >= 3 && !isProcessingVoiceRef.current) {
+          processVoiceDictation(fullText.trim());
+        }
+      } catch (e) {
+        console.warn('Emergency voice stop error:', e);
+      }
     }
   };
 

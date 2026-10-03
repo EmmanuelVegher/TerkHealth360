@@ -28,6 +28,7 @@ import { TerminologyAutocomplete } from '../components/TerminologyAutocomplete';
 import { lookupLabTestMetadata, analyzeLabResultWithOpenMed } from '../utils/labDictionary';
 import { PncGynaeServicesView } from '../components/PncGynaeServicesView';
 import { PhysioReferralModal } from '../components/PhysioReferralModal';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 // Ward Sub-Category Configuration
 const WARD_SUB_CATEGORIES = [
@@ -2059,69 +2060,52 @@ const IPD = () => {
     }
   };
 
-  const startVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice recognition is not supported in this browser. Please use Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
+  const offlineVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
+
+  const startVoice = async () => {
     transcriptBufferRef.current = '';
     interimBufferRef.current = '';
     isProcessingVoiceRef.current = false;
     setVoiceTranscript('');
     setInterimTranscript('');
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    try { rec.lang = 'en-NG'; } catch { rec.lang = 'en-US'; }
-
-    rec.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          transcriptBufferRef.current += t + ' ';
-        } else {
-          interim += t;
+    try {
+      const session = await startOfflineVoiceSession({
+        lang: 'en-US',
+        onInterimText: (text) => {
+          interimBufferRef.current = text;
+          setInterimTranscript(text);
+          setVoiceTranscript(text);
+        },
+        onFinalText: (text) => {
+          transcriptBufferRef.current = text;
+          setVoiceTranscript(text);
         }
-      }
-      interimBufferRef.current = interim;
-      setInterimTranscript(interim);
-      setVoiceTranscript(transcriptBufferRef.current);
-    };
-
-    rec.onerror = (err: any) => {
-      console.warn('SpeechRecognition error:', err?.error);
-      if (err?.error !== 'no-speech') {
-        setIsListening(false);
-      }
-    };
-
-    rec.onend = () => {
-      setIsListening(false);
-      setInterimTranscript('');
-      const fullRecordedText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-      if (fullRecordedText.length >= 3 && !isProcessingVoiceRef.current) {
-        processVoiceDictation(fullRecordedText);
-      }
-    };
-
-    rec.start();
-    setRecognitionRef(rec);
-    setIsListening(true);
-    enqueueSnackbar('🎙️ Voice dictation active — speak symptoms & findings. Auto-translates on completion.', { variant: 'info' });
+      });
+      offlineVoiceSessionRef.current = session;
+      setIsListening(true);
+      enqueueSnackbar('🎙️ Voice dictation active (Offline-ready via OpenMed Whisper). Click to stop when done.', { variant: 'info' });
+    } catch (err) {
+      console.error('Failed to start microphone in IPD:', err);
+      enqueueSnackbar('🎙️ Could not start microphone. Please allow microphone permission.', { variant: 'error' });
+    }
   };
 
-  const stopVoice = () => {
-    if (recognitionRef) {
-      try { recognitionRef.stop(); } catch {}
-    }
+  const stopVoice = async () => {
     setIsListening(false);
-    const fullText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-    setInterimTranscript('');
-    if (fullText.length >= 3 && !isProcessingVoiceRef.current) {
-      processVoiceDictation(fullText);
+    if (offlineVoiceSessionRef.current) {
+      const session = offlineVoiceSessionRef.current;
+      offlineVoiceSessionRef.current = null;
+      try {
+        const text = await session.stop();
+        const fullText = (text || transcriptBufferRef.current || interimBufferRef.current).trim();
+        setInterimTranscript('');
+        if (fullText.length >= 2 && !isProcessingVoiceRef.current) {
+          processVoiceDictation(fullText);
+        }
+      } catch (e) {
+        console.warn('Voice stop error:', e);
+      }
     }
   };
 

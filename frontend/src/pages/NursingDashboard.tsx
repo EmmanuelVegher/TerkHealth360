@@ -22,6 +22,7 @@ import { api } from '../services/api';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { OpenMedUnitCoPilot } from '../components/OpenMedUnitCoPilot';
 import ActiveDutySessionCard from '../components/ActiveDutySessionCard';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 const NURSING_SHIFTS = ['MORNING', 'AFTERNOON', 'NIGHT'];
 const WARD_UNITS = ['General Ward', 'ICU', 'Maternity', 'Paediatric', 'Private', 'Emergency'];
@@ -971,10 +972,12 @@ const NursingDashboard = () => {
   const [isParsingDictation, setIsParsingDictation] = useState(false);
   const [isListeningDictation, setIsListeningDictation] = useState(false);
   const [recognitionRef, setRecognitionRef] = useState<any>(null);
+  const vitalsOfflineSessionRef = React.useRef<OfflineVoiceSession | null>(null);
 
   // Presenting Complaints Dedicated Voice Dictation State
   const [isListeningComplaints, setIsListeningComplaints] = useState(false);
   const [complaintsRecognitionRef, setComplaintsRecognitionRef] = useState<any>(null);
+  const complaintsOfflineSessionRef = React.useRef<OfflineVoiceSession | null>(null);
   const [rawSpokenComplaint, setRawSpokenComplaint] = useState('');
 
   // ── Intelligent Clinical Rewrite Engine (SOAP Subjective Formatting) ───────
@@ -1083,167 +1086,96 @@ const NursingDashboard = () => {
     enqueueSnackbar('✨ Clinically rewritten into professional SOAP presentation format!', { variant: 'success' });
   };
 
+  const stopComplaintsRecording = async () => {
+    setIsListeningComplaints(false);
+    if (complaintsOfflineSessionRef.current) {
+      const session = complaintsOfflineSessionRef.current;
+      complaintsOfflineSessionRef.current = null;
+      try {
+        const full = await session.stop();
+        if (full && full.trim()) {
+          setRawSpokenComplaint(full.trim());
+          const rewritten = clinicallyRewriteComplaint(full.trim());
+          setTriageForm(prev => ({ ...prev, presentingComplaints: rewritten }));
+          enqueueSnackbar('✨ Spoken dictation clinically rewritten into SOAP note!', { variant: 'success' });
+        }
+      } catch (e) {
+        console.warn('Complaints voice stop error:', e);
+      }
+    }
+  };
+
   const toggleComplaintsVoiceRecording = async () => {
     if (isListeningComplaints) {
-      if (complaintsRecognitionRef) {
-        try { complaintsRecognitionRef.stop(); } catch {}
-      }
-      setIsListeningComplaints(false);
-      // Process and clinically rewrite whatever was spoken
-      if (rawSpokenComplaint.trim()) {
-        const rewritten = clinicallyRewriteComplaint(rawSpokenComplaint);
-        setTriageForm(prev => ({ ...prev, presentingComplaints: rewritten }));
-        enqueueSnackbar('✨ Spoken dictation clinically rewritten into SOAP note!', { variant: 'success' });
-      }
+      await stopComplaintsRecording();
       return;
     }
 
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        });
-      }
-    } catch (e) {
-      console.log('Audio constraints request:', e);
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setIsListeningComplaints(true);
-        setRawSpokenComplaint('');
-        enqueueSnackbar('🎤 Voice Dictation Active: Speak presenting complaints...', { variant: 'info' });
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentTranscript += event.results[i][0].transcript;
-        }
-        if (currentTranscript.trim()) {
-          setRawSpokenComplaint(currentTranscript);
-          // Instantly convert raw dictated speech into professional clinical text
-          const rewritten = clinicallyRewriteComplaint(currentTranscript);
-          setTriageForm(prev => ({
-            ...prev,
-            presentingComplaints: rewritten
-          }));
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListeningComplaints(false);
-      };
-
-      recognition.onend = () => {
-        setIsListeningComplaints(false);
-      };
-
-      try {
-        recognition.start();
-        setComplaintsRecognitionRef(recognition);
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
       setIsListeningComplaints(true);
-      enqueueSnackbar('🎤 Voice Dictation active. Speak presenting complaints...', { variant: 'info' });
-      setTimeout(() => {
-        const sampleRaw = 'so patience is having an emergency contraction I would need to get delivered immediately';
-        const rewritten = clinicallyRewriteComplaint(sampleRaw);
-        setTriageForm(prev => ({
-          ...prev,
-          presentingComplaints: rewritten
-        }));
-        setIsListeningComplaints(false);
-        enqueueSnackbar('✨ Spoken dictation clinically rewritten into SOAP note!', { variant: 'success' });
-      }, 3000);
+      setRawSpokenComplaint('');
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          setRawSpokenComplaint(text);
+          const rewritten = clinicallyRewriteComplaint(text);
+          setTriageForm(prev => ({ ...prev, presentingComplaints: rewritten }));
+        },
+        onFinalText: (text) => {
+          setRawSpokenComplaint(text);
+          const rewritten = clinicallyRewriteComplaint(text);
+          setTriageForm(prev => ({ ...prev, presentingComplaints: rewritten }));
+        },
+        lang: 'en-NG',
+      });
+      complaintsOfflineSessionRef.current = session;
+      enqueueSnackbar('🎤 Voice Dictation Active (Offline Whisper Ready): Speak presenting complaints...', { variant: 'info' });
+    } catch (err) {
+      console.error('Complaints mic start error:', err);
+      setIsListeningComplaints(false);
+      enqueueSnackbar('🎙️ Could not start microphone.', { variant: 'error' });
+    }
+  };
+
+  const stopVoiceRecording = async () => {
+    setIsListeningDictation(false);
+    if (vitalsOfflineSessionRef.current) {
+      const session = vitalsOfflineSessionRef.current;
+      vitalsOfflineSessionRef.current = null;
+      try {
+        const full = await session.stop();
+        if (full && full.trim()) {
+          setDictationText(full.trim());
+          enqueueSnackbar('Voice transcribed successfully (Offline Whisper)!', { variant: 'success' });
+        }
+      } catch (e) {
+        console.warn('Vitals voice stop error:', e);
+      }
     }
   };
 
   const toggleVoiceRecording = async () => {
     if (isListeningDictation) {
-      if (recognitionRef) {
-        try { recognitionRef.stop(); } catch {}
-      }
-      setIsListeningDictation(false);
-      enqueueSnackbar('Voice listening paused.', { variant: 'info' });
+      await stopVoiceRecording();
       return;
     }
 
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true, // High-sensitivity microphone gain booster for faint/soft voices
-          }
-        });
-      }
-    } catch (e) {
-      console.log('Audio constraints request:', e);
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setIsListeningDictation(true);
-        enqueueSnackbar('High-Sensitivity Mic Active (Noise Cancellation & Auto Gain ON). Speak vitals now...', { variant: 'info' });
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentTranscript += event.results[i][0].transcript;
-        }
-        if (currentTranscript.trim()) {
-          setDictationText(currentTranscript);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListeningDictation(false);
-      };
-
-      recognition.onend = () => {
-        setIsListeningDictation(false);
-      };
-
-      try {
-        recognition.start();
-        setRecognitionRef(recognition);
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
       setIsListeningDictation(true);
-      enqueueSnackbar('High-Sensitivity Ambient Listener active. Speak vitals...', { variant: 'info' });
-      setTimeout(() => {
-        const sampleDict = 'BP 138 over 88, temp 38.1, pulse 92, spo2 97%, rr 18, pain 3, severe headache';
-        setDictationText(sampleDict);
-        setIsListeningDictation(false);
-        enqueueSnackbar('Voice transcribed successfully!', { variant: 'success' });
-      }, 3000);
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          setDictationText(text);
+        },
+        onFinalText: (text) => {
+          setDictationText(text);
+        },
+        lang: 'en-US',
+      });
+      vitalsOfflineSessionRef.current = session;
+      enqueueSnackbar('High-Sensitivity Mic Active (Offline Whisper Ready). Speak vitals now...', { variant: 'info' });
+    } catch (err) {
+      console.error('Vitals mic start error:', err);
+      setIsListeningDictation(false);
+      enqueueSnackbar('🎙️ Could not start microphone.', { variant: 'error' });
     }
   };
 

@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { isUserRadiologyStaff } from '../utils/roleUtils';
 import { QuickAppointmentModal } from '../components/QuickAppointmentModal';
 import { TerminologyAutocomplete } from '../components/TerminologyAutocomplete';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 import axios from 'axios';
 
 // API root
@@ -940,11 +941,13 @@ const FALLBACK_RADIOLOGY_DICTIONARY = [
   const [usIsDictating, setUsIsDictating] = useState(false);
   const usRecognitionRef = useRef<any>(null);
   const usCapturedTextRef = useRef<string>('');
+  const usVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
 
   // 🎙️ Voice dictation state — X-Ray findings
   const [xrIsDictating, setXrIsDictating] = useState(false);
   const xrRecognitionRef = useRef<any>(null);
   const xrCapturedTextRef = useRef<string>();
+  const xrVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -1120,12 +1123,14 @@ const FALLBACK_RADIOLOGY_DICTIONARY = [
   };
   const [isDictating, setIsDictating] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const clinicalVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
   // Ref that holds the raw captured speech — bypasses stale React-state reads
   const capturedTextRef = useRef<string>('');
   // One-shot flag: prevents rewriteDictatedTextToClinical from firing twice per session
   const didRewriteRef = useRef<boolean>(false);
   // Report dictation refs
   const reportRecognitionRef = useRef<any>(null);
+  const reportVoiceSessionRef = useRef<OfflineVoiceSession | null>(null);
   const reportCapturedTextRef = useRef<string>('');
   const reportDidRewriteRef = useRef<boolean>(false);
   // Web Audio API refs for microphone gain boost & noise processing
@@ -1372,167 +1377,60 @@ const FALLBACK_RADIOLOGY_DICTIONARY = [
   //     by didRewriteRef so it never fires twice in one session)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const stopDictation = () => {
-    // Stop speech recognition
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-      recognitionRef.current = null;
-    }
-    // Release mic stream
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(t => t.stop());
-      micStreamRef.current = null;
-    }
-    // Close audio context
-    if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch {}
-      audioContextRef.current = null;
-    }
+  const stopDictation = async () => {
     setIsDictating(false);
+    if (clinicalVoiceSessionRef.current) {
+      const session = clinicalVoiceSessionRef.current;
+      clinicalVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        if (!didRewriteRef.current) {
+          const spoken = fullText.trim();
+          if (spoken.length > 0) {
+            didRewriteRef.current = true;
+            setOrderForm(o => ({ ...o, clinicalHistory: spoken }));
+            rewriteDictatedTextToClinical(spoken);
+          } else {
+            enqueueSnackbar('🎙️ No speech detected. Please try again.', { variant: 'warning' });
+          }
+        }
+      } catch (e) {
+        console.warn('Clinical voice stop error:', e);
+      }
+    }
   };
 
   const toggleClinicalDictation = async () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    // ── STOP ──────────────────────────────────────────────────────────────
     if (isDictating) {
-      stopDictation();
-      // Trigger rewrite exactly once using the ref
-      if (!didRewriteRef.current) {
-        didRewriteRef.current = true;
-        const spoken = capturedTextRef.current.trim();
-        if (spoken.length > 0) {
-          // Keep raw text in the field while rewrite is in-flight (never goes blank)
-          setOrderForm(o => ({ ...o, clinicalHistory: spoken }));
-          rewriteDictatedTextToClinical(spoken);
-        } else {
-          enqueueSnackbar('🎙️ No speech detected. Please try again.', { variant: 'warning' });
-        }
-      }
+      await stopDictation();
       return;
     }
 
-    // ── START ─────────────────────────────────────────────────────────────
-    if (!SpeechRecognition) {
-      enqueueSnackbar('⚠️ Voice dictation requires Chrome or Edge. Please switch browsers.', { variant: 'warning' });
-      return;
-    }
-
-    // Reset session state
-    capturedTextRef.current = '';
     didRewriteRef.current = false;
+    capturedTextRef.current = '';
     setOrderForm(o => ({ ...o, clinicalHistory: '' }));
 
     try {
-      // ── Step 1: Acquire microphone with best audio processing constraints ───
-      // These constraints tell the browser hardware to:
-      //   • echoCancellation — remove speaker feedback
-      //   • noiseSuppression — filter background noise (AC, keyboard, etc.)
-      //   • autoGainControl  — automatically boost quiet voices
-      let micStream: MediaStream | null = null;
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            // Request highest quality sample rate the hardware allows
-            sampleRate: { ideal: 48000 },
-            channelCount: { ideal: 1 },
-          }
-        });
-        micStreamRef.current = micStream;
-
-        // ── Step 2: Web Audio API gain boost (2.5×) for quiet voices ──────
-        // This amplifies the mic signal BEFORE the browser's STT engine
-        // processes it, dramatically improving pickup of normal speech.
-        const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
-          audioContextRef.current = ctx;
-          const source = ctx.createMediaStreamSource(micStream);
-          const gainNode = ctx.createGain();
-          gainNode.gain.value = 2.5;          // 2.5× amplification
-          const dest = ctx.createMediaStreamDestination();
-          source.connect(gainNode);
-          gainNode.connect(dest);
-          // Note: SpeechRecognition still uses the raw micStream internally;
-          // the AudioContext pipeline improves the signal Chrome hears via
-          // system audio routing (especially on macOS / Windows).
-        }
-      } catch (micErr) {
-        console.warn('Mic getUserMedia failed, continuing without boost:', micErr);
-        // Non-fatal: SpeechRecognition will request the mic on its own
-      }
-
-      // ── Step 3: Configure SpeechRecognition for maximum sensitivity ─────
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;           // keep mic open until user clicks Stop
-      recognition.interimResults = true;        // show live partial results
-      recognition.maxAlternatives = 3;          // pick best of 3 alternatives
-      try { recognition.lang = 'en-NG'; } catch { // Nigerian English first
-        try { recognition.lang = 'en-US'; } catch {}
-      }
-
-      recognitionRef.current = recognition;
       setIsDictating(true);
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          capturedTextRef.current = text;
+          setOrderForm(o => ({ ...o, clinicalHistory: text }));
+        },
+        onFinalText: (text) => {
+          capturedTextRef.current = text;
+          setOrderForm(o => ({ ...o, clinicalHistory: text }));
+        },
+        lang: 'en-NG',
+      });
+      clinicalVoiceSessionRef.current = session;
       enqueueSnackbar(
-        '🎙️ Mic active — speak naturally at normal volume. Click "🔴 Stop" when done.',
+        '🎙️ Mic active (Offline-ready via OpenMed Whisper) — speak findings naturally. Click "Stop" when done.',
         { variant: 'info', autoHideDuration: 4000 }
       );
-
-      // ── Results: accumulate finals, show interim live ──────────────────
-      recognition.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            // Pick the highest-confidence alternative
-            let best = event.results[i][0];
-            for (let a = 1; a < event.results[i].length; a++) {
-              if (event.results[i][a].confidence > best.confidence) {
-                best = event.results[i][a];
-              }
-            }
-            capturedTextRef.current += best.transcript + ' ';
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        // Live preview: finalized + current interim
-        setOrderForm(o => ({ ...o, clinicalHistory: (capturedTextRef.current + interim).trim() }));
-      };
-
-      // ── Error ─────────────────────────────────────────────────────────
-      recognition.onerror = (event: any) => {
-        console.warn('Voice dictation error:', event.error);
-        if (event.error === 'no-speech') {
-          // Common when mic is too far — don't stop, just notify
-          enqueueSnackbar('🎙️ No speech detected. Speak closer to the mic and try again.', { variant: 'warning', autoHideDuration: 3000 });
-          return; // continue listening
-        }
-        stopDictation();
-        enqueueSnackbar(`🎙️ Dictation error: ${event.error}`, { variant: 'error' });
-      };
-
-      // ── End (auto-fired on silence or manual stop) ───────────────────
-      // Guard: didRewriteRef prevents double-rewrite when stop() was already
-      // called manually in the STOP block above.
-      recognition.onend = () => {
-        stopDictation();
-        if (!didRewriteRef.current) {
-          didRewriteRef.current = true;
-          const spoken = capturedTextRef.current.trim();
-          if (spoken.length > 0) {
-            setOrderForm(o => ({ ...o, clinicalHistory: spoken }));
-            rewriteDictatedTextToClinical(spoken);
-          }
-        }
-      };
-
-      recognition.start();
     } catch (err) {
       console.error('Failed to start voice dictation:', err);
-      stopDictation();
+      setIsDictating(false);
       enqueueSnackbar('🎙️ Could not start dictation. Please allow microphone access.', { variant: 'error' });
     }
   };
@@ -2059,39 +1957,30 @@ const FALLBACK_RADIOLOGY_DICTIONARY = [
     enqueueSnackbar('✨ AI Radiologist Assistant: Dictated findings rewritten into structured DICOM report & impression!', { variant: 'success' });
   };
 
-  const stopReportDictation = () => {
-    if (reportRecognitionRef.current) {
-      try { reportRecognitionRef.current.stop(); } catch {}
-      reportRecognitionRef.current = null;
-    }
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(t => t.stop());
-      micStreamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch {}
-      audioContextRef.current = null;
-    }
+  const stopReportDictation = async () => {
     setDictationActive(false);
+    if (reportVoiceSessionRef.current) {
+      const session = reportVoiceSessionRef.current;
+      reportVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        if (!reportDidRewriteRef.current) {
+          const spoken = fullText.trim();
+          if (spoken.length > 0) {
+            reportDidRewriteRef.current = true;
+            setReportForm(prev => ({ ...prev, findings: spoken }));
+            rewriteRadiologyReportToClinical(spoken);
+          }
+        }
+      } catch (e) {
+        console.warn('Report voice stop error:', e);
+      }
+    }
   };
 
   const toggleReportDictation = async () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
     if (dictationActive) {
-      stopReportDictation();
-      if (!reportDidRewriteRef.current) {
-        reportDidRewriteRef.current = true;
-        const spoken = reportCapturedTextRef.current.trim();
-        if (spoken.length > 0) {
-          rewriteRadiologyReportToClinical(spoken);
-        }
-      }
-      return;
-    }
-
-    if (!SpeechRecognition) {
-      enqueueSnackbar('⚠️ Voice dictation requires Chrome or Edge.', { variant: 'warning' });
+      await stopReportDictation();
       return;
     }
 
@@ -2099,123 +1988,104 @@ const FALLBACK_RADIOLOGY_DICTIONARY = [
     reportDidRewriteRef.current = false;
 
     try {
-      let micStream: MediaStream | null = null;
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
-        micStreamRef.current = micStream;
-      } catch {}
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 3;
-      try { recognition.lang = 'en-US'; } catch {}
-
-      reportRecognitionRef.current = recognition;
       setDictationActive(true);
-      enqueueSnackbar('🎙️ Report Workstation Mic Active — Speak report findings now. Click "Stop" when done.', { variant: 'info' });
-
-      recognition.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            reportCapturedTextRef.current += event.results[i][0].transcript + ' ';
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        const live = (reportCapturedTextRef.current + interim).trim();
-        setReportForm(prev => ({ ...prev, findings: live }));
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error === 'no-speech') return;
-        stopReportDictation();
-        enqueueSnackbar(`🎙️ Report dictation error: ${event.error}`, { variant: 'error' });
-      };
-
-      recognition.onend = () => {
-        stopReportDictation();
-        if (!reportDidRewriteRef.current) {
-          reportDidRewriteRef.current = true;
-          const spoken = reportCapturedTextRef.current.trim();
-          if (spoken.length > 0) {
-            rewriteRadiologyReportToClinical(spoken);
-          }
-        }
-      };
-
-      recognition.start();
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          reportCapturedTextRef.current = text;
+          setReportForm(prev => ({ ...prev, findings: text }));
+        },
+        onFinalText: (text) => {
+          reportCapturedTextRef.current = text;
+          setReportForm(prev => ({ ...prev, findings: text }));
+        },
+        lang: 'en-US',
+      });
+      reportVoiceSessionRef.current = session;
+      enqueueSnackbar('🎙️ Report Workstation Mic Active (Offline Whisper Ready) — Speak findings now. Click "Stop" when done.', { variant: 'info' });
     } catch (err) {
-      stopReportDictation();
-      enqueueSnackbar('🎙️ Could not start report dictation.', { variant: 'error' });
+      setDictationActive(false);
+      enqueueSnackbar('🎙️ Could not start report dictation. Please allow microphone access.', { variant: 'error' });
     }
   };
 
   // ─── Voice Dictation: Ultrasound Findings ────────────────────────────────
-  const stopUsDictation = () => {
-    try { usRecognitionRef.current?.stop(); } catch {}
-    usRecognitionRef.current = null;
+  const stopUsDictation = async () => {
     setUsIsDictating(false);
+    if (usVoiceSessionRef.current) {
+      const session = usVoiceSessionRef.current;
+      usVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        if (fullText && fullText.trim().length > 0) {
+          setUsFindingsText(fullText.trim());
+        }
+      } catch (e) {
+        console.warn('US voice stop error:', e);
+      }
+    }
   };
   const toggleUsDictation = async () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (usIsDictating) { stopUsDictation(); return; }
-    if (!SR) { enqueueSnackbar('⚠️ Voice dictation requires Chrome or Edge.', { variant: 'warning' }); return; }
+    if (usIsDictating) { await stopUsDictation(); return; }
     usCapturedTextRef.current = '';
     try {
-      const rec = new SR();
-      rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
-      try { rec.lang = 'en-NG'; } catch { try { rec.lang = 'en-US'; } catch {} }
-      usRecognitionRef.current = rec;
       setUsIsDictating(true);
-      enqueueSnackbar('🎙️ Mic active — dictate ultrasound findings now.', { variant: 'info', autoHideDuration: 3500 });
-      rec.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) usCapturedTextRef.current += event.results[i][0].transcript + ' ';
-          else interim += event.results[i][0].transcript;
-        }
-        setUsFindingsText((usCapturedTextRef.current + interim).trim());
-      };
-      rec.onerror = (e: any) => { if (e.error !== 'no-speech') { stopUsDictation(); enqueueSnackbar(`🎙️ Dictation error: ${e.error}`, { variant: 'error' }); } };
-      rec.onend = () => stopUsDictation();
-      rec.start();
-    } catch { stopUsDictation(); enqueueSnackbar('🎙️ Could not start dictation — allow microphone access.', { variant: 'error' }); }
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          usCapturedTextRef.current = text;
+          setUsFindingsText(text);
+        },
+        onFinalText: (text) => {
+          usCapturedTextRef.current = text;
+          setUsFindingsText(text);
+        },
+        lang: 'en-NG',
+      });
+      usVoiceSessionRef.current = session;
+      enqueueSnackbar('🎙️ Mic active (Offline Whisper Ready) — dictate ultrasound findings now.', { variant: 'info', autoHideDuration: 3500 });
+    } catch {
+      setUsIsDictating(false);
+      enqueueSnackbar('🎙️ Could not start dictation — allow microphone access.', { variant: 'error' });
+    }
   };
 
   // ─── Voice Dictation: X-Ray Findings ──────────────────────────────────────
-  const stopXrDictation = () => {
-    try { xrRecognitionRef.current?.stop(); } catch {}
-    xrRecognitionRef.current = null;
+  const stopXrDictation = async () => {
     setXrIsDictating(false);
+    if (xrVoiceSessionRef.current) {
+      const session = xrVoiceSessionRef.current;
+      xrVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        if (fullText && fullText.trim().length > 0) {
+          setXrFindingsText(fullText.trim());
+        }
+      } catch (e) {
+        console.warn('XR voice stop error:', e);
+      }
+    }
   };
   const toggleXrDictation = async () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (xrIsDictating) { stopXrDictation(); return; }
-    if (!SR) { enqueueSnackbar('⚠️ Voice dictation requires Chrome or Edge.', { variant: 'warning' }); return; }
+    if (xrIsDictating) { await stopXrDictation(); return; }
     xrCapturedTextRef.current = '';
     try {
-      const rec = new SR();
-      rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
-      try { rec.lang = 'en-NG'; } catch { try { rec.lang = 'en-US'; } catch {} }
-      xrRecognitionRef.current = rec;
       setXrIsDictating(true);
-      enqueueSnackbar('🎙️ Mic active — dictate X-Ray findings now.', { variant: 'info', autoHideDuration: 3500 });
-      rec.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) xrCapturedTextRef.current += event.results[i][0].transcript + ' ';
-          else interim += event.results[i][0].transcript;
-        }
-        setXrFindingsText(((xrCapturedTextRef.current ?? '') + interim).trim());
-      };
-      rec.onerror = (e: any) => { if (e.error !== 'no-speech') { stopXrDictation(); enqueueSnackbar(`🎙️ Dictation error: ${e.error}`, { variant: 'error' }); } };
-      rec.onend = () => stopXrDictation();
-      rec.start();
-    } catch { stopXrDictation(); enqueueSnackbar('🎙️ Could not start dictation — allow microphone access.', { variant: 'error' }); }
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          xrCapturedTextRef.current = text;
+          setXrFindingsText(text);
+        },
+        onFinalText: (text) => {
+          xrCapturedTextRef.current = text;
+          setXrFindingsText(text);
+        },
+        lang: 'en-NG',
+      });
+      xrVoiceSessionRef.current = session;
+      enqueueSnackbar('🎙️ Mic active (Offline Whisper Ready) — dictate X-Ray findings now.', { variant: 'info', autoHideDuration: 3500 });
+    } catch {
+      setXrIsDictating(false);
+      enqueueSnackbar('🎙️ Could not start dictation — allow microphone access.', { variant: 'error' });
+    }
   };
 
   // Rendering Panels

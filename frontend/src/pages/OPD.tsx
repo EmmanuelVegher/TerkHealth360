@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import { QuickAppointmentModal } from '../components/QuickAppointmentModal';
 import { TerminologyAutocomplete } from '../components/TerminologyAutocomplete';
 import { PhysioReferralModal } from '../components/PhysioReferralModal';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 const AI_PRIMARY = '#1e3a8a';
 const AI_PURPLE  = '#7c3aed';
@@ -850,8 +851,9 @@ const OPD = () => {
   const [isListening, setIsListening]           = useState(false);
   const [voiceTranscript, setVoiceTranscript]   = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [voiceSupported]                         = useState(() => 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const [voiceSupported]                         = useState(true);
   const [recognitionRef, setRecognitionRef]      = useState<any>(null);
+  const offlineVoiceSessionRef                   = useRef<OfflineVoiceSession | null>(null);
   const [voiceAnalysis, setVoiceAnalysis]       = useState<any>(null);
   const [voiceSummarizing, setVoiceSummarizing] = useState(false);
   const transcriptBufferRef  = useRef<string>('');
@@ -1801,69 +1803,47 @@ const OPD = () => {
     }
   };
 
-  const startVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice recognition is not supported in this browser. Please use Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
-    transcriptBufferRef.current = '';
-    interimBufferRef.current = '';
+  const startVoice = async () => {
     isProcessingVoiceRef.current = false;
     setVoiceTranscript('');
     setInterimTranscript('');
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    try { rec.lang = 'en-NG'; } catch { rec.lang = 'en-US'; }
-
-    rec.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          transcriptBufferRef.current += t + ' ';
-        } else {
-          interim += t;
-        }
-      }
-      interimBufferRef.current = interim;
-      setInterimTranscript(interim);
-      setVoiceTranscript(transcriptBufferRef.current);
-    };
-
-    rec.onerror = (err: any) => {
-      console.warn('SpeechRecognition error:', err?.error);
-      if (err?.error !== 'no-speech') {
-        setIsListening(false);
-      }
-    };
-
-    rec.onend = () => {
+    try {
+      setIsListening(true);
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          setInterimTranscript(text);
+          setVoiceTranscript(text);
+        },
+        onFinalText: (text) => {
+          setVoiceTranscript(text);
+          setInterimTranscript('');
+        },
+        lang: 'en-NG',
+      });
+      offlineVoiceSessionRef.current = session;
+      enqueueSnackbar('🎙️ Voice dictation active (Offline-ready via OpenMed Whisper). Click to stop when finished.', { variant: 'info' });
+    } catch (err) {
+      console.error('Failed to start microphone in OPD:', err);
       setIsListening(false);
-      setInterimTranscript('');
-      const fullRecordedText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-      if (fullRecordedText.length >= 3 && !isProcessingVoiceRef.current) {
-        processVoiceDictation(fullRecordedText);
-      }
-    };
-
-    rec.start();
-    setRecognitionRef(rec);
-    setIsListening(true);
-    enqueueSnackbar('🎙️ Voice dictation active — speak symptoms & findings. Auto-translates on completion.', { variant: 'info' });
+      enqueueSnackbar('🎙️ Could not start microphone. Please allow microphone permission.', { variant: 'error' });
+    }
   };
 
-  const stopVoice = () => {
-    if (recognitionRef) {
-      try { recognitionRef.stop(); } catch {}
-    }
+  const stopVoice = async () => {
     setIsListening(false);
-    const fullText = (transcriptBufferRef.current + ' ' + interimBufferRef.current).trim();
-    setInterimTranscript('');
-    if (fullText.length >= 3 && !isProcessingVoiceRef.current) {
-      processVoiceDictation(fullText);
+    if (offlineVoiceSessionRef.current) {
+      const session = offlineVoiceSessionRef.current;
+      offlineVoiceSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        setInterimTranscript('');
+        if (fullText && fullText.trim().length >= 2 && !isProcessingVoiceRef.current) {
+          processVoiceDictation(fullText.trim());
+        }
+      } catch (e) {
+        console.warn('Voice stop error in OPD:', e);
+      }
     }
   };
 

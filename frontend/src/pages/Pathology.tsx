@@ -19,6 +19,7 @@ import { useSnackbar } from 'notistack';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 // --- Types & Interfaces ---
 interface HistologyOrder {
@@ -1702,6 +1703,7 @@ const savePathologyReportToStorage = (key: string, data: Partial<HistologyOrder>
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const [isVoiceRewriting, setIsVoiceRewriting] = useState(false);
   const voiceRecognitionRef = useRef<any>(null);
+  const pathologyOfflineSessionRef = useRef<OfflineVoiceSession | null>(null);
   const audioContextRef = useRef<any>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const userStoppedVoiceRef = useRef(false);
@@ -2125,52 +2127,37 @@ Postmortem examination findings: ${cleanSpoken}. Findings are consistent with ca
     enqueueSnackbar('✨ OpenMed Pathologist AI: Voice findings structured & clinically rewritten across both sections!', { variant: 'success' });
   };
 
-  const stopVoiceDictation = () => {
+  const stopVoiceDictation = async () => {
     userStoppedVoiceRef.current = true;
-    isRewritingRef.current = true; // Lock field against late raw speech onresult events!
+    isRewritingRef.current = true; // Lock field against late raw speech
 
     const field = activeVoiceField;
-    const rawSpeech = currentVoiceTranscriptRef.current;
-
-    if (voiceRecognitionRef.current) {
-      try {
-        voiceRecognitionRef.current.onresult = null;
-        voiceRecognitionRef.current.onend = null;
-        voiceRecognitionRef.current.stop();
-      } catch (e) {}
-      voiceRecognitionRef.current = null;
-    }
-
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop());
-      micStreamRef.current = null;
-    }
-
-    if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch (e) {}
-      audioContextRef.current = null;
-    }
-
     setActiveVoiceField(null);
 
-    if (field && rawSpeech && rawSpeech.trim().length >= 1) {
-      processPathologistVoiceRewrite(field, rawSpeech);
+    if (pathologyOfflineSessionRef.current) {
+      const session = pathologyOfflineSessionRef.current;
+      pathologyOfflineSessionRef.current = null;
+      try {
+        const fullSpeech = await session.stop();
+        if (field && fullSpeech && fullSpeech.trim().length >= 1) {
+          const cleanText = fullSpeech.trim();
+          currentVoiceTranscriptRef.current = cleanText;
+          updateFieldValue(field, cleanText);
+          processPathologistVoiceRewrite(field, cleanText);
+        }
+      } catch (e) {
+        console.warn('Pathology voice stop error:', e);
+      }
     }
   };
 
   const startVoiceDictation = async (fieldKey: string) => {
     if (activeVoiceField === fieldKey) {
-      stopVoiceDictation();
+      await stopVoiceDictation();
       return;
     }
     if (activeVoiceField) {
-      stopVoiceDictation();
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('⚠️ Voice dictation is not supported in this browser. Please use Chrome, Edge, or Safari.', { variant: 'warning' });
-      return;
+      await stopVoiceDictation();
     }
 
     userStoppedVoiceRef.current = false;
@@ -2178,81 +2165,26 @@ Postmortem examination findings: ${cleanSpoken}. Findings are consistent with ca
     currentVoiceTranscriptRef.current = '';
     setActiveVoiceField(fieldKey);
 
-    // ── 1. Hardware Noise Cancellation & Audio Processing Constraints ──
     try {
-      const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 1 },
-        }
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          if (isRewritingRef.current) return;
+          currentVoiceTranscriptRef.current = text;
+          updateFieldValue(fieldKey, text);
+        },
+        onFinalText: (text) => {
+          if (isRewritingRef.current) return;
+          currentVoiceTranscriptRef.current = text;
+          updateFieldValue(fieldKey, text);
+        },
+        lang: 'en-NG',
       });
-      micStreamRef.current = micStream;
-
-      // ── 2. Web Audio API 2.5x Gain Amplification for Microphone Sensitivity ──
-      const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (AudioContext) {
-        const ctx = new AudioContext();
-        audioContextRef.current = ctx;
-        const source = ctx.createMediaStreamSource(micStream);
-        const gainNode = ctx.createGain();
-        gainNode.gain.value = 2.5;
-        const dest = ctx.createMediaStreamDestination();
-        source.connect(gainNode);
-        gainNode.connect(dest);
-      }
-    } catch (micErr) {
-      console.warn('Microphone enhanced processing fallback:', micErr);
-    }
-
-    // ── 3. Speech Recognition Engine Config ──
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 3;
-    try { recognition.lang = 'en-NG'; } catch { recognition.lang = 'en-US'; }
-
-    recognition.onresult = (event: any) => {
-      if (isRewritingRef.current) return; // Prevent late raw speech from overwriting AI clinical rewrite
-
-      let fullText = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        fullText += event.results[i][0].transcript + ' ';
-      }
-
-      const cleanText = fullText.trim();
-      currentVoiceTranscriptRef.current = cleanText;
-      updateFieldValue(fieldKey, cleanText);
-    };
-
-    recognition.onerror = (err: any) => {
-      console.warn('Voice dictation error:', err);
-      if (err.error === 'not-allowed') {
-        enqueueSnackbar('🔴 Microphone access denied. Please check microphone permissions in your browser.', { variant: 'error' });
-        setActiveVoiceField(null);
-      }
-    };
-
-    recognition.onend = () => {
-      if (!userStoppedVoiceRef.current && activeVoiceField === fieldKey) {
-        try {
-          recognition.start();
-        } catch (e) {
-          stopVoiceDictation();
-        }
-      } else {
-        stopVoiceDictation();
-      }
-    };
-
-    voiceRecognitionRef.current = recognition;
-    try {
-      recognition.start();
-      enqueueSnackbar(`🎙️ Pathologist Voice AI active for ${fieldKey}. Noise-cancelling & Gain Boost active! Speak findings clearly...`, { variant: 'info' });
+      pathologyOfflineSessionRef.current = session;
+      enqueueSnackbar(`🎙️ Pathologist Voice AI active for ${fieldKey} (Offline Whisper Ready). Speak findings clearly...`, { variant: 'info' });
     } catch (e) {
-      console.error('Speech recognition start failed:', e);
+      console.error('Speech recognition start failed in Pathology:', e);
+      setActiveVoiceField(null);
+      enqueueSnackbar('🎙️ Could not start microphone.', { variant: 'error' });
     }
   };
   // Microscopic Reporting Form State

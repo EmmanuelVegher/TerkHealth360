@@ -19,6 +19,7 @@ import {
 import { alpha, useTheme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { api } from '../services/api';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 interface SurgicalRequest {
   id: string; requestNumber: string; patientId: string;
@@ -750,6 +751,7 @@ const DEFAULT_INPATIENT_WARDS = [
   const [opNoteInterimTranscript, setOpNoteInterimTranscript] = useState('');
   const [opNoteVoiceSummarizing, setOpNoteVoiceSummarizing] = useState(false);
   const [opNoteRecognitionRef, setOpNoteRecognitionRef] = useState<any>(null);
+  const opNoteOfflineSessionRef    = useRef<OfflineVoiceSession | null>(null);
   const opNoteTranscriptBufferRef  = useRef<string>('');
   const opNoteInterimBufferRef     = useRef<string>('');
   const opNoteIsProcessingRef      = useRef<boolean>(false);
@@ -1327,67 +1329,47 @@ CLOSURE & POST-OPERATIVE STATUS:
     }
   };
 
-  const startOpNoteVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice recognition is not supported in this browser. Please use Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
-    opNoteTranscriptBufferRef.current = '';
-    opNoteInterimBufferRef.current = '';
+  const startOpNoteVoice = async () => {
     opNoteIsProcessingRef.current = false;
     setOpNoteVoiceTranscript('');
     setOpNoteInterimTranscript('');
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    try { rec.lang = 'en-NG'; } catch { rec.lang = 'en-US'; }
-
-    rec.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          opNoteTranscriptBufferRef.current += t + ' ';
-        } else {
-          interim += t;
-        }
-      }
-      opNoteInterimBufferRef.current = interim;
-      setOpNoteInterimTranscript(interim);
-      setOpNoteVoiceTranscript(opNoteTranscriptBufferRef.current);
-    };
-
-    rec.onerror = (err: any) => {
-      console.warn('Op-Note SpeechRecognition error:', err?.error);
-      if (err?.error !== 'no-speech') setOpNoteIsListening(false);
-    };
-
-    rec.onend = () => {
+    try {
+      setOpNoteIsListening(true);
+      const session = await startOfflineVoiceSession({
+        onInterimText: (text) => {
+          setOpNoteInterimTranscript(text);
+          setOpNoteVoiceTranscript(text);
+        },
+        onFinalText: (text) => {
+          setOpNoteVoiceTranscript(text);
+          setOpNoteInterimTranscript('');
+        },
+        lang: 'en-NG',
+      });
+      opNoteOfflineSessionRef.current = session;
+      enqueueSnackbar('🎙️ Op-Note voice dictation active (Offline Whisper Ready) — dictate procedure, diagnosis & orders. Stop when done.', { variant: 'info' });
+    } catch (err) {
+      console.error('Failed to start microphone in Theatre:', err);
       setOpNoteIsListening(false);
-      setOpNoteInterimTranscript('');
-      const fullText = (opNoteTranscriptBufferRef.current + ' ' + opNoteInterimBufferRef.current).trim();
-      if (fullText.length >= 3 && !opNoteIsProcessingRef.current) {
-        processOpNoteVoiceDictation(fullText);
-      }
-    };
-
-    rec.start();
-    setOpNoteRecognitionRef(rec);
-    setOpNoteIsListening(true);
-    enqueueSnackbar('🎙️ Op-Note voice dictation active — dictate procedure, diagnosis & orders. Auto-populates on completion.', { variant: 'info' });
+      enqueueSnackbar('🎙️ Could not start microphone. Please allow microphone permission.', { variant: 'error' });
+    }
   };
 
-  const stopOpNoteVoice = () => {
-    if (opNoteRecognitionRef) {
-      try { opNoteRecognitionRef.stop(); } catch {}
-    }
+  const stopOpNoteVoice = async () => {
     setOpNoteIsListening(false);
-    const fullText = (opNoteTranscriptBufferRef.current + ' ' + opNoteInterimBufferRef.current).trim();
-    setOpNoteInterimTranscript('');
-    if (fullText.length >= 3 && !opNoteIsProcessingRef.current) {
-      processOpNoteVoiceDictation(fullText);
+    if (opNoteOfflineSessionRef.current) {
+      const session = opNoteOfflineSessionRef.current;
+      opNoteOfflineSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        setOpNoteInterimTranscript('');
+        if (fullText && fullText.trim().length >= 3 && !opNoteIsProcessingRef.current) {
+          processOpNoteVoiceDictation(fullText.trim());
+        }
+      } catch (e) {
+        console.warn('Theatre voice stop error:', e);
+      }
     }
   };
 

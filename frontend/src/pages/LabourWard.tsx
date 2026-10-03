@@ -71,6 +71,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 // Color Palette
 const PRIMARY = '#1976d2';
@@ -109,59 +110,52 @@ export default function LabourWard() {
   const [isDictatingNotes, setIsDictatingNotes] = useState(false);
   const [isRewritingNotes, setIsRewritingNotes] = useState(false);
   const notesRecognitionRef = useRef<any>(null);
+  const notesOfflineSessionRef = useRef<OfflineVoiceSession | null>(null);
 
-  const startNotesDictation = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('Voice dictation is not supported in this browser. Please use Chrome or Edge.', { variant: 'warning' });
-      return;
-    }
-
-    if (isDictatingNotes) {
-      if (notesRecognitionRef.current) {
-        try { notesRecognitionRef.current.stop(); } catch {}
+  const stopNotesDictation = async () => {
+    setIsDictatingNotes(false);
+    if (notesOfflineSessionRef.current) {
+      const session = notesOfflineSessionRef.current;
+      notesOfflineSessionRef.current = null;
+      try {
+        const fullText = await session.stop();
+        if (fullText && fullText.trim()) {
+          setExamNotes((prev) => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${fullText.trim()}` : fullText.trim();
+          });
+        }
+      } catch (e) {
+        console.warn('LabourWard voice stop error:', e);
       }
-      setIsDictatingNotes(false);
+    }
+  };
+
+  const startNotesDictation = async () => {
+    if (isDictatingNotes) {
+      await stopNotesDictation();
       return;
     }
 
     try {
-      const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true;
-      try { rec.lang = 'en-NG'; } catch { rec.lang = 'en-US'; }
-      notesRecognitionRef.current = rec;
       setIsDictatingNotes(true);
-
-      rec.onresult = (event: any) => {
-        let text = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          text += event.results[i][0].transcript;
-        }
-        if (text) {
-          setExamNotes((prev) => {
-            const trimmed = prev.trim();
-            return trimmed ? `${trimmed} ${text.trim()}` : text.trim();
-          });
-        }
-      };
-
-      rec.onerror = (err: any) => {
-        if (err?.error !== 'no-speech') {
-          console.warn('Speech error:', err?.error);
-          setIsDictatingNotes(false);
-        }
-      };
-
-      rec.onend = () => {
-        setIsDictatingNotes(false);
-      };
-
-      rec.start();
-      enqueueSnackbar('🎙️ Voice dictation active. Speak clinical findings...', { variant: 'info' });
+      const session = await startOfflineVoiceSession({
+        onFinalText: (text) => {
+          if (text) {
+            setExamNotes((prev) => {
+              const trimmed = prev.trim();
+              return trimmed ? `${trimmed} ${text.trim()}` : text.trim();
+            });
+          }
+        },
+        lang: 'en-NG',
+      });
+      notesOfflineSessionRef.current = session;
+      enqueueSnackbar('🎙️ Voice dictation active (Offline Whisper Ready). Speak clinical findings...', { variant: 'info' });
     } catch (err) {
-      console.error('Speech recognition error:', err);
+      console.error('Speech recognition error in LabourWard:', err);
       setIsDictatingNotes(false);
+      enqueueSnackbar('🎙️ Could not start microphone.', { variant: 'error' });
     }
   };
 
