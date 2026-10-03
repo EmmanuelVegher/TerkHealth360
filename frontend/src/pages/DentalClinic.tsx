@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Grid, Card, Button, Chip, TextField,
@@ -13,7 +13,8 @@ import {
   Warning, CameraAlt, Save,
   ZoomIn, Contrast, Layers, Close, Speed, Biotech, HistoryEdu,
   ArrowForward, Remove, FlashOn, FilterList, Bloodtype, Assessment,
-  CloudUpload, PhotoLibrary, Description, Mic, MicOff, AutoAwesome, SmartToy
+  CloudUpload, PhotoLibrary, Description, Mic, MicOff, AutoAwesome, SmartToy,
+  Delete, LocalShipping, HourglassEmpty, Storage
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { api } from '../services/api';
@@ -226,10 +227,15 @@ export default function DentalClinic() {
     ml: { pd: 2, gm: 0, bop: false },
   });
 
-  // Lab Orders
+  // Lab Orders (100% PostgreSQL Synced)
   const [labOrders, setLabOrders] = useState<any[]>([]);
+  const [labOrdersLoading, setLabOrdersLoading] = useState(false);
+  const [labOrdersScope, setLabOrdersScope] = useState<'all' | 'patient'>('all');
+  const [labOrderStatusFilter, setLabOrderStatusFilter] = useState<string>('ALL');
+  const [labOrderSearchText, setLabOrderSearchText] = useState<string>('');
   const [labModalOpen, setLabModalOpen] = useState(false);
   const [newLabOrder, setNewLabOrder] = useState({
+    patientId: '',
     labName: 'CeramMax Precision Dental Lab',
     restorationType: 'Monolithic Zirconia Crown',
     toothNumbers: '16',
@@ -352,6 +358,31 @@ export default function DentalClinic() {
       }
     }, 300);
   };
+  const fetchDentalLabOrders = useCallback(async (patientId?: string, status?: string) => {
+    try {
+      setLabOrdersLoading(true);
+      const params = new URLSearchParams();
+      if (patientId) params.append('patientId', patientId);
+      const activeStatus = status !== undefined ? status : labOrderStatusFilter;
+      if (activeStatus && activeStatus !== 'ALL') params.append('status', activeStatus);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/dental/lab-orders${query}`);
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setLabOrders(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load dental lab orders from PostgreSQL:', err);
+    } finally {
+      setLabOrdersLoading(false);
+    }
+  }, [labOrderStatusFilter]);
+
+  useEffect(() => {
+    if (currentSubCategory === 'lab-orders') {
+      const pid = labOrdersScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+      fetchDentalLabOrders(pid);
+    }
+  }, [currentSubCategory, labOrdersScope, selectedPatient, fetchDentalLabOrders]);
 
   const fetchDentalRadiology = async (patientId: string, encounterId?: string) => {
     if (!patientId) return;
@@ -1255,22 +1286,67 @@ export default function DentalClinic() {
   };
 
   const handleCreateLabOrder = async () => {
-    if (!currentEncounter?.id || !selectedPatient) {
-      setStatusMessage({ type: 'error', text: 'Please start an active encounter first.' });
+    const targetPatientId = newLabOrder.patientId || selectedPatient?.id || (patients.length > 0 ? patients[0].id : '');
+    if (!targetPatientId) {
+      enqueueSnackbar('Please select a patient for this dental lab prescription slip.', { variant: 'warning' });
+      setStatusMessage({ type: 'error', text: 'Please select a patient for this dental lab prescription slip.' });
       return;
     }
     try {
-      const res = await api.post(`/dental/encounters/${currentEncounter.id}/lab-orders`, {
-        patientId: selectedPatient.id,
-        ...newLabOrder,
+      setLoading(true);
+      const res = await api.post('/dental/lab-orders', {
+        patientId: targetPatientId,
+        dentalEncounterId: currentEncounter?.id || undefined,
+        labName: newLabOrder.labName,
+        restorationType: newLabOrder.restorationType,
+        toothNumbers: newLabOrder.toothNumbers,
+        shadeVita: newLabOrder.shadeVita,
+        shadeStump: newLabOrder.shadeStump,
+        instructions: newLabOrder.instructions,
+        turnaroundDays: Number(newLabOrder.turnaroundDays) || 5,
+        cost: Number(newLabOrder.cost) || 0,
       });
-      if (res.data?.data) {
-        setLabOrders([res.data.data, ...labOrders]);
+
+      if (res.data?.success && res.data?.data) {
+        const created = res.data.data;
+        setLabOrders(prev => [created, ...prev]);
         setLabModalOpen(false);
-        setStatusMessage({ type: 'success', text: `Lab Slip ${res.data.data.orderNumber} saved in PostgreSQL & sent to ${newLabOrder.labName}!` });
+        enqueueSnackbar(`🎉 Lab Slip ${created.orderNumber} successfully saved to PostgreSQL!`, { variant: 'success' });
+        setStatusMessage({ type: 'success', text: `Lab Slip ${created.orderNumber} saved in PostgreSQL & dispatched to ${created.labName}!` });
       }
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Failed to submit lab order in database.' });
+      console.error('Failed to submit lab order in database:', err);
+      enqueueSnackbar(err.response?.data?.message || err.message || 'Failed to submit lab order in database.', { variant: 'error' });
+      setStatusMessage({ type: 'error', text: err.response?.data?.message || err.message || 'Failed to submit lab order in database.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateLabOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const res = await api.put(`/dental/lab-orders/${orderId}/status`, { status: newStatus });
+      if (res.data?.success) {
+        setLabOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        enqueueSnackbar(`Status updated to ${newStatus} in PostgreSQL database.`, { variant: 'success' });
+      }
+    } catch (err: any) {
+      console.error('Failed to update lab order status:', err);
+      enqueueSnackbar('Failed to update status in PostgreSQL.', { variant: 'error' });
+    }
+  };
+
+  const handleDeleteLabOrder = async (orderId: string, orderNumber: string) => {
+    if (!window.confirm(`Are you sure you want to delete lab slip ${orderNumber} from PostgreSQL database?`)) return;
+    try {
+      const res = await api.delete(`/dental/lab-orders/${orderId}`);
+      if (res.data?.success) {
+        setLabOrders(prev => prev.filter(o => o.id !== orderId));
+        enqueueSnackbar(`Lab slip ${orderNumber} deleted from PostgreSQL.`, { variant: 'info' });
+      }
+    } catch (err: any) {
+      console.error('Failed to delete lab order:', err);
+      enqueueSnackbar('Failed to delete lab order from PostgreSQL.', { variant: 'error' });
     }
   };
 
@@ -3396,76 +3472,357 @@ export default function DentalClinic() {
       })()}
 
       {/* ── 4. Chairside Digital Lab Orders (/dental/lab-orders) ───────────────── */}
-      {currentSubCategory === 'lab-orders' && (
-        <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                Electronic Dental Lab Slips & Turnaround Tracking
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#64748b' }}>
-                Direct integration with external prosthetic laboratories with 3D Shade Selection and STL scan dispatch
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => setLabModalOpen(true)}
-              sx={{ bgcolor: '#3b82f6', fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
-            >
-              New Lab Prescription Slip
-            </Button>
-          </Box>
+      {currentSubCategory === 'lab-orders' && (() => {
+        const filteredOrders = labOrders.filter((ord) => {
+          if (!labOrderSearchText.trim()) return true;
+          const q = labOrderSearchText.toLowerCase();
+          const patName = ord.patient ? `${ord.patient.firstName} ${ord.patient.lastName} ${ord.patient.patientNumber || ''}`.toLowerCase() : '';
+          return (
+            (ord.orderNumber && ord.orderNumber.toLowerCase().includes(q)) ||
+            (ord.labName && ord.labName.toLowerCase().includes(q)) ||
+            (ord.restorationType && ord.restorationType.toLowerCase().includes(q)) ||
+            (ord.toothNumbers && String(ord.toothNumbers).toLowerCase().includes(q)) ||
+            (ord.shadeVita && ord.shadeVita.toLowerCase().includes(q)) ||
+            patName.includes(q)
+          );
+        });
 
-          <Paper sx={{ width: '100%', overflowX: 'auto', borderRadius: 2 }}>
-            <Table>
-              <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Order #</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Lab Partner</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Restoration Type</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Teeth</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Vita Shade</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Turnaround</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Cost (₦)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {labOrders.length === 0 ? (
+        return (
+          <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+            {/* Header with Title and DB Synced Badges */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Electronic Dental Lab Slips & Turnaround Tracking
+                  </Typography>
+                  <Chip
+                    icon={<Storage sx={{ fontSize: '1rem !important', color: '#16a34a !important' }} />}
+                    label="PostgreSQL Database Synced"
+                    size="small"
+                    sx={{ bgcolor: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: '0.75rem', border: '1px solid #bbf7d0' }}
+                  />
+                  <Chip
+                    label={`${filteredOrders.length} Lab Slips`}
+                    size="small"
+                    sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem' }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  Direct PostgreSQL integration with prosthetic laboratories with 3D Vita shade matching, CAD/CAM milling dispatch, and status tracking
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1.5}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={labOrdersLoading ? <CircularProgress size={16} /> : <Refresh />}
+                  disabled={labOrdersLoading}
+                  onClick={() => {
+                    const pid = labOrdersScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+                    fetchDentalLabOrders(pid, labOrderStatusFilter);
+                  }}
+                  sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+                >
+                  Refresh Database
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => {
+                    if (selectedPatient) {
+                      setNewLabOrder(prev => ({ ...prev, patientId: selectedPatient.id }));
+                    }
+                    setLabModalOpen(true);
+                  }}
+                  sx={{ bgcolor: '#2563eb', fontWeight: 700, textTransform: 'none', borderRadius: 2, px: 2.5 }}
+                >
+                  New Lab Prescription Slip
+                </Button>
+              </Stack>
+            </Box>
+
+            {/* Scope, Status & Search Filters Bar */}
+            <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: 2.5, mb: 3, border: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                <Button
+                  variant={labOrdersScope === 'all' ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => {
+                    setLabOrdersScope('all');
+                    fetchDentalLabOrders(undefined, labOrderStatusFilter);
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    ...(labOrdersScope === 'all' ? { bgcolor: '#1e293b', color: '#fff' } : { color: '#475569', borderColor: '#cbd5e1' })
+                  }}
+                >
+                  All Hospital Lab Slips
+                </Button>
+                <Button
+                  variant={labOrdersScope === 'patient' ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => {
+                    setLabOrdersScope('patient');
+                    if (selectedPatient) {
+                      fetchDentalLabOrders(selectedPatient.id, labOrderStatusFilter);
+                    }
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    ...(labOrdersScope === 'patient' ? { bgcolor: '#2563eb', color: '#fff' } : { color: '#475569', borderColor: '#cbd5e1' })
+                  }}
+                >
+                  {selectedPatient ? `Active Patient: ${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Current Patient Only'}
+                </Button>
+              </Stack>
+
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel id="lab-status-filter-label">Filter Status</InputLabel>
+                  <Select
+                    labelId="lab-status-filter-label"
+                    value={labOrderStatusFilter}
+                    label="Filter Status"
+                    onChange={(e) => {
+                      const newFilter = e.target.value;
+                      setLabOrderStatusFilter(newFilter);
+                      const pid = labOrdersScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+                      fetchDentalLabOrders(pid, newFilter);
+                    }}
+                  >
+                    <MenuItem value="ALL">All Statuses</MenuItem>
+                    <MenuItem value="ORDERED">ORDERED</MenuItem>
+                    <MenuItem value="IN_FABRICATION">IN FABRICATION</MenuItem>
+                    <MenuItem value="SHIPPED">SHIPPED</MenuItem>
+                    <MenuItem value="DELIVERED">DELIVERED</MenuItem>
+                    <MenuItem value="FITTED">FITTED</MenuItem>
+                    <MenuItem value="CANCELLED">CANCELLED</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  size="small"
+                  placeholder="Search slip #, patient, tooth..."
+                  value={labOrderSearchText}
+                  onChange={(e) => setLabOrderSearchText(e.target.value)}
+                  sx={{ width: 230, bgcolor: '#fff', borderRadius: 1 }}
+                />
+              </Stack>
+            </Box>
+
+            {/* Table of Orders from PostgreSQL */}
+            <Paper sx={{ width: '100%', overflowX: 'auto', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Table>
+                <TableHead sx={{ bgcolor: '#f1f5f9' }}>
                   <TableRow>
-                    <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: '#94a3b8' }}>
-                      No lab slips on record for this patient encounter. Click "New Lab Prescription Slip" above.
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Order # / Date</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Patient (PostgreSQL)</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Lab Partner</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Restoration Type</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Teeth & Shade</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Turnaround</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Status (Database)</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Lab Fee (₦)</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: '#334155', textAlign: 'center' }}>Actions</TableCell>
                   </TableRow>
-                ) : (
-                  labOrders.map((ord) => (
-                    <TableRow key={ord.id}>
-                      <TableCell sx={{ fontWeight: 800, color: '#2563eb' }}>{ord.orderNumber}</TableCell>
-                      <TableCell>{ord.labName}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{ord.restorationType}</TableCell>
-                      <TableCell>#{ord.toothNumbers}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={`Shade: ${ord.shadeVita}`} sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 800 }} />
+                </TableHead>
+                <TableBody>
+                  {labOrdersLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} sx={{ textAlign: 'center', py: 6 }}>
+                        <CircularProgress size={32} sx={{ mb: 1.5 }} />
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                          Loading dental lab prescription slips from PostgreSQL database...
+                        </Typography>
                       </TableCell>
-                      <TableCell>{ord.turnaroundDays} Days</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={ord.status}
-                          color={ord.status === 'DELIVERED' ? 'success' : 'info'}
-                          sx={{ fontWeight: 700 }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>₦{Number(ord.cost).toLocaleString()}</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Paper>
-        </Card>
-      )}
+                  ) : filteredOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} sx={{ textAlign: 'center', py: 5, color: '#94a3b8' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#64748b', mb: 1 }}>
+                          {labOrdersScope === 'patient' && selectedPatient
+                            ? `No lab slips recorded for ${selectedPatient.firstName} ${selectedPatient.lastName}.`
+                            : 'No dental lab slips found matching your filters.'}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                          {labOrdersScope === 'patient'
+                            ? 'Switch to "All Hospital Lab Slips" or create a new prescription slip below.'
+                            : 'Click "New Lab Prescription Slip" above to dispatch a restoration to a dental laboratory.'}
+                        </Typography>
+                        <Stack direction="row" spacing={1.5} justifyContent="center">
+                          {labOrdersScope === 'patient' && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => {
+                                setLabOrdersScope('all');
+                                fetchDentalLabOrders(undefined, labOrderStatusFilter);
+                              }}
+                              sx={{ textTransform: 'none' }}
+                            >
+                              Show All Clinic Slips
+                            </Button>
+                          )}
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<Add />}
+                            onClick={() => {
+                              if (selectedPatient) {
+                                setNewLabOrder(prev => ({ ...prev, patientId: selectedPatient.id }));
+                              }
+                              setLabModalOpen(true);
+                            }}
+                            sx={{ bgcolor: '#2563eb', textTransform: 'none' }}
+                          >
+                            New Lab Prescription Slip
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredOrders.map((ord) => {
+                      const statusColorMap: Record<string, 'default' | 'warning' | 'primary' | 'secondary' | 'info' | 'success' | 'error'> = {
+                        ORDERED: 'warning',
+                        IN_FABRICATION: 'primary',
+                        SHIPPED: 'secondary',
+                        DELIVERED: 'info',
+                        FITTED: 'success',
+                        CANCELLED: 'error',
+                      };
+                      const chipColor = statusColorMap[ord.status] || 'default';
+
+                      return (
+                        <TableRow key={ord.id} hover sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                          <TableCell>
+                            <Typography sx={{ fontWeight: 800, color: '#2563eb', fontSize: '0.875rem' }}>
+                              {ord.orderNumber}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                              {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'Active'}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            {ord.patient ? (
+                              <Box>
+                                <Typography sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.875rem' }}>
+                                  {ord.patient.firstName} {ord.patient.lastName}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                  MRN: {ord.patient.patientNumber || ord.patient.id?.slice(0, 8)}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" sx={{ color: '#64748b', fontStyle: 'italic' }}>
+                                Patient ID: {ord.patientId?.slice(0, 8)}...
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell sx={{ fontWeight: 600, color: '#334155' }}>
+                            {ord.labName}
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.875rem' }}>
+                              {ord.restorationType}
+                            </Typography>
+                            {ord.instructions && (
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {ord.instructions}
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <Chip
+                                size="small"
+                                label={`#${ord.toothNumbers}`}
+                                sx={{ bgcolor: '#f1f5f9', fontWeight: 800, fontSize: '0.75rem' }}
+                              />
+                              <Chip
+                                size="small"
+                                label={`Vita: ${ord.shadeVita || 'A2'}`}
+                                sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 800, fontSize: '0.75rem' }}
+                              />
+                              {ord.shadeStump && (
+                                <Chip
+                                  size="small"
+                                  label={`Stump: ${ord.shadeStump}`}
+                                  sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 700, fontSize: '0.7rem' }}
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                              {ord.turnaroundDays} Days
+                            </Typography>
+                            {ord.expectedDueDate && (
+                              <Typography variant="caption" sx={{ color: '#16a34a', fontWeight: 700 }}>
+                                Due: {new Date(ord.expectedDueDate).toLocaleDateString()}
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <FormControl size="small" sx={{ minWidth: 135 }}>
+                              <Select
+                                value={ord.status}
+                                onChange={(e) => handleUpdateLabOrderStatus(ord.id, e.target.value)}
+                                sx={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  borderRadius: 2,
+                                  height: 32,
+                                  bgcolor: chipColor === 'success' ? '#dcfce7' : chipColor === 'warning' ? '#fef3c7' : chipColor === 'primary' ? '#dbeafe' : chipColor === 'info' ? '#ccfbf1' : chipColor === 'secondary' ? '#f3e8ff' : '#fee2e2',
+                                  color: chipColor === 'success' ? '#166534' : chipColor === 'warning' ? '#92400e' : chipColor === 'primary' ? '#1e40af' : chipColor === 'info' ? '#115e59' : chipColor === 'secondary' ? '#6b21a8' : '#991b1b',
+                                  '& .MuiSelect-select': { py: 0.5, px: 1 }
+                                }}
+                              >
+                                <MenuItem value="ORDERED" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>ORDERED</MenuItem>
+                                <MenuItem value="IN_FABRICATION" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>IN FABRICATION</MenuItem>
+                                <MenuItem value="SHIPPED" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>SHIPPED</MenuItem>
+                                <MenuItem value="DELIVERED" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>DELIVERED</MenuItem>
+                                <MenuItem value="FITTED" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>FITTED</MenuItem>
+                                <MenuItem value="CANCELLED" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>CANCELLED</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+
+                          <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>
+                            ₦{Number(ord.cost).toLocaleString()}
+                          </TableCell>
+
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <Tooltip title="Delete Lab Slip from PostgreSQL">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteLabOrder(ord.id, ord.orderNumber)}
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </Paper>
+          </Card>
+        );
+      })()}
 
       {/* ── 5. Treatment Plan & CDT Auto-Billing (/dental/treatment-plans) ─────── */}
       {currentSubCategory === 'treatment-plans' && (
@@ -3701,27 +4058,70 @@ export default function DentalClinic() {
       </Dialog>
 
       {/* ── New Lab Slip Modal ──────────────────────────────────────────────── */}
+      {/* ── New Lab Slip Modal ──────────────────────────────────────────────── */}
       <Dialog open={labModalOpen} onClose={() => setLabModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#3b82f6', color: '#fff' }}>
-          Create Electronic Dental Lab Order Slip
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Science />
+            <span>Create Electronic Dental Lab Prescription Slip</span>
+          </Box>
+          <Chip label="PostgreSQL Synced" size="small" sx={{ bgcolor: '#dcfce7', color: '#166534', fontWeight: 800 }} />
         </DialogTitle>
         <DialogContent sx={{ p: 3, mt: 1 }}>
-          <TextField
-            fullWidth
-            label="Dental Laboratory Partner"
-            size="small"
+          {/* Patient Selector */}
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel id="lab-patient-select-label">Select Patient *</InputLabel>
+            <Select
+              labelId="lab-patient-select-label"
+              value={newLabOrder.patientId || selectedPatient?.id || (patients.length > 0 ? patients[0].id : '')}
+              label="Select Patient *"
+              onChange={(e) => setNewLabOrder({ ...newLabOrder, patientId: e.target.value })}
+            >
+              {patients.map(p => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.firstName} {p.lastName} — MRN: {p.patientNumber || p.id.slice(0, 8)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Lab Partner Selection */}
+          <Autocomplete
+            freeSolo
+            options={[
+              'CeramMax Precision Dental Lab',
+              'Apex Dental Art Studio',
+              'CrownCraft Prosthetics & Milling',
+              'Lagos Crown & Bridge Tech Studio',
+              'Continental Dental CAD/CAM Facility'
+            ]}
             value={newLabOrder.labName}
-            onChange={(e) => setNewLabOrder({ ...newLabOrder, labName: e.target.value })}
-            sx={{ mb: 2 }}
+            onInputChange={(_, val) => setNewLabOrder(prev => ({ ...prev, labName: val }))}
+            renderInput={(params) => (
+              <TextField {...params} label="Dental Laboratory Partner" size="small" sx={{ mb: 2 }} />
+            )}
           />
 
-          <TextField
-            fullWidth
-            label="Restoration / Prosthesis Type"
-            size="small"
+          {/* Restoration Type Selection */}
+          <Autocomplete
+            freeSolo
+            options={[
+              'Monolithic Zirconia Crown',
+              'Layered Zirconia Crown (Anterior Aesthetic)',
+              'E.max CAD Lithium Disilicate Veneer',
+              'Porcelain Fused to Metal (PFM) Crown',
+              '3-Unit Posterior Zirconia Bridge',
+              'Cast Partial Cobalt-Chrome Denture',
+              'Complete High-Impact Acrylic Denture',
+              'Custom Titanium Implant Abutment + Crown',
+              'Clear Aligners (Ortho Stage 1-10)',
+              'Dual-Laminate Occlusal Nightguard'
+            ]}
             value={newLabOrder.restorationType}
-            onChange={(e) => setNewLabOrder({ ...newLabOrder, restorationType: e.target.value })}
-            sx={{ mb: 2 }}
+            onInputChange={(_, val) => setNewLabOrder(prev => ({ ...prev, restorationType: val }))}
+            renderInput={(params) => (
+              <TextField {...params} label="Restoration / Prosthesis Type" size="small" sx={{ mb: 2 }} />
+            )}
           />
 
           <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -3729,6 +4129,7 @@ export default function DentalClinic() {
               <TextField
                 fullWidth
                 label="Target Tooth Numbers"
+                placeholder="e.g. 16 or 21-23"
                 size="small"
                 value={newLabOrder.toothNumbers}
                 onChange={(e) => setNewLabOrder({ ...newLabOrder, toothNumbers: e.target.value })}
@@ -3750,9 +4151,36 @@ export default function DentalClinic() {
             </Grid>
           </Grid>
 
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Stump / Preparation Shade</InputLabel>
+                <Select
+                  value={newLabOrder.shadeStump || 'ND2'}
+                  label="Stump / Preparation Shade"
+                  onChange={(e) => setNewLabOrder({ ...newLabOrder, shadeStump: e.target.value })}
+                >
+                  {['ND1', 'ND2', 'ND3', 'ND4', 'ND5', 'ND6', 'ND7', 'ND8', 'ND9'].map(nd => (
+                    <MenuItem key={nd} value={nd}>Natural Die {nd}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Turnaround (Days)"
+                type="number"
+                size="small"
+                value={newLabOrder.turnaroundDays}
+                onChange={(e) => setNewLabOrder({ ...newLabOrder, turnaroundDays: Number(e.target.value) || 1 })}
+              />
+            </Grid>
+          </Grid>
+
           <TextField
             fullWidth
-            label="Lab Manufacturing Instructions"
+            label="Lab Manufacturing Instructions & Occlusal Clearance"
             multiline
             rows={3}
             size="small"
@@ -3775,9 +4203,11 @@ export default function DentalClinic() {
           <Button
             variant="contained"
             onClick={handleCreateLabOrder}
-            sx={{ bgcolor: '#3b82f6', fontWeight: 700, textTransform: 'none', px: 3 }}
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={16} /> : <Save />}
+            sx={{ bgcolor: '#2563eb', fontWeight: 700, textTransform: 'none', px: 3, borderRadius: 2 }}
           >
-            Dispatch to Lab
+            Dispatch to Lab & Save to PostgreSQL
           </Button>
         </DialogActions>
       </Dialog>

@@ -378,8 +378,323 @@ router.post('/encounters/:id/perio/seed-baseline', authMiddleware, async (req: R
   }
 });
 
-// ── 6. POST /api/dental/encounters/:id/lab-orders ───────────────────────────
-// Order prosthetic restoration / crown / aligners from dental laboratory
+// Helper to seed realistic clinical dental lab orders in PostgreSQL if none exist
+async function seedDentalLabOrdersIfEmpty() {
+  try {
+    const count = await prisma.dentalLabOrder.count();
+    if (count > 0) return;
+
+    let encounters = await prisma.dentalEncounter.findMany({
+      include: { patient: true },
+      take: 5
+    });
+
+    if (encounters.length === 0) {
+      const patients = await prisma.patient.findMany({ take: 3 });
+      for (const p of patients) {
+        const enc = await prisma.dentalEncounter.create({
+          data: {
+            encounterNumber: `DENT-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+            patientId: p.id,
+            dentistId: 'DENTIST-SYSTEM',
+            dentistName: 'Dr. Chidi Okafor (Consultant Prosthodontist)',
+            chiefComplaint: 'Prosthodontic Restoration & Crown Rehabilitation',
+            chartingType: 'ADULT_FDI',
+            status: 'IN_PROGRESS'
+          },
+          include: { patient: true }
+        });
+        encounters.push(enc);
+      }
+    }
+
+    if (encounters.length === 0) return;
+
+    const defaultTemplates = [
+      {
+        labName: 'CeramMax Precision Dental Lab (Lagos)',
+        restorationType: 'Monolithic Multilayer Zirconia Crown',
+        toothNumbers: '16',
+        shadeVita: 'A2',
+        shadeStump: 'ND2',
+        instructions: 'High translucency multilayer zirconia, 0.8mm occlusal reduction, high glaze finish with anatomical fissure staining.',
+        turnaroundDays: 5,
+        cost: 48000,
+        status: 'IN_FABRICATION'
+      },
+      {
+        labName: 'Apex Aesthetic Crown Studio (Abuja)',
+        restorationType: 'IPS e.max CAD Lithium Disilicate Veneers',
+        toothNumbers: '11, 21',
+        shadeVita: 'BL2 (Bleach)',
+        shadeStump: 'ND1',
+        instructions: 'Minimal prep buccal veneers (0.5mm), characterization with natural mamelons and incisal translucency.',
+        turnaroundDays: 4,
+        cost: 95000,
+        status: 'SHIPPED'
+      },
+      {
+        labName: 'Metro Dental Prosthetics Lab (Enugu)',
+        restorationType: 'Cobalt-Chromium Cast Partial Denture (RPD)',
+        toothNumbers: '34, 35, 36, 44, 45, 46',
+        shadeVita: 'A3',
+        shadeStump: null,
+        instructions: 'Kennedy Class I lower arch framework with Akers clasps on #34, #44 and anatomical acrylic teeth setup for try-in.',
+        turnaroundDays: 7,
+        cost: 72000,
+        status: 'ORDERED'
+      },
+      {
+        labName: 'CeramMax Precision Dental Lab (Lagos)',
+        restorationType: 'Custom Titanium Abutment & Screw-Retained Crown',
+        toothNumbers: '46',
+        shadeVita: 'A3.5',
+        shadeStump: 'Titanium Anodized Gold',
+        instructions: 'Direct screw-retained implant crown on 4.5mm internal hex platform, 30Ncm torque spec with composite access hole plug.',
+        turnaroundDays: 6,
+        cost: 110000,
+        status: 'DELIVERED'
+      }
+    ];
+
+    for (let i = 0; i < defaultTemplates.length; i++) {
+      const tmpl = defaultTemplates[i];
+      const enc = encounters[i % encounters.length];
+      const orderNumber = `DLAB-2026-${1001 + i}`;
+      const expectedDueDate = new Date(Date.now() + tmpl.turnaroundDays * 24 * 60 * 60 * 1000);
+
+      await prisma.dentalLabOrder.create({
+        data: {
+          orderNumber,
+          dentalEncounterId: enc.id,
+          patientId: enc.patientId,
+          labName: tmpl.labName,
+          restorationType: tmpl.restorationType,
+          toothNumbers: tmpl.toothNumbers,
+          shadeVita: tmpl.shadeVita,
+          shadeStump: tmpl.shadeStump,
+          instructions: tmpl.instructions,
+          turnaroundDays: tmpl.turnaroundDays,
+          expectedDueDate,
+          cost: tmpl.cost,
+          status: tmpl.status
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('[Dental Lab] Auto-seed error (non-fatal):', err);
+  }
+}
+
+// ── 6a. GET /api/dental/lab-orders ──────────────────────────────────────────
+// List all digital dental lab prescription slips from PostgreSQL database
+router.get('/lab-orders', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    await seedDentalLabOrdersIfEmpty();
+
+    const { patientId, dentalEncounterId, status, search } = req.query as {
+      patientId?: string;
+      dentalEncounterId?: string;
+      status?: string;
+      search?: string;
+    };
+
+    const where: any = {};
+    if (patientId) where.patientId = patientId;
+    if (dentalEncounterId) where.dentalEncounterId = dentalEncounterId;
+    if (status && status !== 'ALL') where.status = status;
+
+    if (search && search.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { orderNumber: { contains: term, mode: 'insensitive' } },
+        { labName: { contains: term, mode: 'insensitive' } },
+        { restorationType: { contains: term, mode: 'insensitive' } },
+        { toothNumbers: { contains: term, mode: 'insensitive' } },
+        { instructions: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const labOrders = await prisma.dentalLabOrder.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        dentalEncounter: {
+          include: {
+            patient: {
+              select: {
+                id: true,
+                patientNumber: true,
+                firstName: true,
+                lastName: true,
+                gender: true,
+                birthDate: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const enriched = labOrders.map((ord: any) => ({
+      ...ord,
+      patientName: ord.dentalEncounter?.patient
+        ? `${ord.dentalEncounter.patient.firstName || ''} ${ord.dentalEncounter.patient.lastName || ''}`.trim()
+        : 'Patient',
+      patientMrn: ord.dentalEncounter?.patient?.patientNumber || '',
+      encounterNumber: ord.dentalEncounter?.encounterNumber || '',
+    }));
+
+    return res.json({
+      success: true,
+      data: enriched,
+      count: enriched.length,
+      source: 'PostgreSQL Database'
+    });
+  } catch (err: any) {
+    console.error('[Dental] Fetch lab orders error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 6b. POST /api/dental/lab-orders ─────────────────────────────────────────
+// Create new dental lab prescription slip directly in PostgreSQL
+router.post('/lab-orders', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const {
+      patientId,
+      dentalEncounterId,
+      labName,
+      restorationType,
+      toothNumbers,
+      shadeVita,
+      shadeStump,
+      instructions,
+      turnaroundDays,
+      cost
+    } = req.body;
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'patientId is required' });
+    }
+
+    // Resolve or auto-create dental encounter if not provided
+    let encounterId = dentalEncounterId;
+    if (!encounterId) {
+      let activeEnc = await prisma.dentalEncounter.findFirst({
+        where: { patientId },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!activeEnc) {
+        const encounterNumber = `DENT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+        activeEnc = await prisma.dentalEncounter.create({
+          data: {
+            encounterNumber,
+            patientId,
+            dentistId: (req as any).user?.id || 'DENTIST-SYSTEM',
+            dentistName: (req as any).user ? `${(req as any).user.firstName || ''} ${(req as any).user.lastName || ''}`.trim() : 'Dr. Attending Dentist',
+            chiefComplaint: 'Prosthetic Restoration & Dental Lab Work',
+            chartingType: 'ADULT_FDI',
+            status: 'IN_PROGRESS'
+          }
+        });
+      }
+      encounterId = activeEnc.id;
+    }
+
+    const orderNumber = `DLAB-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const dueDays = Number(turnaroundDays) || 5;
+    const expectedDueDate = new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000);
+
+    const labOrder = await prisma.dentalLabOrder.create({
+      data: {
+        orderNumber,
+        dentalEncounterId: encounterId,
+        patientId,
+        labName: labName || 'Crown & Bridge Dental Lab',
+        restorationType: restorationType || 'Zirconia Crown',
+        toothNumbers: toothNumbers || '16',
+        shadeVita: shadeVita || 'A2',
+        shadeStump: shadeStump || null,
+        instructions: instructions || 'High aesthetic contour, glazed finish',
+        turnaroundDays: dueDays,
+        expectedDueDate,
+        cost: Number(cost) || 45000,
+        status: 'ORDERED'
+      },
+      include: {
+        dentalEncounter: {
+          include: {
+            patient: true
+          }
+        }
+      }
+    });
+
+    const enriched = {
+      ...labOrder,
+      patientName: labOrder.dentalEncounter?.patient
+        ? `${labOrder.dentalEncounter.patient.firstName || ''} ${labOrder.dentalEncounter.patient.lastName || ''}`.trim()
+        : 'Patient',
+      patientMrn: labOrder.dentalEncounter?.patient?.patientNumber || '',
+      encounterNumber: labOrder.dentalEncounter?.encounterNumber || '',
+    };
+
+    return res.json({
+      success: true,
+      message: `Dental Lab Order ${orderNumber} dispatched and saved in PostgreSQL`,
+      data: enriched
+    });
+  } catch (err: any) {
+    console.error('[Dental] Create lab order error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 6c. PUT /api/dental/lab-orders/:id/status ───────────────────────────────
+// Update lab order fabrication & delivery status in PostgreSQL
+router.put('/lab-orders/:id/status', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, instructions } = req.body;
+
+    const data: any = {};
+    if (status) data.status = status;
+    if (instructions !== undefined) data.instructions = instructions;
+
+    const updated = await prisma.dentalLabOrder.update({
+      where: { id },
+      data,
+      include: {
+        dentalEncounter: {
+          include: { patient: true }
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `Lab order status updated to ${status} in PostgreSQL`,
+      data: updated
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 6d. DELETE /api/dental/lab-orders/:id ────────────────────────────────────
+router.delete('/lab-orders/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.dentalLabOrder.delete({ where: { id } });
+    return res.json({ success: true, message: 'Dental lab order deleted from PostgreSQL' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 6e. POST /api/dental/encounters/:id/lab-orders (Legacy route kept for compatibility)
 router.post('/encounters/:id/lab-orders', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
