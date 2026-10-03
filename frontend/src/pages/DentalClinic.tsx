@@ -79,6 +79,27 @@ const PEDO_LOWER_RIGHT = [81, 82, 83, 84, 85];
 // Vita Classical Shade Guide
 const VITA_SHADES = ['A1', 'A2', 'A3', 'A3.5', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D2', 'D3', 'D4', 'OM1', 'OM2', 'OM3'];
 
+// Pre-populated Dental CDT Procedure Catalog for Treatment Planning
+const CDT_PROCEDURE_PRESETS = [
+  { cdtCode: 'D7140', name: 'Extraction, Erupted Tooth or Exposed Root', phase: 1, cost: 20000, category: 'Oral Surgery' },
+  { cdtCode: 'D7210', name: 'Surgical Extraction of Impacted Wisdom Tooth', phase: 1, cost: 35000, category: 'Oral Surgery' },
+  { cdtCode: 'D9110', name: 'Palliative Emergency Treatment of Dental Pain', phase: 1, cost: 15000, category: 'Emergency' },
+  { cdtCode: 'D4341', name: 'Periodontal Scaling & Root Planing (per Quadrant)', phase: 2, cost: 30000, category: 'Periodontics' },
+  { cdtCode: 'D1110', name: 'Adult Prophylaxis & Ultrasonic Calculus Debridement', phase: 2, cost: 18000, category: 'Preventive' },
+  { cdtCode: 'D3310', name: 'Endodontic Therapy, Anterior Root Canal', phase: 2, cost: 45000, category: 'Endodontics' },
+  { cdtCode: 'D3330', name: 'Endodontic Therapy, Molar Root Canal', phase: 2, cost: 65000, category: 'Endodontics' },
+  { cdtCode: 'D2391', name: 'Posterior Resin Composite - 1 Surface', phase: 3, cost: 25000, category: 'Restorative' },
+  { cdtCode: 'D2392', name: 'Posterior Resin Composite - 2 Surfaces', phase: 3, cost: 32000, category: 'Restorative' },
+  { cdtCode: 'D2330', name: 'Anterior Resin Composite - 1 Surface', phase: 3, cost: 22000, category: 'Restorative' },
+  { cdtCode: 'D2740', name: 'Monolithic Zirconia Crown (CAD/CAM)', phase: 3, cost: 95000, category: 'Prosthetics' },
+  { cdtCode: 'D2750', name: 'Porcelain Fused to Metal (PFM) Crown', phase: 3, cost: 75000, category: 'Prosthetics' },
+  { cdtCode: 'D5213', name: 'Maxillary Cast Metal Cobalt-Chromium Partial Denture', phase: 3, cost: 125000, category: 'Prosthetics' },
+  { cdtCode: 'D6010', name: 'Surgical Placement of Endosteal Implant Body', phase: 3, cost: 250000, category: 'Implantology' },
+  { cdtCode: 'D4910', name: 'Periodontal Maintenance Therapy & Subgingival Irrigation', phase: 4, cost: 20000, category: 'Maintenance' },
+  { cdtCode: 'D9944', name: 'Full-Arch Dual-Laminate Occlusal Guard (Nightguard)', phase: 4, cost: 45000, category: 'Maintenance' },
+  { cdtCode: 'D0120', name: 'Periodic Oral Evaluation - Established Patient', phase: 4, cost: 8000, category: 'Diagnostic' },
+];
+
 // Pre-populated Dental Radiology Teeth Presets
 const TEETH_PRESETS_BY_MODALITY: Record<string, string[]> = {
   PANORAMIC_OPG: [
@@ -246,6 +267,28 @@ export default function DentalClinic() {
     cost: 45000,
   });
 
+  // Phased Dental Treatment Plans & CDT Procedure Master (100% PostgreSQL Synced)
+  const [treatmentPlans, setTreatmentPlans] = useState<any[]>([]);
+  const [treatmentPlansLoading, setTreatmentPlansLoading] = useState(false);
+  const [treatmentPlanScope, setTreatmentPlanScope] = useState<'all' | 'patient'>('all');
+  const [treatmentPlanPhaseFilter, setTreatmentPlanPhaseFilter] = useState<string>('ALL');
+  const [treatmentPlanStatusFilter, setTreatmentPlanStatusFilter] = useState<string>('ALL');
+  const [treatmentPlanSearchText, setTreatmentPlanSearchText] = useState<string>('');
+  const [treatmentPlanModalOpen, setTreatmentPlanModalOpen] = useState(false);
+  const [dentalConsumables, setDentalConsumables] = useState<any[]>([]);
+  const [dentalConsumablesLoading, setDentalConsumablesLoading] = useState(false);
+  const [postingToBilling, setPostingToBilling] = useState(false);
+  const [newPlanForm, setNewPlanForm] = useState({
+    patientId: '',
+    phase: 1,
+    procedureName: 'Surgical Extraction of Impacted Wisdom Tooth',
+    cdtCode: 'D7210',
+    toothNumbers: '48',
+    cost: 35000,
+    isApprovedByPatient: true,
+    status: 'PROPOSED',
+  });
+
   // Live Dental Radiology PACS State from PostgreSQL
   const [radiologyScans, setRadiologyScans] = useState<any[]>([]);
   const [selectedScanId, setSelectedScanId] = useState<string>('');
@@ -383,6 +426,44 @@ export default function DentalClinic() {
       fetchDentalLabOrders(pid);
     }
   }, [currentSubCategory, labOrdersScope, selectedPatient, fetchDentalLabOrders]);
+
+  const fetchDentalTreatmentPlans = useCallback(async (patientId?: string, phase?: string, status?: string) => {
+    try {
+      setTreatmentPlansLoading(true);
+      setDentalConsumablesLoading(true);
+      const params = new URLSearchParams();
+      if (patientId) params.append('patientId', patientId);
+      const activePhase = phase !== undefined ? phase : treatmentPlanPhaseFilter;
+      if (activePhase && activePhase !== 'ALL') params.append('phase', activePhase);
+      const activeStatus = status !== undefined ? status : treatmentPlanStatusFilter;
+      if (activeStatus && activeStatus !== 'ALL') params.append('status', activeStatus);
+
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const [resPlans, resConsumables] = await Promise.all([
+        api.get(`/dental/treatment-plans${query}`),
+        api.get(`/dental/treatment-plans/consumables${patientId ? `?patientId=${patientId}` : ''}`)
+      ]);
+
+      if (resPlans.data?.success && Array.isArray(resPlans.data.data)) {
+        setTreatmentPlans(resPlans.data.data);
+      }
+      if (resConsumables.data?.success && Array.isArray(resConsumables.data.data)) {
+        setDentalConsumables(resConsumables.data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load dental treatment plans from PostgreSQL:', err);
+    } finally {
+      setTreatmentPlansLoading(false);
+      setDentalConsumablesLoading(false);
+    }
+  }, [treatmentPlanPhaseFilter, treatmentPlanStatusFilter]);
+
+  useEffect(() => {
+    if (currentSubCategory === 'treatment-plans') {
+      const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+      fetchDentalTreatmentPlans(pid);
+    }
+  }, [currentSubCategory, treatmentPlanScope, selectedPatient, fetchDentalTreatmentPlans]);
 
   const fetchDentalRadiology = async (patientId: string, encounterId?: string) => {
     if (!patientId) return;
@@ -1347,6 +1428,122 @@ export default function DentalClinic() {
     } catch (err: any) {
       console.error('Failed to delete lab order:', err);
       enqueueSnackbar('Failed to delete lab order from PostgreSQL.', { variant: 'error' });
+    }
+  };
+
+  const handleCreateTreatmentPlan = async () => {
+    const targetPatientId = newPlanForm.patientId || selectedPatient?.id || (patients.length > 0 ? patients[0].id : '');
+    if (!targetPatientId) {
+      enqueueSnackbar('Please select a patient for this treatment plan procedure.', { variant: 'warning' });
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await api.post('/dental/treatment-plans', {
+        patientId: targetPatientId,
+        dentalEncounterId: currentEncounter?.id || undefined,
+        phase: Number(newPlanForm.phase) || 1,
+        procedureName: newPlanForm.procedureName,
+        cdtCode: newPlanForm.cdtCode,
+        toothNumbers: newPlanForm.toothNumbers,
+        cost: Number(newPlanForm.cost) || 0,
+        isApprovedByPatient: newPlanForm.isApprovedByPatient,
+        status: newPlanForm.status || 'PROPOSED',
+      });
+
+      if (res.data?.success && res.data?.data) {
+        setTreatmentPlans(prev => [res.data.data, ...prev]);
+        setTreatmentPlanModalOpen(false);
+        enqueueSnackbar(`🎉 Procedure "${newPlanForm.procedureName}" saved to PostgreSQL Treatment Plan!`, { variant: 'success' });
+        // Refresh consumables
+        const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+        api.get(`/dental/treatment-plans/consumables${pid ? `?patientId=${pid}` : ''}`)
+          .then(r => r.data?.data && setDentalConsumables(r.data.data))
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Failed to create treatment plan item:', err);
+      enqueueSnackbar(err.response?.data?.message || err.message || 'Failed to save procedure', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateTreatmentPlanItem = async (itemId: string, updates: any) => {
+    try {
+      const res = await api.put(`/dental/treatment-plans/${itemId}`, updates);
+      if (res.data?.success && res.data?.data) {
+        setTreatmentPlans(prev => prev.map(p => p.id === itemId ? { ...p, ...res.data.data } : p));
+        enqueueSnackbar('Treatment plan updated in PostgreSQL.', { variant: 'success' });
+        // Refresh consumables
+        const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+        api.get(`/dental/treatment-plans/consumables${pid ? `?patientId=${pid}` : ''}`)
+          .then(r => r.data?.data && setDentalConsumables(r.data.data))
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Failed to update treatment plan item:', err);
+      enqueueSnackbar('Failed to update treatment plan in database.', { variant: 'error' });
+    }
+  };
+
+  const handleDeleteTreatmentPlanItem = async (itemId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove "${name}" from PostgreSQL treatment plans?`)) return;
+    try {
+      const res = await api.delete(`/dental/treatment-plans/${itemId}`);
+      if (res.data?.success) {
+        setTreatmentPlans(prev => prev.filter(p => p.id !== itemId));
+        enqueueSnackbar(`Procedure "${name}" deleted from PostgreSQL.`, { variant: 'info' });
+        const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+        api.get(`/dental/treatment-plans/consumables${pid ? `?patientId=${pid}` : ''}`)
+          .then(r => r.data?.data && setDentalConsumables(r.data.data))
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Failed to delete treatment plan item:', err);
+      enqueueSnackbar('Failed to delete treatment plan item from PostgreSQL.', { variant: 'error' });
+    }
+  };
+
+  const handlePostTreatmentPlanToBilling = async () => {
+    const targetPatient = selectedPatient || (patients.length > 0 ? patients[0] : null);
+    if (!targetPatient) {
+      enqueueSnackbar('Please select a patient to post treatment plan procedures to billing.', { variant: 'warning' });
+      return;
+    }
+
+    try {
+      setPostingToBilling(true);
+      const res = await api.post('/dental/treatment-plans/post-to-billing', {
+        patientId: targetPatient.id,
+      });
+
+      if (res.data?.success) {
+        const msg = `🎉 Invoiced ₦${Number(res.data.totalBilled).toLocaleString()}! Invoice #${res.data.invoiceNumber} posted to Hospital Billing & Cashier for ${targetPatient.firstName} ${targetPatient.lastName}.`;
+        setStatusMessage({ type: 'success', text: msg });
+        enqueueSnackbar(msg, {
+          variant: 'success',
+          autoHideDuration: 9000,
+          action: () => (
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => navigate('/billing')}
+              sx={{ bgcolor: '#fff', color: '#10b981', fontWeight: 800, textTransform: 'none', ml: 1 }}
+            >
+              Go to Billing
+            </Button>
+          )
+        });
+        // Refresh treatment plans
+        const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+        fetchDentalTreatmentPlans(pid);
+      }
+    } catch (err: any) {
+      console.error('Failed to post treatment plan to billing:', err);
+      enqueueSnackbar(err.response?.data?.message || err.message || 'Failed to post treatment plan to billing', { variant: 'error' });
+    } finally {
+      setPostingToBilling(false);
     }
   };
 
@@ -3825,83 +4022,441 @@ export default function DentalClinic() {
       })()}
 
       {/* ── 5. Treatment Plan & CDT Auto-Billing (/dental/treatment-plans) ─────── */}
-      {currentSubCategory === 'treatment-plans' && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} lg={8}>
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                    Phased Treatment Plan & CDT Procedure Master
+      {currentSubCategory === 'treatment-plans' && (() => {
+        const filteredPlans = treatmentPlans.filter((p) => {
+          if (!treatmentPlanSearchText.trim()) return true;
+          const q = treatmentPlanSearchText.toLowerCase();
+          const patName = p.patient ? `${p.patient.firstName} ${p.patient.lastName} ${p.patient.patientNumber || ''}`.toLowerCase() : '';
+          return (
+            (p.procedureName && p.procedureName.toLowerCase().includes(q)) ||
+            (p.cdtCode && p.cdtCode.toLowerCase().includes(q)) ||
+            (p.toothNumbers && String(p.toothNumbers).toLowerCase().includes(q)) ||
+            patName.includes(q)
+          );
+        });
+
+        const totalCost = filteredPlans.reduce((sum, p) => sum + Number(p.cost || 0), 0);
+        const approvedCost = filteredPlans.filter(p => p.isApprovedByPatient).reduce((sum, p) => sum + Number(p.cost || 0), 0);
+        const unbilledCost = filteredPlans.filter(p => !p.isBilled).reduce((sum, p) => sum + Number(p.cost || 0), 0);
+
+        return (
+          <Grid container spacing={3}>
+            {/* Left 8 Cols: PostgreSQL Synced Treatment Plans Table */}
+            <Grid item xs={12} lg={8}>
+              <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                        Phased Treatment Plan & CDT Procedure Master
+                      </Typography>
+                      <Chip
+                        icon={<Storage sx={{ fontSize: '1rem !important', color: '#16a34a !important' }} />}
+                        label="PostgreSQL Database Synced"
+                        size="small"
+                        sx={{ bgcolor: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: '0.75rem', border: '1px solid #bbf7d0' }}
+                      />
+                      <Chip
+                        label={`${filteredPlans.length} Planned Procedures`}
+                        size="small"
+                        sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem' }}
+                      />
+                    </Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      Phased clinical sequencing, patient informed consent tracking, and auto-integration with Central Hospital Invoicing & Dispensary
+                    </Typography>
+                  </Box>
+
+                  <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={treatmentPlansLoading ? <CircularProgress size={16} /> : <Refresh />}
+                      disabled={treatmentPlansLoading}
+                      onClick={() => {
+                        const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+                        fetchDentalTreatmentPlans(pid);
+                      }}
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+                    >
+                      Refresh Database
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Add />}
+                      onClick={() => {
+                        if (selectedPatient) {
+                          setNewPlanForm(prev => ({ ...prev, patientId: selectedPatient.id }));
+                        }
+                        setTreatmentPlanModalOpen(true);
+                      }}
+                      sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                    >
+                      Add Procedure
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={postingToBilling ? <CircularProgress size={16} color="inherit" /> : <Receipt />}
+                      disabled={postingToBilling || unbilledCost === 0}
+                      onClick={handlePostTreatmentPlanToBilling}
+                      sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2, px: 2 }}
+                    >
+                      Post to Billing & Dispense
+                    </Button>
+                  </Stack>
+                </Box>
+
+                {/* Filters Bar: Scope, Phase, Status, Search */}
+                <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: 2.5, mb: 3, border: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    <Button
+                      variant={treatmentPlanScope === 'all' ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => {
+                        setTreatmentPlanScope('all');
+                        fetchDentalTreatmentPlans(undefined, treatmentPlanPhaseFilter, treatmentPlanStatusFilter);
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        borderRadius: 2,
+                        ...(treatmentPlanScope === 'all' ? { bgcolor: '#1e293b', color: '#fff' } : { color: '#475569', borderColor: '#cbd5e1' })
+                      }}
+                    >
+                      All Hospital Plans
+                    </Button>
+                    <Button
+                      variant={treatmentPlanScope === 'patient' ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => {
+                        setTreatmentPlanScope('patient');
+                        if (selectedPatient) {
+                          fetchDentalTreatmentPlans(selectedPatient.id, treatmentPlanPhaseFilter, treatmentPlanStatusFilter);
+                        }
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        borderRadius: 2,
+                        ...(treatmentPlanScope === 'patient' ? { bgcolor: '#2563eb', color: '#fff' } : { color: '#475569', borderColor: '#cbd5e1' })
+                      }}
+                    >
+                      {selectedPatient ? `Active Patient: ${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Current Patient Only'}
+                    </Button>
+                  </Stack>
+
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <InputLabel id="treatment-phase-filter-label">Filter Phase</InputLabel>
+                      <Select
+                        labelId="treatment-phase-filter-label"
+                        value={treatmentPlanPhaseFilter}
+                        label="Filter Phase"
+                        onChange={(e) => {
+                          const newPhase = e.target.value;
+                          setTreatmentPlanPhaseFilter(newPhase);
+                          const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+                          fetchDentalTreatmentPlans(pid, newPhase, treatmentPlanStatusFilter);
+                        }}
+                      >
+                        <MenuItem value="ALL">All Phases</MenuItem>
+                        <MenuItem value="1">Phase 1: Urgent (Emergency)</MenuItem>
+                        <MenuItem value="2">Phase 2: Disease Control</MenuItem>
+                        <MenuItem value="3">Phase 3: Restorative</MenuItem>
+                        <MenuItem value="4">Phase 4: Maintenance</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <FormControl size="small" sx={{ minWidth: 130 }}>
+                      <InputLabel id="treatment-status-filter-label">Status</InputLabel>
+                      <Select
+                        labelId="treatment-status-filter-label"
+                        value={treatmentPlanStatusFilter}
+                        label="Status"
+                        onChange={(e) => {
+                          const newStatus = e.target.value;
+                          setTreatmentPlanStatusFilter(newStatus);
+                          const pid = treatmentPlanScope === 'patient' && selectedPatient ? selectedPatient.id : undefined;
+                          fetchDentalTreatmentPlans(pid, treatmentPlanPhaseFilter, newStatus);
+                        }}
+                      >
+                        <MenuItem value="ALL">All Statuses</MenuItem>
+                        <MenuItem value="PROPOSED">PROPOSED</MenuItem>
+                        <MenuItem value="ACCEPTED">ACCEPTED</MenuItem>
+                        <MenuItem value="IN_PROGRESS">IN PROGRESS</MenuItem>
+                        <MenuItem value="COMPLETED">COMPLETED</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      size="small"
+                      placeholder="Search procedure, CDT, tooth..."
+                      value={treatmentPlanSearchText}
+                      onChange={(e) => setTreatmentPlanSearchText(e.target.value)}
+                      sx={{ width: 200, bgcolor: '#fff', borderRadius: 1 }}
+                    />
+                  </Stack>
+                </Box>
+
+                {/* Procedures Table */}
+                <Paper sx={{ width: '100%', overflowX: 'auto', borderRadius: 2, border: '1px solid #e2e8f0', mb: 2 }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: '#f1f5f9' }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Patient (PostgreSQL)</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Tooth #</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>CDT Code</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Procedure Description</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Phase</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Fee (₦)</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Patient Approved</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Billing</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155', textAlign: 'center' }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {treatmentPlansLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={10} sx={{ textAlign: 'center', py: 6 }}>
+                            <CircularProgress size={32} sx={{ mb: 1.5 }} />
+                            <Typography variant="body2" sx={{ color: '#64748b' }}>
+                              Loading treatment plan procedures from PostgreSQL database...
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredPlans.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={10} sx={{ textAlign: 'center', py: 5, color: '#94a3b8' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#64748b', mb: 1 }}>
+                              {treatmentPlanScope === 'patient' && selectedPatient
+                                ? `No treatment plan items found for ${selectedPatient.firstName} ${selectedPatient.lastName}.`
+                                : 'No treatment plan procedures found matching your filters.'}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                              Click "Add Procedure" above to add phased procedures to this patient's plan.
+                            </Typography>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<Add />}
+                              onClick={() => {
+                                if (selectedPatient) {
+                                  setNewPlanForm(prev => ({ ...prev, patientId: selectedPatient.id }));
+                                }
+                                setTreatmentPlanModalOpen(true);
+                              }}
+                              sx={{ bgcolor: '#2563eb', textTransform: 'none' }}
+                            >
+                              Add Treatment Plan Procedure
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredPlans.map((p) => {
+                          const phaseColor = p.phase === 1 ? '#ef4444' : p.phase === 2 ? '#f97316' : p.phase === 3 ? '#3b82f6' : '#10b981';
+                          const phaseBg = p.phase === 1 ? '#fee2e2' : p.phase === 2 ? '#ffedd5' : p.phase === 3 ? '#dbeafe' : '#dcfce7';
+                          const phaseLabel = p.phase === 1 ? 'Phase 1 (Urgent)' : p.phase === 2 ? 'Phase 2 (Disease Ctrl)' : p.phase === 3 ? 'Phase 3 (Restorative)' : 'Phase 4 (Recall)';
+
+                          return (
+                            <TableRow key={p.id} hover sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                              <TableCell>
+                                {p.patient ? (
+                                  <Box>
+                                    <Typography sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.8rem' }}>
+                                      {p.patient.firstName} {p.patient.lastName}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                      MRN: {p.patient.patientNumber || p.patient.id?.slice(0, 8)}
+                                    </Typography>
+                                  </Box>
+                                ) : (
+                                  <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                    ID: {p.patientId?.slice(0, 8)}
+                                  </Typography>
+                                )}
+                              </TableCell>
+
+                              <TableCell sx={{ fontWeight: 800, color: '#1e3a8a' }}>
+                                #{p.toothNumbers || '—'}
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={p.cdtCode || 'CDT'}
+                                  sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 800, fontSize: '0.75rem' }}
+                                />
+                              </TableCell>
+
+                              <TableCell sx={{ fontWeight: 600, color: '#0f172a' }}>
+                                {p.procedureName}
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={phaseLabel}
+                                  sx={{ bgcolor: phaseBg, color: phaseColor, fontWeight: 700, fontSize: '0.7rem' }}
+                                />
+                              </TableCell>
+
+                              <TableCell sx={{ fontWeight: 700, color: '#0f172a' }}>
+                                ₦{Number(p.cost).toLocaleString()}
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={p.isApprovedByPatient ? 'Approved' : 'Pending'}
+                                  color={p.isApprovedByPatient ? 'success' : 'default'}
+                                  onClick={() => handleUpdateTreatmentPlanItem(p.id, { isApprovedByPatient: !p.isApprovedByPatient })}
+                                  sx={{ fontWeight: 700, fontSize: '0.7rem', cursor: 'pointer' }}
+                                />
+                              </TableCell>
+
+                              <TableCell>
+                                <Select
+                                  size="small"
+                                  value={p.status || 'PROPOSED'}
+                                  onChange={(e) => handleUpdateTreatmentPlanItem(p.id, { status: e.target.value })}
+                                  sx={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    height: 28,
+                                    borderRadius: 1.5,
+                                    '& .MuiSelect-select': { py: 0.2, px: 1 }
+                                  }}
+                                >
+                                  <MenuItem value="PROPOSED" sx={{ fontSize: '0.75rem' }}>PROPOSED</MenuItem>
+                                  <MenuItem value="ACCEPTED" sx={{ fontSize: '0.75rem' }}>ACCEPTED</MenuItem>
+                                  <MenuItem value="IN_PROGRESS" sx={{ fontSize: '0.75rem' }}>IN PROGRESS</MenuItem>
+                                  <MenuItem value="COMPLETED" sx={{ fontSize: '0.75rem' }}>COMPLETED</MenuItem>
+                                  <MenuItem value="REJECTED" sx={{ fontSize: '0.75rem' }}>REJECTED</MenuItem>
+                                </Select>
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={p.isBilled ? 'BILLED' : 'UNBILLED'}
+                                  color={p.isBilled ? 'success' : 'warning'}
+                                  variant={p.isBilled ? 'filled' : 'outlined'}
+                                  sx={{ fontWeight: 800, fontSize: '0.65rem' }}
+                                />
+                              </TableCell>
+
+                              <TableCell sx={{ textAlign: 'center' }}>
+                                <Tooltip title="Remove Procedure from PostgreSQL">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteTreatmentPlanItem(p.id, p.procedureName)}
+                                  >
+                                    <Delete fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </Paper>
+
+                {/* Plan Value Breakdown Footer */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#475569', fontWeight: 600 }}>
+                    Total Plan: <strong style={{ color: '#0f172a' }}>₦{totalCost.toLocaleString()}</strong>
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b' }}>
-                    Auto-synchronized with central hospital billing and dental consumables dispensary
+                  <Typography variant="body2" sx={{ color: '#16a34a', fontWeight: 600 }}>
+                    Patient Approved: <strong>₦{approvedCost.toLocaleString()}</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#2563eb', fontWeight: 600 }}>
+                    Unbilled / Actionable: <strong>₦{unbilledCost.toLocaleString()}</strong>
                   </Typography>
                 </Box>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<Receipt />}
-                  onClick={handlePostToBilling}
-                  sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
-                >
-                  Post to Billing & Dispense
-                </Button>
-              </Box>
+              </Card>
+            </Grid>
 
-              <Table size="small">
-                <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800 }}>Tooth</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>CDT Code</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>Procedure Description</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>Phase</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>Fee (₦)</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.values(toothFindings).map((f: any, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell sx={{ fontWeight: 800, color: '#1e3a8a' }}>#{f.toothNumber}</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#2563eb' }}>{f.cdtCode || 'D2391'}</TableCell>
-                      <TableCell>{f.diagnosis || 'Restorative Treatment'}</TableCell>
-                      <TableCell>Phase 1 (Urgent)</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>₦{(f.cost || 25000).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={f.status || 'PLANNED'} color="primary" variant="outlined" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} lg={4}>
-            <Card sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
-                📦 Auto-Deducted Dental Inventory
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 2 }}>
-                Items automatically deducted from Central Pharmacy upon procedure completion:
-              </Typography>
-
-              {[
-                { name: 'Lidocaine 2% with 1:100,000 Epinephrine (1.8mL Carpule)', qty: '2 Cartridges' },
-                { name: '3M Filtek Z350 XT Universal Restorative Composite', qty: '0.4 grams' },
-                { name: 'Single Bond Universal Adhesive', qty: '1 drop (0.05mL)' },
-                { name: 'Micro-applicator tips & Etching Gel (37% Phosphoric)', qty: '1 unit' },
-              ].map((item, i) => (
-                <Box key={i} sx={{ p: 1.2, mb: 1, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>{item.name}</Typography>
-                  <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600 }}>Deducting: {item.qty}</Typography>
+            {/* Right 4 Cols: Auto-Calculated Dental Consumables from PostgreSQL */}
+            <Grid item xs={12} lg={4}>
+              <Card sx={{ p: 2.5, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    📦 Auto-Calculated Dental Consumables
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label="PostgreSQL Plan Derived"
+                    sx={{ bgcolor: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: '0.65rem' }}
+                  />
                 </Box>
-              ))}
-            </Card>
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 2 }}>
+                  Consumables dynamically calculated from the patient's active treatment plan in PostgreSQL and deducted from Central Dispensary upon completion:
+                </Typography>
+
+                {dentalConsumablesLoading ? (
+                  <Box sx={{ py: 4, textAlign: 'center' }}>
+                    <CircularProgress size={24} sx={{ mb: 1 }} />
+                    <Typography variant="caption" sx={{ display: 'block', color: '#94a3b8' }}>
+                      Computing consumable inventory from database...
+                    </Typography>
+                  </Box>
+                ) : dentalConsumables.length === 0 ? (
+                  <Alert severity="info" sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
+                    No procedures in treatment plan requiring clinical dispensary deductions.
+                  </Alert>
+                ) : (
+                  <Box sx={{ maxHeight: 480, overflowY: 'auto', pr: 0.5 }}>
+                    {dentalConsumables.map((item, i) => (
+                      <Box
+                        key={i}
+                        sx={{
+                          p: 1.2,
+                          mb: 1,
+                          bgcolor: '#f8fafc',
+                          borderRadius: 2,
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 1
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.8rem' }}>
+                            {item.name}
+                          </Typography>
+                          {item.category && (
+                            <Chip
+                              size="small"
+                              label={item.category}
+                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: '#f1f5f9' }}
+                            />
+                          )}
+                        </Box>
+                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          Deducting: {item.qty}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic', display: 'block' }}>
+                  Auto-synchronized with Central Pharmacy & Hospital Consumables Ledger via TerkHealth360 Stock Engine.
+                </Typography>
+              </Card>
+            </Grid>
           </Grid>
-        </Grid>
-      )}
+        );
+      })()}
 
       {/* ── 6. Digital Consent Form (/dental/consent) ─────────────────────────── */}
       {currentSubCategory === 'consent' && (
@@ -4208,6 +4763,150 @@ export default function DentalClinic() {
             sx={{ bgcolor: '#2563eb', fontWeight: 700, textTransform: 'none', px: 3, borderRadius: 2 }}
           >
             Dispatch to Lab & Save to PostgreSQL
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Add Treatment Plan Procedure Modal ────────────────────────────── */}
+      <Dialog open={treatmentPlanModalOpen} onClose={() => setTreatmentPlanModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#1e3a8a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <MedicalServices />
+            <span>Add Planned Dental Procedure</span>
+          </Box>
+          <Chip label="PostgreSQL Synced" size="small" sx={{ bgcolor: '#dcfce7', color: '#166534', fontWeight: 800 }} />
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, mt: 1 }}>
+          {/* Patient Selector */}
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel id="plan-patient-select-label">Select Patient *</InputLabel>
+            <Select
+              labelId="plan-patient-select-label"
+              value={newPlanForm.patientId || selectedPatient?.id || (patients.length > 0 ? patients[0].id : '')}
+              label="Select Patient *"
+              onChange={(e) => setNewPlanForm({ ...newPlanForm, patientId: e.target.value })}
+            >
+              {patients.map(p => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.firstName} {p.lastName} — MRN: {p.patientNumber || p.id.slice(0, 8)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Quick Preset Selector */}
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel id="plan-preset-select-label">Choose from Standard CDT Procedures (Optional)</InputLabel>
+            <Select
+              labelId="plan-preset-select-label"
+              label="Choose from Standard CDT Procedures (Optional)"
+              value=""
+              onChange={(e) => {
+                const found = CDT_PROCEDURE_PRESETS.find(pr => pr.cdtCode === e.target.value);
+                if (found) {
+                  setNewPlanForm(prev => ({
+                    ...prev,
+                    procedureName: found.name,
+                    cdtCode: found.cdtCode,
+                    phase: found.phase,
+                    cost: found.cost
+                  }));
+                }
+              }}
+            >
+              {CDT_PROCEDURE_PRESETS.map((pr) => (
+                <MenuItem key={pr.cdtCode} value={pr.cdtCode}>
+                  [{pr.cdtCode}] {pr.name} (₦{pr.cost.toLocaleString()})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <TextField
+            fullWidth
+            label="Procedure Description *"
+            size="small"
+            value={newPlanForm.procedureName}
+            onChange={(e) => setNewPlanForm({ ...newPlanForm, procedureName: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="CDT Code (e.g. D2391)"
+                size="small"
+                value={newPlanForm.cdtCode}
+                onChange={(e) => setNewPlanForm({ ...newPlanForm, cdtCode: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Tooth Number(s)"
+                placeholder="e.g. 16, 21-23"
+                size="small"
+                value={newPlanForm.toothNumbers}
+                onChange={(e) => setNewPlanForm({ ...newPlanForm, toothNumbers: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Treatment Phase</InputLabel>
+                <Select
+                  value={newPlanForm.phase}
+                  label="Treatment Phase"
+                  onChange={(e) => setNewPlanForm({ ...newPlanForm, phase: Number(e.target.value) })}
+                >
+                  <MenuItem value={1}>Phase 1: Urgent (Emergency Relief)</MenuItem>
+                  <MenuItem value={2}>Phase 2: Disease Control (Perio/Endo)</MenuItem>
+                  <MenuItem value={3}>Phase 3: Restorative & Prosthetic</MenuItem>
+                  <MenuItem value={4}>Phase 4: Maintenance & Prevention</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Estimated Fee (₦)"
+                type="number"
+                size="small"
+                value={newPlanForm.cost}
+                onChange={(e) => setNewPlanForm({ ...newPlanForm, cost: Number(e.target.value) })}
+              />
+            </Grid>
+          </Grid>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+              Patient Informed Consent & Approval
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={newPlanForm.isApprovedByPatient}
+                  onChange={(e) => setNewPlanForm({ ...newPlanForm, isApprovedByPatient: e.target.checked })}
+                  color="success"
+                />
+              }
+              label={newPlanForm.isApprovedByPatient ? 'Approved' : 'Pending Approval'}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f8fafc' }}>
+          <Button onClick={() => setTreatmentPlanModalOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateTreatmentPlan}
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={16} /> : <Save />}
+            sx={{ bgcolor: '#1e3a8a', fontWeight: 700, textTransform: 'none', px: 3, borderRadius: 2 }}
+          >
+            Save Procedure to PostgreSQL
           </Button>
         </DialogActions>
       </Dialog>

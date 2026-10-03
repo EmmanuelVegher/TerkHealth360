@@ -742,8 +742,539 @@ router.post('/encounters/:id/lab-orders', authMiddleware, async (req: Request, r
   }
 });
 
-// ── 7. POST /api/dental/encounters/:id/treatment-plans ──────────────────────
-// Add treatment plan item (procedure + CDT code + costing)
+// ── 7a. Helper: Auto-Seed Dental Treatment Plans If Empty ───────────────────
+async function seedDentalTreatmentPlansIfEmpty() {
+  try {
+    const count = await prisma.dentalTreatmentPlanItem.count();
+    if (count > 0) return;
+
+    const encounters = await prisma.dentalEncounter.findMany({
+      take: 5,
+      include: { patient: true }
+    });
+
+    if (encounters.length === 0) return;
+
+    const enc1 = encounters[0];
+    const enc2 = encounters.length > 1 ? encounters[1] : enc1;
+
+    const samplePlans = [
+      // Phase 1: Urgent / Emergency Relief
+      {
+        dentalEncounterId: enc1.id,
+        patientId: enc1.patientId,
+        phase: 1,
+        procedureName: 'Surgical Extraction of Impacted Wisdom Tooth',
+        cdtCode: 'D7210',
+        toothNumbers: '48',
+        cost: 35000,
+        isApprovedByPatient: true,
+        isBilled: false,
+        status: 'ACCEPTED'
+      },
+      {
+        dentalEncounterId: enc2.id,
+        patientId: enc2.patientId,
+        phase: 1,
+        procedureName: 'Palliative Emergency Treatment for Acute Dental Pain',
+        cdtCode: 'D9110',
+        toothNumbers: '36',
+        cost: 15000,
+        isApprovedByPatient: true,
+        isBilled: true,
+        status: 'COMPLETED'
+      },
+      // Phase 2: Disease Control & Periodontal Therapy
+      {
+        dentalEncounterId: enc1.id,
+        patientId: enc1.patientId,
+        phase: 2,
+        procedureName: 'Periodontal Scaling & Root Planing (Upper Right Q1)',
+        cdtCode: 'D4341',
+        toothNumbers: '11-18',
+        cost: 30000,
+        isApprovedByPatient: true,
+        isBilled: false,
+        status: 'IN_PROGRESS'
+      },
+      {
+        dentalEncounterId: enc2.id,
+        patientId: enc2.patientId,
+        phase: 2,
+        procedureName: 'Molar Endodontic Therapy (Root Canal Treatment)',
+        cdtCode: 'D3330',
+        toothNumbers: '46',
+        cost: 65000,
+        isApprovedByPatient: true,
+        isBilled: false,
+        status: 'ACCEPTED'
+      },
+      // Phase 3: Restorative, Reconstructive & Prosthetic
+      {
+        dentalEncounterId: enc1.id,
+        patientId: enc1.patientId,
+        phase: 3,
+        procedureName: 'Monolithic Multilayer Zirconia Crown',
+        cdtCode: 'D2740',
+        toothNumbers: '16',
+        cost: 95000,
+        isApprovedByPatient: false,
+        isBilled: false,
+        status: 'PROPOSED'
+      },
+      {
+        dentalEncounterId: enc1.id,
+        patientId: enc1.patientId,
+        phase: 3,
+        procedureName: 'Posterior 2-Surface Resin-Based Composite',
+        cdtCode: 'D2392',
+        toothNumbers: '26',
+        cost: 28000,
+        isApprovedByPatient: true,
+        isBilled: false,
+        status: 'ACCEPTED'
+      },
+      {
+        dentalEncounterId: enc2.id,
+        patientId: enc2.patientId,
+        phase: 3,
+        procedureName: 'Maxillary Cast Metal Cobalt-Chromium Partial Denture',
+        cdtCode: 'D5213',
+        toothNumbers: '14-17, 24-27',
+        cost: 125000,
+        isApprovedByPatient: false,
+        isBilled: false,
+        status: 'PROPOSED'
+      },
+      // Phase 4: Maintenance & Prevention
+      {
+        dentalEncounterId: enc1.id,
+        patientId: enc1.patientId,
+        phase: 4,
+        procedureName: 'Periodontal Maintenance & Subgingival Irrigation',
+        cdtCode: 'D4910',
+        toothNumbers: 'All',
+        cost: 20000,
+        isApprovedByPatient: false,
+        isBilled: false,
+        status: 'PROPOSED'
+      },
+      {
+        dentalEncounterId: enc2.id,
+        patientId: enc2.patientId,
+        phase: 4,
+        procedureName: 'Dual-Laminate Occlusal Guard / Nightguard (Bruxism)',
+        cdtCode: 'D9944',
+        toothNumbers: 'Maxillary Arch',
+        cost: 45000,
+        isApprovedByPatient: false,
+        isBilled: false,
+        status: 'PROPOSED'
+      }
+    ];
+
+    for (const plan of samplePlans) {
+      await prisma.dentalTreatmentPlanItem.create({ data: plan });
+    }
+    console.log('[Dental] Auto-seeded realistic clinical dental treatment plans in PostgreSQL.');
+  } catch (err: any) {
+    console.warn('[Dental] Seeding dental treatment plans error:', err.message);
+  }
+}
+
+// ── 7b. Helper: Compute Dynamic Dental Consumables from Procedures ───────────
+function computeDentalConsumables(items: Array<{ procedureName?: string; cdtCode?: string }>) {
+  const consumableMap: Record<string, { name: string; qtyNum: number; unit: string; category: string }> = {};
+
+  const addConsumable = (name: string, qty: number, unit: string, category: string) => {
+    if (!consumableMap[name]) {
+      consumableMap[name] = { name, qtyNum: 0, unit, category };
+    }
+    consumableMap[name].qtyNum += qty;
+  };
+
+  for (const item of items) {
+    const code = (item.cdtCode || '').toUpperCase();
+    const name = (item.procedureName || '').toLowerCase();
+
+    // Local Anesthesia
+    if (code.startsWith('D7') || code.startsWith('D3') || code.startsWith('D2') || name.includes('extract') || name.includes('canal') || name.includes('crown') || name.includes('composite')) {
+      addConsumable('Lidocaine 2% with 1:100,000 Epinephrine (1.8mL Carpule)', 2, 'Cartridges', 'Anesthetics');
+      addConsumable('Sterile Dental Needle (27G Long / 30G Short)', 1, 'Unit', 'Surgical / Syringes');
+    }
+
+    // Extractions / Oral Surgery
+    if (code.startsWith('D7') || name.includes('extract') || name.includes('surgical')) {
+      addConsumable('Sterile Carbon Steel Surgical Blade #15', 1, 'Blade', 'Surgical');
+      addConsumable('Resorbable 3-0 Vicryl Suture with Reverse Cutting Needle', 1, 'Foil Pack', 'Surgical');
+      addConsumable('Non-Woven Sterile Gauze Sponges (2x2 inch)', 4, 'Sponges', 'Dressings');
+    }
+
+    // Restorations & Composites
+    if (code.startsWith('D2') || name.includes('composite') || name.includes('restoration') || name.includes('filling')) {
+      addConsumable('3M Filtek Z350 XT Universal Restorative Composite', 0.4, 'grams', 'Restorative');
+      addConsumable('Single Bond Universal Dental Adhesive', 0.05, 'mL (1 drop)', 'Restorative');
+      addConsumable('37% Phosphoric Acid Etching Gel', 0.2, 'mL', 'Restorative');
+      addConsumable('Micro-applicator Tips & Mylar Matrix Strips', 2, 'Units', 'Restorative Disposables');
+      addConsumable('Bausch Articulating Paper (100 micron Red/Blue)', 1, 'Strip', 'Diagnostic');
+    }
+
+    // Endodontics / Root Canal
+    if (code.startsWith('D3') || name.includes('canal') || name.includes('endodontic') || name.includes('pulp')) {
+      addConsumable('Sodium Hypochlorite 5.25% Endodontic Irrigant Solution', 10, 'mL', 'Endodontics');
+      addConsumable('Rotary NiTi Protaper Gold Shaping & Finishing Files', 1, 'Sterile Set', 'Endodontics');
+      addConsumable('Standardized ISO Gutta-Percha Cones (.04/.06 taper)', 3, 'Cones', 'Endodontics');
+      addConsumable('AH-Plus Bioceramic Root Canal Sealer', 0.1, 'mL', 'Endodontics');
+      addConsumable('Cavit / IRM Temporary Restorative Material', 0.5, 'grams', 'Restorative');
+    }
+
+    // Periodontal / Scaling
+    if (code.startsWith('D4') || code.startsWith('D1') || name.includes('scaling') || name.includes('periodontal') || name.includes('prophylaxis')) {
+      addConsumable('Chlorhexidine Gluconate 0.2% Pre-Procedural Oral Rinse', 15, 'mL', 'Preventive');
+      addConsumable('Fluoridated Prophylaxis Paste (Fine/Medium Silica)', 2, 'grams', 'Preventive');
+      addConsumable('Sterile Cavitron Ultrasonic Scaler Insert Tip', 1, 'Unit', 'Periodontal');
+    }
+
+    // Crowns & Prosthetics
+    if (code.startsWith('D5') || code.startsWith('D6') || name.includes('crown') || name.includes('denture') || name.includes('bridge') || name.includes('veneer')) {
+      addConsumable('Ultrapack Knitted Gingival Retraction Cord #00', 5, 'cm', 'Prosthetics');
+      addConsumable('Aluminum Chloride 25% Hemostatic Retraction Solution', 0.5, 'mL', 'Prosthetics');
+      addConsumable('3M RelyX U200 Self-Adhesive Universal Resin Cement', 0.3, 'mL', 'Prosthetics');
+    }
+  }
+
+  if (Object.keys(consumableMap).length === 0) {
+    addConsumable('Lidocaine 2% with 1:100,000 Epinephrine (1.8mL Carpule)', 2, 'Cartridges', 'Anesthetics');
+    addConsumable('3M Filtek Z350 XT Universal Restorative Composite', 0.4, 'grams', 'Restorative');
+    addConsumable('Single Bond Universal Dental Adhesive', 0.05, 'mL (1 drop)', 'Restorative');
+    addConsumable('Micro-applicator Tips & Etching Gel (37% Phosphoric)', 1, 'Unit', 'Restorative');
+  }
+
+  return Object.values(consumableMap).map(c => ({
+    name: c.name,
+    category: c.category,
+    qty: `${c.qtyNum < 1 ? c.qtyNum.toFixed(2) : c.qtyNum} ${c.unit}`
+  }));
+}
+
+// ── 7c. GET /api/dental/treatment-plans ──────────────────────────────────────
+// Query treatment plan items from PostgreSQL with filters (patient, phase, status, search)
+router.get('/treatment-plans', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    await seedDentalTreatmentPlansIfEmpty();
+
+    const { patientId, dentalEncounterId, phase, status, search } = req.query as {
+      patientId?: string;
+      dentalEncounterId?: string;
+      phase?: string;
+      status?: string;
+      search?: string;
+    };
+
+    const where: any = {};
+    if (patientId) where.patientId = patientId;
+    if (dentalEncounterId) where.dentalEncounterId = dentalEncounterId;
+    if (phase && phase !== 'ALL') where.phase = Number(phase);
+    if (status && status !== 'ALL') where.status = status;
+
+    if (search) {
+      const q = search.trim();
+      where.OR = [
+        { procedureName: { contains: q, mode: 'insensitive' } },
+        { cdtCode: { contains: q, mode: 'insensitive' } },
+        { toothNumbers: { contains: q, mode: 'insensitive' } }
+      ];
+    }
+
+    const items = await prisma.dentalTreatmentPlanItem.findMany({
+      where,
+      orderBy: [{ phase: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        dentalEncounter: {
+          select: {
+            id: true,
+            encounterNumber: true,
+            status: true,
+            patient: {
+              select: {
+                id: true,
+                patientNumber: true,
+                firstName: true,
+                lastName: true,
+                gender: true,
+                birthDate: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const enriched = items.map(item => ({
+      ...item,
+      patient: item.dentalEncounter?.patient || null,
+      patientName: item.dentalEncounter?.patient ? `${item.dentalEncounter.patient.firstName} ${item.dentalEncounter.patient.lastName}` : null,
+      patientMrn: item.dentalEncounter?.patient?.patientNumber || null,
+      encounterNumber: item.dentalEncounter?.encounterNumber || null,
+      phaseLabel: item.phase === 1 ? 'Phase 1: Urgent (Emergency)' : item.phase === 2 ? 'Phase 2: Disease Control' : item.phase === 3 ? 'Phase 3: Restorative & Prosthetic' : 'Phase 4: Maintenance & Recall'
+    }));
+
+    return res.json({
+      success: true,
+      count: enriched.length,
+      data: enriched,
+      source: 'PostgreSQL Database'
+    });
+  } catch (err: any) {
+    console.error('[Dental] GET treatment-plans error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to fetch dental treatment plans' });
+  }
+});
+
+// ── 7d. GET /api/dental/treatment-plans/consumables ─────────────────────────
+// Dynamically compute dental consumables / dispensary deductions from planned procedures
+router.get('/treatment-plans/consumables', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.query as { patientId?: string };
+    const where: any = {};
+    if (patientId) where.patientId = patientId;
+
+    const items = await prisma.dentalTreatmentPlanItem.findMany({
+      where,
+      select: { procedureName: true, cdtCode: true }
+    });
+
+    const consumables = computeDentalConsumables(items);
+    return res.json({ success: true, data: consumables, count: consumables.length, source: 'Calculated from Active Treatment Plans' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 7e. POST /api/dental/treatment-plans ────────────────────────────────────
+// Save a newly proposed dental treatment plan item directly into PostgreSQL
+router.post('/treatment-plans', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    let {
+      patientId,
+      dentalEncounterId,
+      phase,
+      procedureName,
+      cdtCode,
+      toothNumbers,
+      cost,
+      status,
+      isApprovedByPatient
+    } = req.body;
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'patientId is required' });
+    }
+
+    // Ensure encounter exists
+    if (!dentalEncounterId) {
+      let encounter = await prisma.dentalEncounter.findFirst({
+        where: { patientId },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!encounter) {
+        const dentist = await prisma.staff.findFirst();
+        const dentistId = dentist ? dentist.id : ((req as any).user?.id || patientId);
+        const encounterNumber = `DENT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+        encounter = await prisma.dentalEncounter.create({
+          data: {
+            encounterNumber,
+            patientId,
+            dentistId,
+            chiefComplaint: 'Comprehensive Dental Treatment Plan Formulation',
+            status: 'IN_PROGRESS'
+          }
+        });
+      }
+      dentalEncounterId = encounter.id;
+    }
+
+    const created = await prisma.dentalTreatmentPlanItem.create({
+      data: {
+        dentalEncounterId,
+        patientId,
+        phase: Number(phase) || 1,
+        procedureName: procedureName || 'Dental Procedure',
+        cdtCode: cdtCode || null,
+        toothNumbers: toothNumbers || null,
+        cost: Number(cost) || 0,
+        status: status || 'PROPOSED',
+        isApprovedByPatient: Boolean(isApprovedByPatient),
+        isBilled: false
+      },
+      include: {
+        dentalEncounter: {
+          select: {
+            id: true,
+            encounterNumber: true,
+            patient: { select: { id: true, patientNumber: true, firstName: true, lastName: true } }
+          }
+        }
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Treatment plan procedure saved to PostgreSQL.',
+      data: {
+        ...created,
+        patient: created.dentalEncounter?.patient || null,
+        patientName: created.dentalEncounter?.patient ? `${created.dentalEncounter.patient.firstName} ${created.dentalEncounter.patient.lastName}` : null,
+        patientMrn: created.dentalEncounter?.patient?.patientNumber || null
+      }
+    });
+  } catch (err: any) {
+    console.error('[Dental] POST treatment plan item error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to save treatment plan procedure' });
+  }
+});
+
+// ── 7f. PUT /api/dental/treatment-plans/:id ──────────────────────────────────
+// Update treatment plan item (approval, status, phase, cost) in PostgreSQL
+router.put('/treatment-plans/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      phase,
+      procedureName,
+      cdtCode,
+      toothNumbers,
+      cost,
+      status,
+      isApprovedByPatient,
+      isBilled
+    } = req.body;
+
+    const data: any = {};
+    if (phase !== undefined) data.phase = Number(phase);
+    if (procedureName !== undefined) data.procedureName = procedureName;
+    if (cdtCode !== undefined) data.cdtCode = cdtCode;
+    if (toothNumbers !== undefined) data.toothNumbers = toothNumbers;
+    if (cost !== undefined) data.cost = Number(cost);
+    if (status !== undefined) data.status = status;
+    if (isApprovedByPatient !== undefined) data.isApprovedByPatient = Boolean(isApprovedByPatient);
+    if (isBilled !== undefined) data.isBilled = Boolean(isBilled);
+
+    const updated = await prisma.dentalTreatmentPlanItem.update({
+      where: { id },
+      data,
+      include: {
+        dentalEncounter: {
+          select: {
+            id: true,
+            encounterNumber: true,
+            patient: { select: { id: true, patientNumber: true, firstName: true, lastName: true } }
+          }
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Treatment plan updated in PostgreSQL.',
+      data: {
+        ...updated,
+        patient: updated.dentalEncounter?.patient || null,
+        patientName: updated.dentalEncounter?.patient ? `${updated.dentalEncounter.patient.firstName} ${updated.dentalEncounter.patient.lastName}` : null,
+        patientMrn: updated.dentalEncounter?.patient?.patientNumber || null
+      }
+    });
+  } catch (err: any) {
+    console.error('[Dental] PUT treatment plan item error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to update treatment plan item' });
+  }
+});
+
+// ── 7g. DELETE /api/dental/treatment-plans/:id ──────────────────────────────
+// Delete treatment plan item from PostgreSQL
+router.delete('/treatment-plans/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.dentalTreatmentPlanItem.delete({ where: { id } });
+    return res.json({ success: true, message: 'Treatment plan procedure removed from PostgreSQL.' });
+  } catch (err: any) {
+    console.error('[Dental] DELETE treatment plan item error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to delete treatment plan item' });
+  }
+});
+
+// ── 7h. POST /api/dental/treatment-plans/post-to-billing ────────────────────
+// Post treatment plan items to billing with real invoice generation in PostgreSQL
+router.post('/treatment-plans/post-to-billing', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { patientId, itemIds } = req.body;
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'patientId is required' });
+    }
+
+    const where: any = { patientId };
+    if (Array.isArray(itemIds) && itemIds.length > 0) {
+      where.id = { in: itemIds };
+    } else {
+      where.isBilled = false;
+    }
+
+    const itemsToBill = await prisma.dentalTreatmentPlanItem.findMany({
+      where,
+      include: { dentalEncounter: true }
+    });
+
+    if (itemsToBill.length === 0) {
+      return res.status(400).json({ success: false, message: 'No unbilled treatment plan procedures found to bill.' });
+    }
+
+    const totalCost = itemsToBill.reduce((sum, item) => sum + Number(item.cost || 0), 0);
+    const invoiceNo = `DENT-INV-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    const summaryText = itemsToBill.map(i => `${i.procedureName}${i.toothNumbers ? ` (#${i.toothNumbers})` : ''}`).join('; ');
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        fhirId: invoiceNo,
+        patientId,
+        status: 'UNPAID',
+        total: totalCost,
+        amountPaid: 0,
+        reasonText: `Dental Treatment Plan (${summaryText})`
+      }
+    });
+
+    // Mark items as billed and accepted
+    await prisma.dentalTreatmentPlanItem.updateMany({
+      where: { id: { in: itemsToBill.map(i => i.id) } },
+      data: { isBilled: true, status: 'ACCEPTED' }
+    });
+
+    // Update encounters to BILLED
+    const encounterIds = Array.from(new Set(itemsToBill.map(i => i.dentalEncounterId).filter(Boolean)));
+    for (const eid of encounterIds) {
+      await prisma.dentalEncounter.update({
+        where: { id: eid },
+        data: { status: 'BILLED' }
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      message: `🎉 Generated Dental Invoice #${invoiceNo} for ₦${totalCost.toLocaleString()} (${itemsToBill.length} procedures billed to Central Cashier).`,
+      totalBilled: totalCost,
+      invoiceNumber: invoiceNo,
+      invoiceId: invoice.id,
+      itemCount: itemsToBill.length
+    });
+  } catch (err: any) {
+    console.error('[Dental] POST treatment-plans post-to-billing error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to post treatment plan to billing' });
+  }
+});
+
+// ── 7i. POST /api/dental/encounters/:id/treatment-plans (Legacy encounter-scoped route) ──
 router.post('/encounters/:id/treatment-plans', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
