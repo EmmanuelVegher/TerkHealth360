@@ -74,6 +74,7 @@ import ophthalmologyRoutes from './routes/ophthalmology.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
+import { warmUpOfflineSTT } from './utils/offlineSpeechToText.js';
 
 dotenv.config();
 
@@ -336,6 +337,7 @@ async function bootstrap() {
     });
 
     analyzerListener.start();
+    warmUpOfflineSTT();
   } catch (err) {
     console.error('[Bootstrap] Non-fatal initialization warning:', err);
   }

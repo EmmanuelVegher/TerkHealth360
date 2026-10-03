@@ -16,6 +16,7 @@ import {
   getFullChatHistory,
   clearConversation,
 } from '../utils/openmedChatMemory.js';
+import { transcribeOffline, getOfflineSTTStatus } from '../utils/offlineSpeechToText.js';
 
 const router = Router();
 
@@ -3673,6 +3674,54 @@ router.post('/refine-dental-radiology', async (req: any, res: Response, next) =>
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * GET /openmed/stt-status
+ * Returns offline Whisper speech-to-text status
+ */
+router.get('/stt-status', (_req: Request, res: Response) => {
+  res.json({ success: true, data: getOfflineSTTStatus() });
+});
+
+/**
+ * POST /openmed/transcribe-voice
+ * Transcribes voice audio offline using local Whisper ONNX engine.
+ * Input:
+ *   - pcmBase64: string (base64 of Float32Array 16 kHz mono PCM)
+ *   - pcmArray: number[] (Float32Array samples)
+ */
+router.post('/transcribe-voice', async (req: Request, res: Response, next) => {
+  try {
+    const { pcmBase64, pcmArray } = req.body;
+    let float32Samples: Float32Array;
+
+    if (pcmBase64 && typeof pcmBase64 === 'string') {
+      const buf = Buffer.from(pcmBase64, 'base64');
+      float32Samples = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+    } else if (Array.isArray(pcmArray)) {
+      float32Samples = new Float32Array(pcmArray);
+    } else {
+      return res.status(400).json({ success: false, message: 'Audio samples (pcmBase64 or pcmArray) required' });
+    }
+
+    if (float32Samples.length < 1600) { // less than 0.1s
+      return res.json({ success: true, data: { text: '', model: 'none', ms: 0 } });
+    }
+
+    const result = await transcribeOffline(float32Samples);
+    res.json({
+      success: true,
+      data: {
+        text: result.text,
+        model: result.model,
+        ms: result.ms,
+      }
+    });
+  } catch (err: any) {
+    console.error('[OpenMed STT] Transcription error:', err);
+    res.status(500).json({ success: false, message: err?.message || 'Offline transcription failed' });
   }
 });
 

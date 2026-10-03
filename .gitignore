@@ -36,6 +36,9 @@ dist_electron/
 *.rpm
 *.zip
 *.tar.gz
+*.onnx
+models/
+*/models/
 
 # Environment variables
 .env

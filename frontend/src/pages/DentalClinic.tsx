@@ -274,17 +274,29 @@ export default function DentalClinic() {
   const voiceSilenceTimerRef = useRef<any>(null);
   // Track whether we WANT to be listening (so onend can restart the session automatically)
   const voiceActiveRef = useRef<{ active: boolean; target: 'findings' | 'impression' | null }>({ active: false, target: null });
+  // Offline audio recording refs (bypasses browser cloud STT when offline)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Cleanup voice recognition on unmount
+  // Cleanup voice recognition and audio capture on unmount
   useEffect(() => {
     return () => {
-      voiceActiveRef.current = { active: false, target: null }; // prevent auto-restart on unmount
+      voiceActiveRef.current = { active: false, target: null };
       if (voiceSilenceTimerRef.current) {
         clearTimeout(voiceSilenceTimerRef.current);
       }
       if (voiceRecognitionRef.current) {
         try { voiceRecognitionRef.current.stop(); } catch {}
         voiceRecognitionRef.current = null;
+      }
+      if (mediaRecorderRef.current) {
+        try { mediaRecorderRef.current.stop(); } catch {}
+        mediaRecorderRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        try { mediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+        mediaStreamRef.current = null;
       }
     };
   }, []);
@@ -469,9 +481,36 @@ export default function DentalClinic() {
     return formatted;
   };
 
+  // ── Helper: Convert audio blob to 16 kHz mono Float32 PCM base64 ───────────
+  const audioBlobTo16kPcmBase64 = async (blob: Blob): Promise<string> => {
+    const arrayBuffer = await blob.arrayBuffer();
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    try {
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const sourceData = audioBuffer.getChannelData(0);
+      const targetSampleRate = 16000;
+      const ratio = audioBuffer.sampleRate / targetSampleRate;
+      const newLength = Math.round(sourceData.length / ratio);
+      const pcm16k = new Float32Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        const idx = Math.min(Math.floor(i * ratio), sourceData.length - 1);
+        pcm16k[i] = sourceData[idx];
+      }
+      const bytes = new Uint8Array(pcm16k.buffer);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as any);
+      }
+      return btoa(binary);
+    } finally {
+      try { await audioCtx.close(); } catch {}
+    }
+  };
+
   // ── Stop Microphone & Immediately Trigger OpenMed Clinical Rewriter ────────
-  const handleStopAndRewrite = (target: 'findings' | 'impression', textOverride?: string) => {
-    // Signal to onend that we are intentionally stopping (do NOT auto-restart)
+  const handleStopAndRewrite = async (target: 'findings' | 'impression', textOverride?: string) => {
     voiceActiveRef.current = { active: false, target: null };
 
     if (voiceSilenceTimerRef.current) {
@@ -484,13 +523,61 @@ export default function DentalClinic() {
       voiceRecognitionRef.current = null;
     }
 
+    // Stop MediaRecorder and grab full recorded audio
+    let audioBlob: Blob | null = null;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      audioBlob = await new Promise<Blob>((resolve) => {
+        if (!mediaRecorderRef.current) return resolve(new Blob(audioChunksRef.current));
+        mediaRecorderRef.current.onstop = () => {
+          resolve(new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' }));
+        };
+        try { mediaRecorderRef.current.stop(); } catch { resolve(new Blob(audioChunksRef.current)); }
+      });
+    } else if (audioChunksRef.current.length > 0) {
+      audioBlob = new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' });
+    }
+
+    if (mediaStreamRef.current) {
+      try { mediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+      mediaStreamRef.current = null;
+    }
+
     setIsListeningField(null);
 
-    const fullSpoken = (
+    let fullSpoken = (
       textOverride ||
-      (voiceCapturedTextRef.current + ' ' + interimVoiceRef.current).trim() ||
-      (target === 'findings' ? radiologyFindingsEdit : radiologyReportEdit).trim()
+      (voiceCapturedTextRef.current + ' ' + interimVoiceRef.current).trim()
     );
+
+    // If Web Speech didn't capture text (e.g. offline / network disconnected), transcribe locally via Whisper!
+    if ((!fullSpoken || fullSpoken.length < 3) && audioBlob && audioBlob.size > 800) {
+      setIsRefiningAIField(target);
+      enqueueSnackbar('🧠 OpenMed AI: Transcribing speech locally with offline Whisper...', { variant: 'info' });
+      try {
+        const pcmBase64 = await audioBlobTo16kPcmBase64(audioBlob);
+        const sttRes = await api.post('/openmed/transcribe-voice', { pcmBase64 });
+        if (sttRes.data?.success && sttRes.data?.data?.text) {
+          const rawStt = sttRes.data.data.text.trim();
+          fullSpoken = rawStt.replace(/^(\.|\,|\s)+/, '');
+          if (fullSpoken) {
+            setLiveVoiceTranscript(fullSpoken);
+            if (target === 'findings') {
+              setRadiologyFindingsEdit(fullSpoken);
+            } else {
+              setRadiologyReportEdit(fullSpoken);
+            }
+          }
+        }
+      } catch (sttErr: any) {
+        console.warn('Offline Whisper transcription fallback error:', sttErr);
+      } finally {
+        setIsRefiningAIField(null);
+      }
+    }
+
+    if (!fullSpoken) {
+      fullSpoken = (target === 'findings' ? radiologyFindingsEdit : radiologyReportEdit).trim();
+    }
 
     if (fullSpoken.length >= 2) {
       handleRefineWithOpenMed(target, fullSpoken);
@@ -531,15 +618,13 @@ export default function DentalClinic() {
         setRadiologyReportEdit(liveText);
       }
 
-      // ── Smart Silence VAD: cancel & restart timer on every new speech event ──
-      // Timer fires 5s after the LAST speech event (so talking continuously never stops it)
+      // Smart Silence VAD: fires 5s after the last speech event
       if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
       if (liveText.length >= 4) {
         voiceSilenceTimerRef.current = setTimeout(() => {
           if (!voiceActiveRef.current.active) return;
           const spokenNow = (voiceCapturedTextRef.current + ' ' + interimVoiceRef.current).trim() || liveText;
           if (spokenNow.length >= 4) {
-            // User has been silent for 5s — auto-stop and rewrite
             handleStopAndRewrite(target, spokenNow);
           }
         }, 5000);
@@ -547,33 +632,34 @@ export default function DentalClinic() {
     };
 
     recognition.onerror = (event: any) => {
-      console.warn('Dental voice dictation error:', event.error);
-      // 'no-speech' is a normal browser VAD event when mic is open but no speech detected.
-      // We RESTART recognition instead of stopping to keep mic active.
+      console.warn('Dental voice dictation event:', event.error);
       if (event.error === 'no-speech' || event.error === 'audio-capture') {
-        return; // onend will fire next and restart
+        return; // normal browser VAD event, keep mic active
       }
-      if (event.error === 'aborted') return; // We deliberately aborted, ignore
-      // Fatal errors only
+      if (event.error === 'network') {
+        // Browser Speech API failed because network is offline.
+        // Our local MediaRecorder is recording audio for offline Whisper!
+        console.info('Speech recognition offline. Audio is recorded for local Whisper transcription.');
+        enqueueSnackbar('🎙️ OpenMed Offline Dictation: Recording speech for local offline transcription...', { variant: 'info', autoHideDuration: 4000 });
+        return;
+      }
+      if (event.error === 'aborted') return;
+      // Other error: don't abort immediately, let MediaRecorder finish
       voiceActiveRef.current = { active: false, target: null };
       if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
       setIsListeningField(null);
-      enqueueSnackbar(`🎙️ Dictation error: ${event.error}. Please try again.`, { variant: 'error' });
+      enqueueSnackbar(`🎙️ Dictation notice: ${event.error}. Click button when finished speaking.`, { variant: 'info' });
     };
 
     recognition.onend = () => {
-      // If voiceActiveRef is still true, the browser VAD cut us off — RESTART automatically
       if (voiceActiveRef.current.active && voiceActiveRef.current.target === target) {
         try {
           const newRecognition = startRecognitionInstance(target, SpeechRecognition);
           voiceRecognitionRef.current = newRecognition;
           newRecognition.start();
-          return; // Seamless restart — do NOT finalize yet
-        } catch {
-          // If restart fails, fall through to finalize
-        }
+          return;
+        } catch {}
       }
-      // voiceActiveRef is false — user explicitly stopped, finalize the rewrite
       if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
       const spoken = (voiceCapturedTextRef.current + ' ' + interimVoiceRef.current).trim();
       setIsListeningField(null);
@@ -585,13 +671,7 @@ export default function DentalClinic() {
     return recognition;
   };
 
-  const handleStartVoiceDictation = (target: 'findings' | 'impression') => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      enqueueSnackbar('🎙️ Voice dictation requires Google Chrome or Microsoft Edge.', { variant: 'warning' });
-      return;
-    }
-
+  const handleStartVoiceDictation = async (target: 'findings' | 'impression') => {
     // If currently listening to this field, one-click manual stop & rewrite
     if (isListeningField === target) {
       handleStopAndRewrite(target);
@@ -605,6 +685,14 @@ export default function DentalClinic() {
       try { voiceRecognitionRef.current.stop(); } catch {}
       voiceRecognitionRef.current = null;
     }
+    if (mediaRecorderRef.current) {
+      try { mediaRecorderRef.current.stop(); } catch {}
+      mediaRecorderRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      try { mediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+      mediaStreamRef.current = null;
+    }
 
     voiceCapturedTextRef.current = '';
     interimVoiceRef.current = '';
@@ -612,17 +700,44 @@ export default function DentalClinic() {
     setIsListeningField(target);
     voiceActiveRef.current = { active: true, target };
 
+    // 1. Start pure offline MediaRecorder audio capture
     try {
-      const recognition = startRecognitionInstance(target, SpeechRecognition);
-      voiceRecognitionRef.current = recognition;
-      recognition.start();
-      enqueueSnackbar(`🎙️ OpenMed AI is listening... Speak freely. Click the button again when done.`, { variant: 'info', autoHideDuration: 5000 });
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      let mimeType = '';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+        else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+        else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) mimeType = 'audio/ogg;codecs=opus';
+      }
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start(250);
+
+      enqueueSnackbar(`🎙️ OpenMed AI is listening... Speak your findings. Click the button again when done.`, { variant: 'info', autoHideDuration: 5000 });
+    } catch (micErr) {
+      console.error('Failed to access microphone:', micErr);
       voiceActiveRef.current = { active: false, target: null };
-      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
       setIsListeningField(null);
-      enqueueSnackbar('🎙️ Could not start microphone. Please allow mic permission in your browser.', { variant: 'error' });
+      enqueueSnackbar('🎙️ Could not start microphone. Please allow microphone permission in your browser.', { variant: 'error' });
+      return;
+    }
+
+    // 2. Also start Web Speech API for real-time live preview if available
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = startRecognitionInstance(target, SpeechRecognition);
+        voiceRecognitionRef.current = recognition;
+        recognition.start();
+      } catch (speechErr) {
+        console.warn('Web Speech API not available or blocked, falling back to local offline Whisper:', speechErr);
+      }
     }
   };
 

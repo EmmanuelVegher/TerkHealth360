@@ -1,6 +1,7 @@
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import { ReadableStream as WebReadableStream, WritableStream as WebWritableStream } from 'stream/web';
 
 /**
  * Universal Native Fetch Implementation for Node.js < 18 (e.g. Node 16.x)
@@ -117,12 +118,77 @@ export function nativeFetch(input: string | URL, init?: any): Promise<any> {
   });
 }
 
+// Universal Headers Polyfill for Node < 18
+export class PolyfillHeaders {
+  private map: Map<string, string> = new Map();
+  constructor(init?: any) {
+    if (!init) return;
+    if (init instanceof PolyfillHeaders || typeof init.forEach === 'function') {
+      init.forEach((v: string, k: string) => this.set(k, v));
+    } else if (Array.isArray(init)) {
+      for (const [k, v] of init) this.set(k, v);
+    } else if (typeof init === 'object') {
+      for (const [k, v] of Object.entries(init)) this.set(k, String(v));
+    }
+  }
+  append(name: string, value: string) {
+    const key = name.toLowerCase();
+    const existing = this.map.get(key);
+    this.map.set(key, existing ? `${existing}, ${value}` : String(value));
+  }
+  delete(name: string) {
+    this.map.delete(name.toLowerCase());
+  }
+  get(name: string): string | null {
+    return this.map.get(name.toLowerCase()) ?? null;
+  }
+  has(name: string): boolean {
+    return this.map.has(name.toLowerCase());
+  }
+  set(name: string, value: string) {
+    this.map.set(name.toLowerCase(), String(value));
+  }
+  forEach(callback: (value: string, key: string, parent: any) => void) {
+    this.map.forEach((v, k) => callback(v, k, this));
+  }
+  entries() {
+    return this.map.entries();
+  }
+  keys() {
+    return this.map.keys();
+  }
+  values() {
+    return this.map.values();
+  }
+  [Symbol.iterator]() {
+    return this.map.entries();
+  }
+}
+
 // Polyfill globalThis.fetch and global.fetch if not present
 if (typeof (globalThis as any).fetch !== 'function') {
   (globalThis as any).fetch = nativeFetch;
 }
 if (typeof (global as any).fetch !== 'function') {
   (global as any).fetch = nativeFetch;
+}
+
+// Polyfill Headers if not present
+if (typeof (globalThis as any).Headers !== 'function') {
+  (globalThis as any).Headers = PolyfillHeaders;
+}
+if (typeof (global as any).Headers !== 'function') {
+  (global as any).Headers = PolyfillHeaders;
+}
+
+// Polyfill ReadableStream and WritableStream if not present
+if (typeof (globalThis as any).ReadableStream !== 'function' && typeof WebReadableStream === 'function') {
+  (globalThis as any).ReadableStream = WebReadableStream;
+  (global as any).ReadableStream = WebReadableStream;
+}
+if (typeof (globalThis as any).WritableStream !== 'function' && typeof WebWritableStream === 'function') {
+  (globalThis as any).WritableStream = WebWritableStream;
+  (global as any).WritableStream = WebWritableStream;
 }
 
 // Polyfill AbortSignal.timeout for Node < 17.3
