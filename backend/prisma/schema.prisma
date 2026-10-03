@@ -43,6 +43,8 @@ model User {
 
   @@index([role])
   @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("users")
 }
 
@@ -54,6 +56,8 @@ model RefreshToken {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("refresh_tokens")
 }
 
@@ -179,6 +183,9 @@ model Patient {
   @@index([createdAt])
   @@index([status])
   @@index([status, isActive])
+  @@index([createdById])
+  @@index([isActive])
+  @@index([updatedAt])
   @@map("patients")
 }
 
@@ -192,6 +199,7 @@ model PatientIdentifier {
   patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@unique([patientId, system, value])
+  @@index([patientId])
   @@map("patient_identifiers")
 }
 
@@ -212,6 +220,11 @@ model MonnifyVirtualAccount {
   transactions         MonnifyWalletTransaction[]
 
   @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("monnify_virtual_accounts")
 }
 
@@ -237,6 +250,10 @@ model MonnifyWalletTransaction {
 
   @@index([patientId])
   @@index([virtualAccountId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("monnify_wallet_transactions")
 }
 
@@ -249,6 +266,7 @@ model PatientTelecom {
   rank      Int?
   patient   Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
   @@map("patient_telecoms")
 }
 
@@ -265,6 +283,7 @@ model PatientAddress {
   type       AddressType?
   patient    Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
   @@map("patient_addresses")
 }
 
@@ -349,6 +368,9 @@ model Staff {
   triagesDone                 TriageRecord[]                 @relation("TriageCreator")
   wardNurseRosters            WardNurseRoster[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("staff")
 }
 
@@ -380,6 +402,10 @@ model Appointment {
   @@index([staffId])
   @@index([status])
   @@index([start])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("appointments")
 }
 
@@ -407,6 +433,16 @@ model Encounter {
   staff             Staff?          @relation(fields: [staffId], references: [id])
   visit             Visit?          @relation(fields: [visitId], references: [id])
 
+  @@index([approvedById])
+  @@index([patientId])
+  @@index([staffId])
+  @@index([visitId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
   @@map("encounters")
 }
 
@@ -430,6 +466,16 @@ model Observation {
   patient           Patient           @relation(fields: [patientId], references: [id])
   staff             Staff?            @relation(fields: [staffId], references: [id])
 
+  @@index([patientId])
+  @@index([staffId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([code])
+  @@index([category])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([encounterId, status])
   @@map("observations")
 }
 
@@ -452,6 +498,13 @@ model Condition {
   patient            Patient            @relation(fields: [patientId], references: [id])
   staff              Staff?             @relation(fields: [staffId], references: [id])
 
+  @@index([patientId])
+  @@index([staffId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([code])
+  @@index([category])
+  @@index([patientId, createdAt])
   @@map("conditions")
 }
 
@@ -473,6 +526,14 @@ model MedicationRequest {
   patient           Patient                 @relation(fields: [patientId], references: [id])
   staff             Staff?                  @relation(fields: [staffId], references: [id])
 
+  @@index([patientId])
+  @@index([staffId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([encounterId, status])
   @@map("medication_requests")
 }
 
@@ -488,6 +549,8 @@ model AuditLog {
   createdAt    DateTime @default(now())
   user         User?    @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
@@ -503,6 +566,12 @@ model Invoice {
   updatedAt  DateTime @updatedAt
   patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("invoices")
 }
 
@@ -516,6 +585,9 @@ model Role {
   permissions RolePermission[]
   users       UserRoleMapping[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("roles")
 }
 
@@ -537,6 +609,8 @@ model RolePermission {
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@index([roleId])
   @@map("role_permissions")
 }
 
@@ -547,6 +621,8 @@ model UserRoleMapping {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
+  @@index([roleId])
+  @@index([userId])
   @@map("user_role_mappings")
 }
 
@@ -561,6 +637,9 @@ model Department {
   histories   DepartmentHistory[]
   members     UserDepartment[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("departments")
 }
 
@@ -572,6 +651,8 @@ model UserDepartment {
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, departmentId])
+  @@index([departmentId])
+  @@index([userId])
   @@map("user_departments")
 }
 
@@ -585,6 +666,8 @@ model DepartmentHistory {
   department      Department @relation(fields: [newDepartmentId], references: [id], onDelete: Cascade)
   user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([newDepartmentId])
+  @@index([userId])
   @@map("department_histories")
 }
 
@@ -595,6 +678,8 @@ model PasswordHistory {
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("password_histories")
 }
 
@@ -607,6 +692,8 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("password_reset_tokens")
 }
 
@@ -618,6 +705,7 @@ model BreakGlassLog {
   accessedAt      DateTime @default(now())
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("break_glass_logs")
 }
 
@@ -629,6 +717,7 @@ model PatientCardReprint {
   reason      String?
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
   @@map("patient_card_reprints")
 }
 
@@ -640,6 +729,8 @@ model FamilyAccount {
   updatedAt     DateTime  @updatedAt
   members       Patient[]
 
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("family_accounts")
 }
 
@@ -663,6 +754,11 @@ model Visit {
 
   @@index([patientId])
   @@index([status])
+  @@index([consultationServiceId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("visits")
 }
 
@@ -677,6 +773,10 @@ model WorkflowTemplate {
   updatedAt   DateTime       @updatedAt
   steps       WorkflowStep[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([isDefault])
   @@map("workflow_templates")
 }
 
@@ -696,6 +796,7 @@ model WorkflowStep {
   template         WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, stepOrder])
+  @@index([templateId])
   @@map("workflow_steps")
 }
 
@@ -709,6 +810,7 @@ model VisitWorkflowState {
   updatedAt        DateTime @updatedAt
   visit            Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
 
+  @@index([updatedAt])
   @@map("visit_workflow_states")
 }
 
@@ -726,6 +828,10 @@ model ConsultationService {
   updatedAt      DateTime @updatedAt
   visits         Visit[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([category])
   @@map("consultation_services")
 }
 
@@ -744,6 +850,8 @@ model InsuranceBenefitCatalogItem {
   plan            InsuranceBenefitPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@unique([planId, serviceCode])
+  @@index([planId])
+  @@index([createdAt])
   @@map("insurance_benefit_catalog")
 }
 
@@ -762,6 +870,7 @@ model Ward {
   transfersFrom WardTransfer[]    @relation("FromWard")
   transfersTo   WardTransfer[]    @relation("ToWard")
 
+  @@index([isActive])
   @@map("wards")
 }
 
@@ -775,6 +884,8 @@ model Bed {
   ward       Ward        @relation(fields: [wardId], references: [id], onDelete: Cascade)
 
   @@unique([wardId, number])
+  @@index([wardId])
+  @@index([status])
   @@map("beds")
 }
 
@@ -793,6 +904,10 @@ model Admission {
   patient             Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
   transfers           WardTransfer[]
 
+  @@index([bedId])
+  @@index([patientId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("admissions")
 }
 
@@ -814,6 +929,9 @@ model WardTransfer {
   fromWard            Ward      @relation("FromWard", fields: [fromWardId], references: [id])
   toWard              Ward      @relation("ToWard", fields: [toWardId], references: [id])
 
+  @@index([admissionId])
+  @@index([fromWardId])
+  @@index([toWardId])
   @@map("ward_transfers")
 }
 
@@ -829,6 +947,9 @@ model WardNurseRoster {
   staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   ward      Ward      @relation(fields: [wardId], references: [id], onDelete: Cascade)
 
+  @@index([staffId])
+  @@index([wardId])
+  @@index([createdAt])
   @@map("ward_nurse_roster")
 }
 
@@ -844,6 +965,11 @@ model Referral {
   createdAt         DateTime @default(now())
   patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("referrals")
 }
 
@@ -856,6 +982,7 @@ model InsuranceProvider {
   plans          InsuranceBenefitPlan[]
   policies       PatientInsurancePolicy[]
 
+  @@index([isActive])
   @@map("insurance_providers")
 }
 
@@ -872,6 +999,7 @@ model InsuranceBenefitPlan {
   provider         InsuranceProvider             @relation(fields: [providerId], references: [id], onDelete: Cascade)
   policies         PatientInsurancePolicy[]
 
+  @@index([providerId])
   @@map("insurance_benefit_plans")
 }
 
@@ -892,6 +1020,10 @@ model PatientInsurancePolicy {
   provider         InsuranceProvider    @relation(fields: [providerId], references: [id])
 
   @@unique([providerId, membershipNumber])
+  @@index([patientId])
+  @@index([planId])
+  @@index([providerId])
+  @@index([isActive])
   @@map("patient_insurance_policies")
 }
 
@@ -906,6 +1038,12 @@ model Claim {
   createdAt      DateTime               @default(now())
   policy         PatientInsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
+  @@index([policyId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([encounterId, status])
   @@map("claims")
 }
 
@@ -944,6 +1082,14 @@ model Allergy {
   updatedAt DateTime  @updatedAt
   patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([category])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("allergies")
 }
 
@@ -957,6 +1103,11 @@ model ClinicalAlert {
   updatedAt DateTime @updatedAt
   patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, createdAt])
   @@map("clinical_alerts")
 }
 
@@ -979,6 +1130,11 @@ model ConsultationNote {
   patient     Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
   visit       Visit?                      @relation(fields: [visitId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([visitId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, createdAt])
   @@map("consultation_notes")
 }
 
@@ -994,6 +1150,7 @@ model ConsultationNoteAmendment {
   justification String
   note          ConsultationNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
+  @@index([noteId])
   @@map("consultation_note_amendments")
 }
 
@@ -1007,6 +1164,10 @@ model ClinicalAttachment {
   createdAt DateTime @default(now())
   patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([category])
+  @@index([patientId, createdAt])
   @@map("clinical_attachments")
 }
 
@@ -1018,28 +1179,39 @@ model ProviderCalendarBlock {
   reason    String
   staff     Staff?   @relation(fields: [staffId], references: [id])
 
+  @@index([staffId])
   @@map("provider_calendar_blocks")
 }
 
 model PatientQueue {
-  id               String    @id @default(uuid())
-  patientId        String
-  visitId          String?
-  tokenNumber      String
-  department       String
-  status           String    @default("WAITING")
-  priority         Int       @default(0)
-  priorityReason   String?
-  calledAt         DateTime?
-  serviceStartedAt DateTime?
-  completedAt      DateTime?
-  assignedDoctorId String?
+  id                 String    @id @default(uuid())
+  patientId          String
+  visitId            String?
+  tokenNumber        String
+  department         String
+  status             String    @default("WAITING")
+  priority           Int       @default(0)
+  priorityReason     String?
+  calledAt           DateTime?
+  serviceStartedAt   DateTime?
+  completedAt        DateTime?
+  assignedDoctorId   String?
   assignedDoctorName String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  visit            Visit?    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  patient            Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visit              Visit?    @relation(fields: [visitId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([visitId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([priority])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
+  @@index([department, status])
   @@map("patient_queues")
 }
 
@@ -1052,6 +1224,10 @@ model PatientFeedback {
   createdAt    DateTime @default(now())
   patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([category])
+  @@index([patientId, createdAt])
   @@map("patient_feedbacks")
 }
 
@@ -1066,6 +1242,8 @@ model PortalAccount {
   createdAt       DateTime  @default(now())
   patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("portal_accounts")
 }
 
@@ -1080,6 +1258,10 @@ model NurseAssignment {
   patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   nurse      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([staffId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("nurse_assignments")
 }
 
@@ -1092,6 +1274,8 @@ model NurseShift {
   changedToStaffId String?
   nurse            Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
+  @@index([staffId])
+  @@index([status])
   @@map("nurse_shifts")
 }
 
@@ -1113,6 +1297,9 @@ model ShiftHandover {
   outgoingNurse         Staff     @relation("OutgoingNurse", fields: [outgoingNurseId], references: [id])
   patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([incomingNurseId])
+  @@index([outgoingNurseId])
+  @@index([patientId])
   @@map("shift_handovers")
 }
 
@@ -1131,6 +1318,12 @@ model NursingTask {
   completedNurse   Staff?    @relation("CompletedNurse", fields: [completedNurseId], references: [id])
   patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([assignedNurseId])
+  @@index([completedNurseId])
+  @@index([patientId])
+  @@index([status])
+  @@index([priority])
+  @@index([patientId, status])
   @@map("nursing_tasks")
 }
 
@@ -1164,6 +1357,11 @@ model TriageRecord {
   creator              Staff    @relation("TriageCreator", fields: [createdById], references: [id])
   patient              Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([createdById])
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([priority])
+  @@index([patientId, createdAt])
   @@map("triage_records")
 }
 
@@ -1181,6 +1379,13 @@ model NursingCarePlan {
   patient          Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
   interventions    NursingIntervention[]
 
+  @@index([createdById])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("nursing_care_plans")
 }
 
@@ -1197,6 +1402,11 @@ model NursingIntervention {
   patient       Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
   performer     Staff           @relation("InterventionPerformer", fields: [performedById], references: [id])
 
+  @@index([carePlanId])
+  @@index([patientId])
+  @@index([performedById])
+  @@index([status])
+  @@index([patientId, status])
   @@map("nursing_interventions")
 }
 
@@ -1216,6 +1426,11 @@ model EMARRecord {
   administerer     Staff?    @relation("EMARAdministeredBy", fields: [administeredById], references: [id])
   patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([administeredById])
+  @@index([patientId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@index([patientId, status])
   @@map("emar_records")
 }
 
@@ -1235,6 +1450,11 @@ model PregnancyRecord {
   labourRecords   LabourRecord[]
   patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("pregnancy_records")
 }
 
@@ -1258,6 +1478,7 @@ model AntenatalVisit {
   nextVisitDate     DateTime?
   pregnancy         PregnancyRecord @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
 
+  @@index([pregnancyId])
   @@map("antenatal_visits")
 }
 
@@ -1276,6 +1497,8 @@ model LabourRecord {
   monitoringEntries     LabourMonitoringEntry[]
   pregnancy             PregnancyRecord         @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
 
+  @@index([pregnancyId])
+  @@index([status])
   @@map("labour_records")
 }
 
@@ -1293,6 +1516,8 @@ model DeliveryRecord {
   pregnancy         PregnancyRecord  @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
   neonatalRecords   NeonatalRecord[]
 
+  @@index([birthAttendantId])
+  @@index([pregnancyId])
   @@map("delivery_records")
 }
 
@@ -1314,6 +1539,9 @@ model NeonatalRecord {
   delivery            DeliveryRecord      @relation(fields: [deliveryRecordId], references: [id], onDelete: Cascade)
   mother              Patient             @relation("MotherBaby", fields: [motherId], references: [id], onDelete: Cascade)
 
+  @@index([deliveryRecordId])
+  @@index([motherId])
+  @@index([createdAt])
   @@map("neonatal_records")
 }
 
@@ -1328,6 +1556,12 @@ model ClinicalDiscussion {
   creator     Staff                       @relation("DiscussionCreator", fields: [createdById], references: [id])
   patient     Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([createdById])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("clinical_discussions")
 }
 
@@ -1341,6 +1575,9 @@ model ClinicalDiscussionComment {
   author           Staff              @relation("CommentAuthor", fields: [authorId], references: [id])
   discussion       ClinicalDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
 
+  @@index([authorId])
+  @@index([discussionId])
+  @@index([createdAt])
   @@map("clinical_discussion_comments")
 }
 
@@ -1356,6 +1593,8 @@ model MDTMeeting {
   attendanceJson String?
   createdAt      DateTime @default(now())
 
+  @@index([status])
+  @@index([createdAt])
   @@map("mdt_meetings")
 }
 
@@ -1376,6 +1615,10 @@ model TelemedicineSession {
   patient              Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   host                 Staff     @relation("TelemedicineHost", fields: [staffId], references: [id])
 
+  @@index([patientId])
+  @@index([staffId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("telemedicine_sessions")
 }
 
@@ -1394,6 +1637,12 @@ model ClinicalMessage {
   recipient     Staff     @relation("MessageRecipient", fields: [recipientId], references: [id])
   sender        Staff     @relation("MessageSender", fields: [senderId], references: [id])
 
+  @@index([patientId])
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([priority])
+  @@index([patientId, createdAt])
   @@map("clinical_messages")
 }
 
@@ -1419,6 +1668,10 @@ model LabTestCatalog {
   updatedAt       DateTime       @updatedAt
   orderItems      LabOrderItem[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([category])
   @@map("lab_test_catalog")
 }
 
@@ -1447,6 +1700,17 @@ model LabOrder {
   requestedBy       Staff              @relation("LabOrderRequester", fields: [requestedById], references: [id])
   specimens         LabSpecimen[]
 
+  @@index([patientId])
+  @@index([requestedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([priority])
+  @@index([orderedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
+  @@index([department, status])
   @@map("lab_orders")
 }
 
@@ -1463,6 +1727,11 @@ model LabOrderItem {
   worksheet   LabWorksheet?  @relation(fields: [worksheetId], references: [id])
   result      LabResult?
 
+  @@index([orderId])
+  @@index([testId])
+  @@index([worksheetId])
+  @@index([status])
+  @@index([createdAt])
   @@map("lab_order_items")
 }
 
@@ -1486,6 +1755,10 @@ model LabSpecimen {
   updatedAt       DateTime  @updatedAt
   order           LabOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("lab_specimens")
 }
 
@@ -1503,6 +1776,11 @@ model LabWorksheet {
   results      LabResult[]
   technician   Staff          @relation("LabTechnician", fields: [technicianId], references: [id])
 
+  @@index([technicianId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([department, status])
   @@map("lab_worksheets")
 }
 
@@ -1535,6 +1813,13 @@ model LabResult {
   verifiedBy         Staff?             @relation("LabResultVerifier", fields: [verifiedById], references: [id])
   worksheet          LabWorksheet?      @relation(fields: [worksheetId], references: [id])
 
+  @@index([validatedById])
+  @@index([verifiedById])
+  @@index([worksheetId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([resultedAt])
+  @@index([isCritical])
   @@map("lab_results")
 }
 
@@ -1555,6 +1840,7 @@ model LabQCRecord {
   correctionTaken String?
   createdAt       DateTime  @default(now())
 
+  @@index([createdAt])
   @@map("lab_qc_records")
 }
 
@@ -1578,6 +1864,10 @@ model LabInventoryItem {
   updatedAt        DateTime                  @updatedAt
   transactions     LabInventoryTransaction[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([category])
   @@map("lab_inventory_items")
 }
 
@@ -1593,6 +1883,8 @@ model LabInventoryTransaction {
   createdAt   DateTime         @default(now())
   item        LabInventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  @@index([itemId])
+  @@index([createdAt])
   @@map("lab_inventory_transactions")
 }
 
@@ -1613,6 +1905,10 @@ model LabEquipment {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([department, status])
   @@map("lab_equipment")
 }
 
@@ -1630,6 +1926,8 @@ model LabCriticalAlert {
   order          LabOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   result         LabResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([resultId])
   @@map("lab_critical_alerts")
 }
 
@@ -1650,6 +1948,9 @@ model LabReferral {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("lab_referrals")
 }
 
@@ -1681,6 +1982,9 @@ model PharmacyInventoryItem {
   adjustments         PharmacyStockAdjustment[]
   batches             PharmacyStockBatch[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("pharmacy_inventory_items")
 }
 
@@ -1705,6 +2009,11 @@ model PharmacyStockBatch {
   warehouse        PharmacyWarehouse?         @relation(fields: [warehouseId], references: [id])
 
   @@unique([inventoryItemId, batchNumber])
+  @@index([inventoryItemId])
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("pharmacy_stock_batches")
 }
 
@@ -1742,6 +2051,19 @@ model PharmacyPrescription {
   prescriber            Staff                          @relation("PharmacyPrescriber", fields: [prescribedById], references: [id])
   verifier              Staff?                         @relation("PharmacyVerifier", fields: [verifiedById], references: [id])
 
+  @@index([patientId])
+  @@index([prescribedById])
+  @@index([verifiedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([priority])
+  @@index([orderedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
+  @@index([encounterId, status])
+  @@index([department, status])
   @@map("pharmacy_prescriptions")
 }
 
@@ -1766,6 +2088,10 @@ model PharmacyPrescriptionItem {
   medication         PharmacyInventoryItem      @relation(fields: [medicationId], references: [id])
   prescription       PharmacyPrescription       @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
+  @@index([medicationId])
+  @@index([prescriptionId])
+  @@index([status])
+  @@index([createdAt])
   @@map("pharmacy_prescription_items")
 }
 
@@ -1794,6 +2120,12 @@ model PharmacyDispensingRecord {
   prescription           PharmacyPrescription     @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   prescriptionItem       PharmacyPrescriptionItem @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
 
+  @@index([batchId])
+  @@index([dispensedById])
+  @@index([prescriptionId])
+  @@index([prescriptionItemId])
+  @@index([createdAt])
+  @@index([dispensedAt])
   @@map("pharmacy_dispensing_records")
 }
 
@@ -1812,6 +2144,8 @@ model PharmacyControlledSubstanceLog {
   createdAt           DateTime              @default(now())
   inventoryItem       PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
+  @@index([inventoryItemId])
+  @@index([createdAt])
   @@map("pharmacy_controlled_substance_logs")
 }
 
@@ -1836,6 +2170,9 @@ model PharmacySupplier {
   purchaseOrders   PharmacyPurchaseOrder[]
   batches          PharmacyStockBatch[]
 
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("pharmacy_suppliers")
 }
 
@@ -1856,6 +2193,11 @@ model PharmacyPurchaseOrder {
   items            PharmacyPurchaseOrderItem[]
   supplier         PharmacySupplier            @relation(fields: [supplierId], references: [id])
 
+  @@index([supplierId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([orderedAt])
   @@map("pharmacy_purchase_orders")
 }
 
@@ -1870,6 +2212,9 @@ model PharmacyPurchaseOrderItem {
   medication       PharmacyInventoryItem @relation(fields: [medicationId], references: [id])
   po               PharmacyPurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
 
+  @@index([medicationId])
+  @@index([poId])
+  @@index([createdAt])
   @@map("pharmacy_purchase_order_items")
 }
 
@@ -1887,6 +2232,9 @@ model PharmacyGRN {
   items              PharmacyGRNItem[]
   po                 PharmacyPurchaseOrder @relation(fields: [poId], references: [id])
 
+  @@index([poId])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("pharmacy_grns")
 }
 
@@ -1902,6 +2250,9 @@ model PharmacyGRNItem {
   grn              PharmacyGRN           @relation(fields: [grnId], references: [id], onDelete: Cascade)
   medication       PharmacyInventoryItem @relation(fields: [medicationId], references: [id])
 
+  @@index([grnId])
+  @@index([medicationId])
+  @@index([createdAt])
   @@map("pharmacy_grn_items")
 }
 
@@ -1921,6 +2272,10 @@ model PharmacyStockAdjustment {
   inventoryItem    PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   warehouse        PharmacyWarehouse?    @relation(fields: [warehouseId], references: [id])
 
+  @@index([authorizedById])
+  @@index([inventoryItemId])
+  @@index([warehouseId])
+  @@index([createdAt])
   @@map("pharmacy_stock_adjustments")
 }
 
@@ -1940,6 +2295,11 @@ model PharmacyADE {
   createdAt         DateTime @default(now())
   patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("pharmacy_ades")
 }
 
@@ -1958,6 +2318,10 @@ model PharmacyClinicalIntervention {
   prescriber       Staff                @relation("PrescriberClinicalReview", fields: [prescriberId], references: [id])
   prescription     PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
+  @@index([pharmacistId])
+  @@index([prescriberId])
+  @@index([prescriptionId])
+  @@index([createdAt])
   @@map("pharmacy_clinical_interventions")
 }
 
@@ -1972,6 +2336,8 @@ model PharmacyAntimicrobialRecord {
   createdAt            DateTime             @default(now())
   prescription         PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
+  @@index([prescriptionId])
+  @@index([createdAt])
   @@map("pharmacy_antimicrobial_records")
 }
 
@@ -1983,6 +2349,7 @@ model PharmacySyncLog {
   details   String
   syncedAt  DateTime @default(now())
 
+  @@index([status])
   @@map("pharmacy_sync_logs")
 }
 
@@ -1999,6 +2366,7 @@ model RadiologyImagingCatalogItem {
   createdAt         DateTime         @default(now())
   orders            RadiologyOrder[]
 
+  @@index([createdAt])
   @@map("radiology_imaging_catalog")
 }
 
@@ -2028,6 +2396,16 @@ model RadiologyOrder {
   reports              RadiologyReport[]
   schedules            RadiologySchedule[]
 
+  @@index([catalogItemId])
+  @@index([patientId])
+  @@index([requestedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([priority])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([encounterId, status])
   @@map("radiology_orders")
 }
 
@@ -2040,6 +2418,8 @@ model RadiologyOrderHistory {
   changedAt DateTime       @default(now())
   order     RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([status])
   @@map("radiology_order_histories")
 }
 
@@ -2055,6 +2435,10 @@ model RadiologySchedule {
   order           RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   technician      Staff          @relation("RadiologyTechnician", fields: [technicianId], references: [id])
 
+  @@index([orderId])
+  @@index([technicianId])
+  @@index([status])
+  @@index([createdAt])
   @@map("radiology_schedules")
 }
 
@@ -2071,6 +2455,7 @@ model RadiologyStudyPACS {
   acquiredAt       DateTime       @default(now())
   order            RadiologyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
   @@map("radiology_pacs_studies")
 }
 
@@ -2095,6 +2480,11 @@ model RadiologyReport {
   reporter            Staff          @relation("RadiologyReporter", fields: [reporterId], references: [id])
   verifier            Staff?         @relation("RadiologyVerifier", fields: [verifierId], references: [id])
 
+  @@index([orderId])
+  @@index([reporterId])
+  @@index([verifierId])
+  @@index([status])
+  @@index([createdAt])
   @@map("radiology_reports")
 }
 
@@ -2110,6 +2500,7 @@ model RadiologyEquipment {
   maintenanceLogs  RadiologyEquipmentMaintenance[]
   qaLogs           RadiologyEquipmentQA[]
 
+  @@index([status])
   @@map("radiology_equipment")
 }
 
@@ -2122,6 +2513,7 @@ model RadiologyEquipmentQA {
   checkedBy    String
   equipment    RadiologyEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
+  @@index([equipmentId])
   @@map("radiology_equipment_qa")
 }
 
@@ -2136,6 +2528,7 @@ model RadiologyEquipmentMaintenance {
   performedBy    String
   equipment      RadiologyEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
+  @@index([equipmentId])
   @@map("radiology_equipment_maintenance")
 }
 
@@ -2154,6 +2547,13 @@ model RadiologyIncident {
   patient      Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   reporter     Staff    @relation("RadiologyIncidentReporter", fields: [reportedById], references: [id])
 
+  @@index([patientId])
+  @@index([reportedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([category])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("radiology_incidents")
 }
 
@@ -2189,6 +2589,9 @@ model BloodDonor {
   donations        BloodDonation[]
   patient          Patient?        @relation(fields: [patientId], references: [id])
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("blood_donors")
 }
 
@@ -2208,6 +2611,9 @@ model BloodDonation {
   phlebotomist      Staff             @relation("DonationCollector", fields: [phlebotomistId], references: [id])
   testResults       BloodTestResult[]
 
+  @@index([donorId])
+  @@index([phlebotomistId])
+  @@index([status])
   @@map("blood_donations")
 }
 
@@ -2227,6 +2633,9 @@ model BloodComponent {
   processor          Staff                    @relation("ComponentProcessor", fields: [processedById], references: [id])
   transfusionRecords BloodTransfusionRecord[]
 
+  @@index([donationId])
+  @@index([processedById])
+  @@index([status])
   @@map("blood_components")
 }
 
@@ -2239,6 +2648,7 @@ model BloodTestResult {
   testedAt   DateTime      @default(now())
   donation   BloodDonation @relation(fields: [donationId], references: [id], onDelete: Cascade)
 
+  @@index([donationId])
   @@map("blood_test_results")
 }
 
@@ -2259,6 +2669,12 @@ model BloodTransfusionRequest {
   patient            Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   requester          Staff                    @relation("TransfusionRequester", fields: [requesterId], references: [id])
 
+  @@index([patientId])
+  @@index([requesterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("blood_transfusion_requests")
 }
 
@@ -2274,6 +2690,9 @@ model BloodCompatibilityTest {
   request        BloodTransfusionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   scientist      Staff                   @relation("CompatibilityScientist", fields: [scientistId], references: [id])
 
+  @@index([componentId])
+  @@index([requestId])
+  @@index([scientistId])
   @@map("blood_compatibility_tests")
 }
 
@@ -2301,6 +2720,12 @@ model BloodTransfusionRecord {
   patient              Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
   request              BloodTransfusionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
+  @@index([administeredById])
+  @@index([componentId])
+  @@index([patientId])
+  @@index([requestId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("blood_transfusion_records")
 }
 
@@ -2315,6 +2740,7 @@ model BloodBankEquipment {
   status        String   @default("NORMAL")
   lastCheckDate DateTime @default(now())
 
+  @@index([status])
   @@map("blood_bank_equipment")
 }
 
@@ -2336,6 +2762,12 @@ model SurgicalRequest {
   patient              Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   surgeon              Staff             @relation("SurgicalRequestSurgeon", fields: [surgeonId], references: [id])
 
+  @@index([patientId])
+  @@index([surgeonId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("surgical_requests")
 }
 
@@ -2364,6 +2796,14 @@ model SurgicalBooking {
   consents              SurgicalConsent[]
   safetyChecklists      WHOSurgicalSafetyCheck[]
 
+  @@index([anaesthetistId])
+  @@index([patientId])
+  @@index([requestId])
+  @@index([surgeonId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("surgical_bookings")
 }
 
@@ -2383,6 +2823,13 @@ model PreOpAssessment {
   clinician           Staff           @relation("PreOpAssessmentClinician", fields: [clinicianId], references: [id])
   patient             Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([bookingId])
+  @@index([clinicianId])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("pre_op_assessments")
 }
 
@@ -2399,6 +2846,9 @@ model PreAnaestheticAssessment {
   booking            SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   clinician          Staff           @relation("PreAnaestheticClinician", fields: [clinicianId], references: [id])
 
+  @@index([bookingId])
+  @@index([clinicianId])
+  @@index([createdAt])
   @@map("pre_anaesthetic_assessments")
 }
 
@@ -2418,6 +2868,8 @@ model SurgicalConsent {
   booking           SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   patient           Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([bookingId])
+  @@index([patientId])
   @@map("surgical_consents")
 }
 
@@ -2434,6 +2886,8 @@ model WHOSurgicalSafetyCheck {
   createdAt       DateTime        @default(now())
   booking         SurgicalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  @@index([bookingId])
+  @@index([createdAt])
   @@map("who_surgical_safety_checks")
 }
 
@@ -2470,6 +2924,7 @@ model SurgicalImplant {
   recallStatus    String        @default("NORMAL")
   intraOpRecord   IntraOpRecord @relation(fields: [intraOpRecordId], references: [id], onDelete: Cascade)
 
+  @@index([intraOpRecordId])
   @@map("surgical_implants")
 }
 
@@ -2483,6 +2938,7 @@ model SurgicalSpecimen {
   chainOfCustodyLogs String
   intraOpRecord      IntraOpRecord @relation(fields: [intraOpRecordId], references: [id], onDelete: Cascade)
 
+  @@index([intraOpRecordId])
   @@map("surgical_specimens")
 }
 
@@ -2502,6 +2958,8 @@ model PACURecoveryRecord {
   clinician           Staff           @relation("PACUClinician", fields: [clinicianId], references: [id])
   patient             Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([clinicianId])
+  @@index([patientId])
   @@map("pacu_recovery_records")
 }
 
@@ -2518,6 +2976,7 @@ model CSSDSterilizationCycle {
   sterilizedAt        DateTime @default(now())
   officer             Staff    @relation("CSSDOfficer", fields: [officerId], references: [id])
 
+  @@index([officerId])
   @@map("cssd_sterilization_cycles")
 }
 
@@ -2529,6 +2988,7 @@ model IcuBed {
   isolationRules String?
   admissions     IcuAdmission[]
 
+  @@index([status])
   @@map("icu_beds")
 }
 
@@ -2562,6 +3022,11 @@ model IcuAdmission {
   progressNotes     IcuProgressNote[]
   ventilators       IcuVentilatorSetting[]
 
+  @@index([admittingStaffId])
+  @@index([bedId])
+  @@index([patientId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("icu_admissions")
 }
 
@@ -2574,6 +3039,8 @@ model IcuCarePlanGoal {
   status      String       @default("PENDING")
   admission   IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([status])
   @@map("icu_care_plan_goals")
 }
 
@@ -2587,6 +3054,8 @@ model IcuEquipmentAssignment {
   maintenanceStatus String       @default("VERIFIED")
   admission         IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([status])
   @@map("icu_equipment_assignments")
 }
 
@@ -2610,6 +3079,9 @@ model IcuPhysiologicalObservation {
   observer              Staff        @relation("IcuObservingClinician", fields: [observerId], references: [id])
   patient               Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([observerId])
+  @@index([patientId])
   @@map("icu_physiological_observations")
 }
 
@@ -2638,6 +3110,7 @@ model IcuVentilatorSetting {
   loggedAt               DateTime     @default(now())
   admission              IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
   @@map("icu_ventilator_settings")
 }
 
@@ -2657,6 +3130,8 @@ model IcuInfusionTherapy {
   admission           IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
   patient             Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([patientId])
   @@map("icu_infusion_therapies")
 }
 
@@ -2672,6 +3147,10 @@ model IcuDialysisLifeSupport {
   admission               IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
   patient                 Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([patientId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("icu_dialysis_life_supports")
 }
 
@@ -2691,6 +3170,9 @@ model IcuNeurologicalObservation {
   clinician           Staff        @relation("IcuNeuroClinician", fields: [clinicianId], references: [id])
   patient             Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([clinicianId])
+  @@index([patientId])
   @@map("icu_neurological_observations")
 }
 
@@ -2707,6 +3189,10 @@ model IcuEarlyWarningAlert {
   admission        IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
   patient          Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([patientId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("icu_early_warning_alerts")
 }
 
@@ -2718,6 +3204,7 @@ model IcuProgressNote {
   loggedAt    DateTime     @default(now())
   admission   IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
   @@map("icu_progress_notes")
 }
 
@@ -2731,6 +3218,7 @@ model IcuInfectionPreventionCheck {
   auditDate             DateTime     @default(now())
   admission             IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
   @@map("icu_infection_prevention_checks")
 }
 
@@ -2744,6 +3232,7 @@ model IcuClinicalPathwayCompliance {
   auditedAt            DateTime     @default(now())
   admission            IcuAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
   @@map("icu_clinical_pathway_compliance")
 }
 
@@ -2762,6 +3251,9 @@ model IcuDischargeHandover {
   clinician                 Staff        @relation("IcuHandoverClinician", fields: [clinicianId], references: [id])
   patient                   Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([admissionId])
+  @@index([clinicianId])
+  @@index([patientId])
   @@map("icu_discharge_handovers")
 }
 
@@ -2780,6 +3272,11 @@ model IcuIncidentRecord {
   patient         Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   reporter        Staff        @relation("IcuIncidentReporter", fields: [reporterId], references: [id])
 
+  @@index([admissionId])
+  @@index([patientId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("icu_incident_records")
 }
 
@@ -2792,6 +3289,7 @@ model IcuStaffingShift {
   shiftDate           DateTime @default(now())
   clinician           Staff    @relation("IcuStaffClinician", fields: [clinicianId], references: [id])
 
+  @@index([clinicianId])
   @@map("icu_staffing_shifts")
 }
 
@@ -2816,6 +3314,10 @@ model EmergencyArrival {
   traumas             EmergencyTraumaTeam[]
   triages             EmergencyTriage[]
 
+  @@index([bedId])
+  @@index([patientId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("emergency_arrivals")
 }
 
@@ -2831,6 +3333,7 @@ model AmbulancePreArrival {
   turnaroundTimeMin Int              @default(0)
   arrival           EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
 
+  @@index([arrivalId])
   @@map("ambulance_pre_arrivals")
 }
 
@@ -2854,6 +3357,7 @@ model EmergencyTriage {
   reassessmentDate    DateTime?
   arrival             EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
 
+  @@index([arrivalId])
   @@map("emergency_triages")
 }
 
@@ -2864,6 +3368,7 @@ model EmergencyBed {
   status   String             @default("AVAILABLE")
   arrivals EmergencyArrival[]
 
+  @@index([status])
   @@map("emergency_beds")
 }
 
@@ -2880,6 +3385,7 @@ model EmergencyResuscitation {
   resusEndTime         DateTime?
   arrival              EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
 
+  @@index([arrivalId])
   @@map("emergency_resuscitations")
 }
 
@@ -2896,6 +3402,9 @@ model EmergencyTraumaTeam {
   surgeon           Staff?           @relation("TraumaSurgeon", fields: [surgeonId], references: [id])
   teamLeader        Staff            @relation("TraumaTeamLeader", fields: [teamLeaderId], references: [id])
 
+  @@index([arrivalId])
+  @@index([surgeonId])
+  @@index([teamLeaderId])
   @@map("emergency_trauma_teams")
 }
 
@@ -2911,6 +3420,8 @@ model EmergencyProcedure {
   arrival       EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
   clinician     Staff            @relation("EmergencyOperator", fields: [clinicianId], references: [id])
 
+  @@index([arrivalId])
+  @@index([clinicianId])
   @@map("emergency_procedures")
 }
 
@@ -2925,6 +3436,8 @@ model EmergencyObservationLog {
   arrival              EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
   nurse                Staff            @relation("EmergencyObserver", fields: [nurseId], references: [id])
 
+  @@index([arrivalId])
+  @@index([nurseId])
   @@map("emergency_observation_logs")
 }
 
@@ -2939,6 +3452,7 @@ model EmergencyDischargeHandover {
   handoverDate              DateTime         @default(now())
   arrival                   EmergencyArrival @relation(fields: [arrivalId], references: [id], onDelete: Cascade)
 
+  @@index([arrivalId])
   @@map("emergency_discharge_handovers")
 }
 
@@ -2968,6 +3482,11 @@ model EmergencyIncidentRecord {
   patient         Patient?         @relation(fields: [patientId], references: [id], onDelete: Cascade)
   reporter        Staff            @relation("EmergencyIncidentReporter", fields: [reporterId], references: [id])
 
+  @@index([arrivalId])
+  @@index([patientId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([patientId, status])
   @@map("emergency_incident_records")
 }
 
@@ -2980,6 +3499,7 @@ model EmergencyStaffingShift {
   shiftDate           DateTime @default(now())
   clinician           Staff    @relation("EmergencyStaffClinician", fields: [clinicianId], references: [id])
 
+  @@index([clinicianId])
   @@map("emergency_staffing_shifts")
 }
 
@@ -3018,6 +3538,9 @@ model MaternityProfile {
   pmtctFollowUps            PmtctFollowUp[]
   postnatalVisits           PostnatalVisit[]
 
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, createdAt])
   @@map("maternity_profiles")
 }
 
@@ -3038,6 +3561,9 @@ model MaternalRiskAssessment {
   assessor           Staff            @relation("RiskAssessor", fields: [assessorId], references: [id])
   maternityProfile   MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
 
+  @@index([assessorId])
+  @@index([maternityProfileId])
+  @@index([createdAt])
   @@map("maternal_risk_assessments")
 }
 
@@ -3067,6 +3593,8 @@ model FetalSurveillance {
   createdAt            DateTime         @default(now())
   maternityProfile     MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
 
+  @@index([maternityProfileId])
+  @@index([createdAt])
   @@map("fetal_surveillance")
 }
 
@@ -3085,6 +3613,8 @@ model MaternalComplication {
   createdAt          DateTime         @default(now())
   maternityProfile   MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
 
+  @@index([maternityProfileId])
+  @@index([createdAt])
   @@map("maternal_complications")
 }
 
@@ -3113,6 +3643,7 @@ model LabourMonitoringEntry {
   enteredBy           String?
   labourRecord        LabourRecord @relation(fields: [labourRecordId], references: [id], onDelete: Cascade)
 
+  @@index([labourRecordId])
   @@map("labour_monitoring_entries")
 }
 
@@ -3133,6 +3664,7 @@ model BirthNotification {
   status             String         @default("DRAFT")
   neonatalRecord     NeonatalRecord @relation(fields: [neonatalRecordId], references: [id])
 
+  @@index([status])
   @@map("birth_notifications")
 }
 
@@ -3165,6 +3697,8 @@ model PostnatalVisit {
   createdAt            DateTime         @default(now())
   maternityProfile     MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
 
+  @@index([maternityProfileId])
+  @@index([createdAt])
   @@map("postnatal_visits")
 }
 
@@ -3191,6 +3725,10 @@ model GynaecologyConsultation {
   clinician             Staff     @relation("GynaecologyClinician", fields: [clinicianId], references: [id])
   patient               Patient   @relation("GynaecologyConsultations", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([clinicianId])
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("gynaecology_consultations")
 }
 
@@ -3216,6 +3754,11 @@ model GynaecologyProcedure {
   createdAt        DateTime  @default(now())
   patient          Patient   @relation("GynaecologyProcedures", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("gynaecology_procedures")
 }
 
@@ -3238,6 +3781,9 @@ model CervicalCancerScreening {
   createdAt             DateTime  @default(now())
   patient               Patient   @relation("CervicalScreenings", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("cervical_cancer_screenings")
 }
 
@@ -3261,6 +3807,12 @@ model FamilyPlanningEnrollment {
   maternityProfile    MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
   patient             Patient          @relation("FamilyPlanningEnrollments", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([maternityProfileId])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("family_planning_enrollments")
 }
 
@@ -3285,6 +3837,8 @@ model PmtctFollowUp {
   createdAt                DateTime         @default(now())
   maternityProfile         MaternityProfile @relation(fields: [maternityProfileId], references: [id], onDelete: Cascade)
 
+  @@index([maternityProfileId])
+  @@index([createdAt])
   @@map("pmtct_follow_ups")
 }
 
@@ -3310,6 +3864,7 @@ model NeonatalCareEntry {
   causeOfDeath        String?
   neonatalRecord      NeonatalRecord @relation(fields: [neonatalRecordId], references: [id], onDelete: Cascade)
 
+  @@index([neonatalRecordId])
   @@map("neonatal_care_entries")
 }
 
@@ -3333,6 +3888,9 @@ model MaternalDeathReview {
   createdAt       DateTime  @default(now())
   patient         Patient   @relation("MaternalDeaths", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("maternal_death_reviews")
 }
 
@@ -3356,6 +3914,9 @@ model FertilityAssessment {
   createdAt            DateTime @default(now())
   patient              Patient  @relation("FertilityAssessments", fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("fertility_assessments")
 }
 
@@ -3372,6 +3933,8 @@ model SyncQueue {
   syncedAt  DateTime? @map("synced_at")
 
   @@index([status, createdAt])
+  @@index([status])
+  @@index([createdAt])
   @@map("sync_queue")
 }
 
@@ -3406,6 +3969,8 @@ model AttendanceRecord {
   @@index([staffId, shiftDate])
   @@index([syncStatus])
   @@index([captureMode])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("attendance_records")
 }
 
@@ -3419,6 +3984,7 @@ model SystemEvent {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([eventType, createdAt])
+  @@index([createdAt])
   @@map("system_events")
 }
 
@@ -3430,6 +3996,8 @@ model Bank {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("banks")
 }
 
@@ -3447,6 +4015,10 @@ model PharmacyWarehouse {
   adjustments   PharmacyStockAdjustment[]
   batches       PharmacyStockBatch[]
   devices       PharmacyIoTDevice[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model PharmacyIoTDevice {
@@ -3465,6 +4037,10 @@ model PharmacyIoTDevice {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   warehouse       PharmacyWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model PharmacyRequisition {
@@ -3478,6 +4054,13 @@ model PharmacyRequisition {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   requester     Staff    @relation("RequisitionRequester", fields: [requesterId], references: [id])
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([priority])
+  @@index([department, status])
 }
 
 model PharmacyTransfer {
@@ -3495,6 +4078,13 @@ model PharmacyTransfer {
   destination   PharmacyWarehouse     @relation("TransferDestination", fields: [destinationId], references: [id])
   medication    PharmacyInventoryItem @relation("TransferMedication", fields: [medicationId], references: [id])
   source        PharmacyWarehouse     @relation("TransferSource", fields: [sourceId], references: [id])
+
+  @@index([destinationId])
+  @@index([medicationId])
+  @@index([sourceId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model PharmacyColdChainLog {
@@ -3506,6 +4096,9 @@ model PharmacyColdChainLog {
   status      String             @default("NORMAL")
   recordedAt  DateTime           @default(now())
   batch       PharmacyStockBatch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId])
+  @@index([status])
 }
 
 model PharmacySCMRisk {
@@ -3518,6 +4111,11 @@ model PharmacySCMRisk {
   status      String   @default("IDENTIFIED")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([category])
 }
 
 model PharmacyFraudAlert {
@@ -3533,6 +4131,10 @@ model PharmacyFraudAlert {
   capaAction        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model HospitalConfig {
@@ -3542,6 +4144,8 @@ model HospitalConfig {
   isActive    Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 
+  @@index([isActive])
+  @@index([updatedAt])
   @@map("hospital_config")
 }
 
@@ -3699,12 +4303,12 @@ enum MedicationRequestIntent {
 // ── Global Interoperability & Terminology Data Dictionary ───────────────────
 model TerminologyConcept {
   id          String        @id @default(uuid())
-  system      String        // "LOINC" | "ICD10" | "SNOMED" | "RXNORM" | "CPT" | "ISBT128"
+  system      String // "LOINC" | "ICD10" | "SNOMED" | "RXNORM" | "CPT" | "ISBT128"
   code        String
   display     String
   description String?
-  category    String?       // "LAB", "DIAGNOSIS", "PHARMACY", "BILLING", "BLOOD_BANK", "VITAL"
-  systemUri   String?       // e.g. "http://loinc.org", "http://hl7.org/fhir/sid/icd-10"
+  category    String? // "LAB", "DIAGNOSIS", "PHARMACY", "BILLING", "BLOOD_BANK", "VITAL"
+  systemUri   String? // e.g. "http://loinc.org", "http://hl7.org/fhir/sid/icd-10"
   isActive    Boolean       @default(true)
   mappings    CodeMapping[]
   createdAt   DateTime      @default(now())
@@ -3713,12 +4317,16 @@ model TerminologyConcept {
   @@unique([system, code])
   @@index([system, code])
   @@index([category])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([code])
   @@map("terminology_concepts")
 }
 
 model CodeMapping {
   id            String             @id @default(uuid())
-  localItemType String             // "LAB_TEST", "PHARMACY_ITEM", "SERVICE_TARIFF", "DIAGNOSIS"
+  localItemType String // "LAB_TEST", "PHARMACY_ITEM", "SERVICE_TARIFF", "DIAGNOSIS"
   localItemId   String
   conceptId     String
   concept       TerminologyConcept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
@@ -3726,6 +4334,8 @@ model CodeMapping {
   notes         String?
   createdAt     DateTime           @default(now())
 
+  @@index([conceptId])
+  @@index([createdAt])
   @@map("code_mappings")
 }
 
@@ -3746,13 +4356,16 @@ model AiChatConversation {
 
   @@index([userId])
   @@index([userId, isActive])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("ai_chat_conversations")
 }
 
 model AiChatTurn {
   id             String             @id @default(uuid())
   conversationId String
-  sender         String             // "user" | "agent"
+  sender         String // "user" | "agent"
   text           String             @db.Text
   intent         String?
   toolsExecuted  String[]
@@ -3762,6 +4375,7 @@ model AiChatTurn {
   conversation   AiChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([createdAt])
   @@map("ai_chat_turns")
 }
 
@@ -3772,6 +4386,8 @@ model SystemConfig {
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("system_config")
 }
 
@@ -3800,6 +4416,12 @@ model DentalEncounter {
   treatmentPlans   DentalTreatmentPlanItem[]
 
   @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
   @@map("dental_encounters")
 }
 
@@ -3824,6 +4446,9 @@ model DentalToothFinding {
   dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
 
   @@index([dentalEncounterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("dental_tooth_findings")
 }
 
@@ -3843,6 +4468,7 @@ model DentalPerioMeasurement {
   dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
 
   @@index([dentalEncounterId])
+  @@index([createdAt])
   @@map("dental_perio_measurements")
 }
 
@@ -3866,6 +4492,11 @@ model DentalLabOrder {
   dentalEncounter   DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
 
   @@index([dentalEncounterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("dental_lab_orders")
 }
 
@@ -3886,6 +4517,11 @@ model DentalTreatmentPlanItem {
   dentalEncounter     DentalEncounter @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
 
   @@index([dentalEncounterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("dental_treatment_plan_items")
 }
 
@@ -3894,34 +4530,40 @@ model DentalTreatmentPlanItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model EyeEncounter {
-  id                     String                   @id @default(uuid())
-  encounterNumber        String                   @unique
-  patientId              String
-  ophthalmologistId      String
-  ophthalmologistName    String?
-  visitId                String?
-  chiefComplaint         String?
-  historyOfPresentIllness String?                 @db.Text
-  generalExam            String?                  @db.Text
-  anteriorSegmentOD      String?                  @db.Text
-  anteriorSegmentOS      String?                  @db.Text
-  posteriorFundusOD      String?                  @db.Text
-  posteriorFundusOS      String?                  @db.Text
-  cupToDiscRatioOD       Decimal?                 @db.Decimal(3, 2)
-  cupToDiscRatioOS       Decimal?                 @db.Decimal(3, 2)
-  diagnosisOD            String?
-  diagnosisOS            String?
-  clinicalManagementPlan String?                  @db.Text
-  status                 String                   @default("IN_PROGRESS")
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-  patient                Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  refractions            EyeRefractionExam[]
-  iopMeasurements        EyeIopMeasurement[]
-  drawings               EyeAnatomicalDrawing[]
-  opticalPrescriptions   EyeOpticalPrescription[]
+  id                      String                   @id @default(uuid())
+  encounterNumber         String                   @unique
+  patientId               String
+  ophthalmologistId       String
+  ophthalmologistName     String?
+  visitId                 String?
+  chiefComplaint          String?
+  historyOfPresentIllness String?                  @db.Text
+  generalExam             String?                  @db.Text
+  anteriorSegmentOD       String?                  @db.Text
+  anteriorSegmentOS       String?                  @db.Text
+  posteriorFundusOD       String?                  @db.Text
+  posteriorFundusOS       String?                  @db.Text
+  cupToDiscRatioOD        Decimal?                 @db.Decimal(3, 2)
+  cupToDiscRatioOS        Decimal?                 @db.Decimal(3, 2)
+  diagnosisOD             String?
+  diagnosisOS             String?
+  clinicalManagementPlan  String?                  @db.Text
+  status                  String                   @default("IN_PROGRESS")
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  patient                 Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  refractions             EyeRefractionExam[]
+  iopMeasurements         EyeIopMeasurement[]
+  drawings                EyeAnatomicalDrawing[]
+  opticalPrescriptions    EyeOpticalPrescription[]
 
   @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([visitId, status])
   @@map("eye_encounters")
 }
 
@@ -3950,6 +4592,7 @@ model EyeRefractionExam {
   eyeEncounter        EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
 
   @@index([eyeEncounterId])
+  @@index([createdAt])
   @@map("eye_refraction_exams")
 }
 
@@ -3970,6 +4613,8 @@ model EyeIopMeasurement {
 
   @@index([eyeEncounterId])
   @@index([patientId])
+  @@index([createdAt])
+  @@index([patientId, createdAt])
   @@map("eye_iop_measurements")
 }
 
@@ -3985,6 +4630,7 @@ model EyeAnatomicalDrawing {
   eyeEncounter   EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
 
   @@index([eyeEncounterId])
+  @@index([createdAt])
   @@map("eye_anatomical_drawings")
 }
 
@@ -4015,5 +4661,10 @@ model EyeOpticalPrescription {
   eyeEncounter   EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
 
   @@index([eyeEncounterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("eye_optical_prescriptions")
 }
