@@ -6,15 +6,15 @@ import {
   MenuItem, InputAdornment, Avatar, LinearProgress, Stack, Divider,
   List, ListItem, ListItemText, Tab, Tabs, Slider, Paper, FormControl,
   InputLabel, Select, Alert, Tooltip, Switch, FormControlLabel, CircularProgress,
-  ToggleButton, ToggleButtonGroup, Autocomplete, Checkbox,
+  ToggleButton, ToggleButtonGroup, Autocomplete, Checkbox, TablePagination,
 } from '@mui/material';
 import {
   Add, Search, Bed, Close, LocalPharmacy, Receipt, Biotech,
   Notifications, Assignment, CheckCircle, Warning, PlayArrow,
   HourglassEmpty, AccountCircle, Settings, LocalHospital, SwapHoriz,
-  BabyChangingStation, TrendingUp, VolumeUp, HelpOutline, CalendarMonth, Delete, Edit,
+  BabyChangingStation, TrendingUp, VolumeUp, HelpOutline, CalendarMonth, Delete, Edit, DeleteOutline,
   AutoAwesome, Psychology, Speed, Shield, Mic, MicOff, GraphicEq, CheckCircleOutline, SmartToy, FlashOn,
-  TableChart, ChevronLeft, ChevronRight, Today, FilterList, CheckBox, CheckBoxOutlineBlank, InfoOutlined,
+  TableChart, ChevronLeft, ChevronRight, Today, FilterList, FilterAlt, FilterAltOff, RestartAlt, CheckBox, CheckBoxOutlineBlank, InfoOutlined,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
@@ -300,6 +300,21 @@ const parseDosageAndRoute = (medName: string) => {
   return { dosage: dosage || '500mg', route };
 };
 
+const normalizeRouteValue = (rawRoute?: string | null): string => {
+  if (!rawRoute) return 'Oral';
+  const r = rawRoute.trim().toLowerCase();
+  if (r === 'iv' || r === 'i.v.' || r === 'i.v' || r.includes('intravenous') || r.includes('infusion')) return 'Intravenous';
+  if (r === 'im' || r === 'i.m.' || r === 'i.m' || r.includes('intramuscular')) return 'Intramuscular';
+  if (r === 'sc' || r === 's.c.' || r === 's.c' || r.includes('subcutaneous') || r.includes('sub-q') || r.includes('subcut')) return 'Subcutaneous';
+  if (r === 'sl' || r === 's.l.' || r.includes('sublingual')) return 'Sublingual';
+  if (r === 'oral' || r === 'po' || r === 'p.o.' || r === 'p.o' || r.includes('oral') || r.includes('tablet') || r.includes('capsule') || r.includes('suspension') || r.includes('syrup')) return 'Oral';
+  if (r.includes('inhal') || r.includes('nebul')) return 'Inhalation';
+  if (r.includes('topical') || r.includes('transdermal') || r.includes('cream') || r.includes('ointment')) return 'Topical';
+  if (r.includes('drop') || r.includes('spray') || r.includes('gutt') || r.includes('eye') || r.includes('ear') || r.includes('ophthalmic') || r.includes('otic')) return 'Drops';
+  if (r.includes('rectal') || r === 'pr' || r === 'p.r.' || r.includes('suppository')) return 'Rectal';
+  return rawRoute;
+};
+
 const KpiCard = ({ icon, label, value, color, subtitle }: {
   icon: React.ReactNode; label: string; value: string | number; color: string; subtitle?: string;
 }) => (
@@ -558,6 +573,25 @@ const NursingDashboard = () => {
   const [emarLoading, setEmarLoading] = useState<boolean>(false);
   const [emarAllergies, setEmarAllergies] = useState<any[]>([]);
   const [emarLogs, setEmarLogs] = useState<any[]>([]);
+
+  // eMAR Filter & Pagination States
+  const [emarSearchQuery, setEmarSearchQuery] = useState<string>('');
+  const [emarStatusFilter, setEmarStatusFilter] = useState<string>('ALL');
+  const [emarRouteFilter, setEmarRouteFilter] = useState<string>('ALL');
+  const [emarDatePreset, setEmarDatePreset] = useState<string>('ALL');
+  const [emarStartDate, setEmarStartDate] = useState<string>('');
+  const [emarEndDate, setEmarEndDate] = useState<string>('');
+  const [emarPage, setEmarPage] = useState<number>(0);
+  const [emarRowsPerPage, setEmarRowsPerPage] = useState<number>(10);
+
+  // eMAR Edit & Delete Dialog States
+  const [editEmarOpen, setEditEmarOpen] = useState<boolean>(false);
+  const [editingEmarRecord, setEditingEmarRecord] = useState<any>(null);
+  const [editEmarSubmitting, setEditEmarSubmitting] = useState<boolean>(false);
+
+  const [deleteEmarOpen, setDeleteEmarOpen] = useState<boolean>(false);
+  const [deletingEmarRecord, setDeletingEmarRecord] = useState<any>(null);
+  const [deleteEmarSubmitting, setDeleteEmarSubmitting] = useState<boolean>(false);
   const [maternityRegForm, setMaternityRegForm] = useState({ patientId: '', gestationNumber: 1, lmpDate: new Date().toISOString().slice(0, 10), isHighRisk: false, highRiskReason: '' });
   const [partographForm, setPartographForm] = useState({ pregnancyId: '', membranesStatus: 'INTACT', cervicalDilatation: 4, contractionsFrequency: 3, fetalHeartRate: 140, maternalPulse: 80, maternalBp: '120/80', partographData: '' });
   const [deliveryForm, setDeliveryForm] = useState({
@@ -2017,6 +2051,164 @@ const NursingDashboard = () => {
     }
   };
 
+  const handleOpenEditEmar = (record: any) => {
+    setEditingEmarRecord({
+      id: record.id,
+      patientId: record.patientId,
+      patientName: record.patient ? `${record.patient.firstName} ${record.patient.lastName}` : 'Ward Patient',
+      patientNumber: record.patient?.patientNumber || 'N/A',
+      medicationName: record.medicationName || '',
+      dosage: record.dosage || '',
+      route: normalizeRouteValue(record.route || 'Oral'),
+      site: record.site || '',
+      status: record.status || 'ADMINISTERED',
+      scheduledTime: record.scheduledTime ? new Date(record.scheduledTime).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      administeredTime: record.administeredTime ? new Date(record.administeredTime).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      omittedReason: record.omittedReason || '',
+      notes: record.notes || '',
+    });
+    setEditEmarOpen(true);
+  };
+
+  const handleSaveEditEmar = async () => {
+    if (!editingEmarRecord?.id) return;
+    try {
+      setEditEmarSubmitting(true);
+      await api.put(`/emar/${editingEmarRecord.id}`, {
+        medicationName: editingEmarRecord.medicationName,
+        dosage: editingEmarRecord.dosage,
+        route: normalizeRouteValue(editingEmarRecord.route || 'Oral'),
+        site: editingEmarRecord.site || null,
+        status: editingEmarRecord.status,
+        omittedReason: editingEmarRecord.status !== 'ADMINISTERED' ? (editingEmarRecord.omittedReason || null) : null,
+        notes: editingEmarRecord.notes || null,
+        scheduledTime: editingEmarRecord.scheduledTime,
+        administeredTime: editingEmarRecord.status === 'ADMINISTERED'
+          ? (editingEmarRecord.administeredTime ? new Date(editingEmarRecord.administeredTime).toISOString() : new Date().toISOString())
+          : null,
+      });
+      enqueueSnackbar(`✅ Updated eMAR record for ${editingEmarRecord.medicationName}!`, { variant: 'success' });
+      setEditEmarOpen(false);
+      setEditingEmarRecord(null);
+      await fetchDashboardData();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || err.response?.data?.error || 'Failed to update eMAR record', { variant: 'error' });
+    } finally {
+      setEditEmarSubmitting(false);
+    }
+  };
+
+  const handleOpenDeleteEmar = (record: any) => {
+    setDeletingEmarRecord(record);
+    setDeleteEmarOpen(true);
+  };
+
+  const handleConfirmDeleteEmar = async () => {
+    if (!deletingEmarRecord?.id) return;
+    try {
+      setDeleteEmarSubmitting(true);
+      await api.delete(`/emar/${deletingEmarRecord.id}`);
+      enqueueSnackbar(`🗑️ Deleted eMAR record for ${deletingEmarRecord.medicationName}`, { variant: 'success' });
+      setDeleteEmarOpen(false);
+      setDeletingEmarRecord(null);
+      await fetchDashboardData();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || err.response?.data?.error || 'Failed to delete eMAR record', { variant: 'error' });
+    } finally {
+      setDeleteEmarSubmitting(false);
+    }
+  };
+
+  const handleResetEmarFilters = () => {
+    setEmarSearchQuery('');
+    setEmarStatusFilter('ALL');
+    setEmarRouteFilter('ALL');
+    setEmarDatePreset('ALL');
+    setEmarStartDate('');
+    setEmarEndDate('');
+    setEmarPage(0);
+  };
+
+  // Filtered & Paginated eMAR computation
+  const filteredEmarList = useMemo(() => {
+    const list: any[] = dashboardData?.pendingMedications || [];
+    return list.filter((m: any) => {
+      // 1. Text Search (Patient name, MRN, Medication Name, Notes, Site)
+      if (emarSearchQuery.trim()) {
+        const query = emarSearchQuery.toLowerCase().trim();
+        const patName = m.patient ? `${m.patient.firstName} ${m.patient.lastName}`.toLowerCase() : '';
+        const mrn = (m.patient?.patientNumber || '').toLowerCase();
+        const medName = (m.medicationName || '').toLowerCase();
+        const notes = (m.notes || '').toLowerCase();
+        const site = (m.site || '').toLowerCase();
+        const matches = patName.includes(query) || mrn.includes(query) || medName.includes(query) || notes.includes(query) || site.includes(query);
+        if (!matches) return false;
+      }
+
+      // 2. Status Filter
+      if (emarStatusFilter !== 'ALL') {
+        if (m.status !== emarStatusFilter) return false;
+      }
+
+      // 3. Route Filter
+      if (emarRouteFilter !== 'ALL') {
+        const routeLower = (m.route || '').toLowerCase();
+        if (!routeLower.includes(emarRouteFilter.toLowerCase())) return false;
+      }
+
+      // 4. Date Filtering
+      const targetTime = m.administeredTime || m.scheduledTime;
+      if (targetTime) {
+        const recDate = new Date(targetTime);
+        const today = new Date();
+
+        if (emarDatePreset === 'TODAY') {
+          const isToday = recDate.toDateString() === today.toDateString();
+          if (!isToday) return false;
+        } else if (emarDatePreset === 'YESTERDAY') {
+          const yesterday = new Date();
+          yesterday.setDate(today.getDate() - 1);
+          if (recDate.toDateString() !== yesterday.toDateString()) return false;
+        } else if (emarDatePreset === 'LAST_7_DAYS') {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(today.getDate() - 7);
+          sevenDaysAgo.setHours(0, 0, 0, 0);
+          if (recDate < sevenDaysAgo) return false;
+        } else if (emarDatePreset === 'THIS_MONTH') {
+          if (recDate.getMonth() !== today.getMonth() || recDate.getFullYear() !== today.getFullYear()) return false;
+        } else if (emarDatePreset === 'CUSTOM') {
+          if (emarStartDate) {
+            const start = new Date(emarStartDate);
+            start.setHours(0, 0, 0, 0);
+            if (recDate < start) return false;
+          }
+          if (emarEndDate) {
+            const end = new Date(emarEndDate);
+            end.setHours(23, 59, 59, 999);
+            if (recDate > end) return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [dashboardData?.pendingMedications, emarSearchQuery, emarStatusFilter, emarRouteFilter, emarDatePreset, emarStartDate, emarEndDate]);
+
+  const paginatedEmarList = useMemo(() => {
+    const startIndex = emarPage * emarRowsPerPage;
+    return filteredEmarList.slice(startIndex, startIndex + emarRowsPerPage);
+  }, [filteredEmarList, emarPage, emarRowsPerPage]);
+
+  const activeEmarFilterCount = useMemo(() => {
+    let count = 0;
+    if (emarSearchQuery.trim()) count++;
+    if (emarStatusFilter !== 'ALL') count++;
+    if (emarRouteFilter !== 'ALL') count++;
+    if (emarDatePreset !== 'ALL') count++;
+    if (emarDatePreset === 'CUSTOM' && (emarStartDate || emarEndDate)) count++;
+    return count;
+  }, [emarSearchQuery, emarStatusFilter, emarRouteFilter, emarDatePreset, emarStartDate, emarEndDate]);
+
   const handleMaternityRegSubmit = async () => {
     try {
       await api.post('/maternity/register', maternityRegForm);
@@ -2427,80 +2619,413 @@ const NursingDashboard = () => {
       {tab === 2 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold">Electronic Medication Administration Record (eMAR)</Typography>
-              <Button variant="contained" size="small" startIcon={<LocalPharmacy />} onClick={() => handleOpenEmarDialog()}>Log Administration</Button>
+            {/* Header & Quick Action */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5, mb: 2 }}>
+              <Box>
+                <Typography variant="h6" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <LocalPharmacy color="primary" />
+                  Electronic Medication Administration Record (eMAR)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Showing {filteredEmarList.length} of {dashboardData?.pendingMedications?.length || 0} logged dose records
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {activeEmarFilterCount > 0 && (
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    size="small"
+                    startIcon={<FilterAltOff />}
+                    onClick={handleResetEmarFilters}
+                  >
+                    Reset Filters ({activeEmarFilterCount})
+                  </Button>
+                )}
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<LocalPharmacy />}
+                  onClick={() => handleOpenEmarDialog()}
+                  sx={{ borderRadius: 2, px: 2, fontWeight: 700 }}
+                >
+                  Log Administration
+                </Button>
+              </Stack>
             </Box>
-            <TableContainer component={Paper} sx={{ border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+
+            {/* Filter Toolbar Paper */}
+            <Paper sx={{ p: 2, mb: 2.5, borderRadius: 2.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.07)' }}>
+              <Grid container spacing={2} alignItems="center">
+                {/* Search by Patient or Medication */}
+                <Grid item xs={12} sm={6} md={3.5}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search Patient, MRN, Medication..."
+                    value={emarSearchQuery}
+                    onChange={(e) => {
+                      setEmarSearchQuery(e.target.value);
+                      setEmarPage(0);
+                    }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" color="action" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: emarSearchQuery ? (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => { setEmarSearchQuery(''); setEmarPage(0); }}>
+                            <Close fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : null
+                    }}
+                  />
+                </Grid>
+
+                {/* Status Filter */}
+                <Grid item xs={6} sm={3} md={2}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="emar-status-filter-label">Status</InputLabel>
+                    <Select
+                      labelId="emar-status-filter-label"
+                      label="Status"
+                      value={emarStatusFilter}
+                      onChange={(e) => {
+                        setEmarStatusFilter(e.target.value);
+                        setEmarPage(0);
+                      }}
+                    >
+                      <MenuItem value="ALL">All Statuses</MenuItem>
+                      <MenuItem value="ADMINISTERED">Administered</MenuItem>
+                      <MenuItem value="SCHEDULED">Scheduled</MenuItem>
+                      <MenuItem value="OMITTED">Omitted / Held</MenuItem>
+                      <MenuItem value="DELAYED">Delayed</MenuItem>
+                      <MenuItem value="CANCELLED">Cancelled</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                {/* Route Filter */}
+                <Grid item xs={6} sm={3} md={2}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="emar-route-filter-label">Route</InputLabel>
+                    <Select
+                      labelId="emar-route-filter-label"
+                      label="Route"
+                      value={emarRouteFilter}
+                      onChange={(e) => {
+                        setEmarRouteFilter(e.target.value);
+                        setEmarPage(0);
+                      }}
+                    >
+                      <MenuItem value="ALL">All Routes</MenuItem>
+                      <MenuItem value="Oral">Oral</MenuItem>
+                      <MenuItem value="Intravenous">IV (Intravenous)</MenuItem>
+                      <MenuItem value="Intramuscular">IM (Intramuscular)</MenuItem>
+                      <MenuItem value="Subcutaneous">SC (Subcutaneous)</MenuItem>
+                      <MenuItem value="Inhalation">Inhalation</MenuItem>
+                      <MenuItem value="Topical">Topical</MenuItem>
+                      <MenuItem value="Drops">Drops (Ophthalmic/Otic)</MenuItem>
+                      <MenuItem value="Rectal">Rectal</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                {/* Date Filter Presets */}
+                <Grid item xs={12} sm={6} md={2.5}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="emar-date-preset-label">Date Filter</InputLabel>
+                    <Select
+                      labelId="emar-date-preset-label"
+                      label="Date Filter"
+                      value={emarDatePreset}
+                      onChange={(e) => {
+                        setEmarDatePreset(e.target.value);
+                        setEmarPage(0);
+                      }}
+                    >
+                      <MenuItem value="ALL">All Time</MenuItem>
+                      <MenuItem value="TODAY">Today Only</MenuItem>
+                      <MenuItem value="YESTERDAY">Yesterday</MenuItem>
+                      <MenuItem value="LAST_7_DAYS">Last 7 Days</MenuItem>
+                      <MenuItem value="THIS_MONTH">This Month</MenuItem>
+                      <MenuItem value="CUSTOM">Custom Date Range</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                {/* Custom Date Inputs if CUSTOM is chosen */}
+                {emarDatePreset === 'CUSTOM' && (
+                  <Grid item xs={12} sm={6} md={2}>
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        label="From"
+                        type="date"
+                        size="small"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        value={emarStartDate}
+                        onChange={(e) => { setEmarStartDate(e.target.value); setEmarPage(0); }}
+                      />
+                      <TextField
+                        label="To"
+                        type="date"
+                        size="small"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        value={emarEndDate}
+                        onChange={(e) => { setEmarEndDate(e.target.value); setEmarPage(0); }}
+                      />
+                    </Stack>
+                  </Grid>
+                )}
+
+                {/* Clear / Reset Filter button on right */}
+                {activeEmarFilterCount > 0 && emarDatePreset !== 'CUSTOM' && (
+                  <Grid item xs={12} sm={6} md={2} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      size="small"
+                      color="inherit"
+                      variant="text"
+                      startIcon={<RestartAlt />}
+                      onClick={handleResetEmarFilters}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Clear All Filters
+                    </Button>
+                  </Grid>
+                )}
+              </Grid>
+
+              {/* Active Filter Badges */}
+              {activeEmarFilterCount > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', mr: 0.5, fontWeight: 700 }}>
+                    Active Filters:
+                  </Typography>
+                  {emarSearchQuery && (
+                    <Chip
+                      size="small"
+                      label={`Search: "${emarSearchQuery}"`}
+                      onDelete={() => setEmarSearchQuery('')}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  )}
+                  {emarStatusFilter !== 'ALL' && (
+                    <Chip
+                      size="small"
+                      label={`Status: ${emarStatusFilter}`}
+                      onDelete={() => setEmarStatusFilter('ALL')}
+                      color="info"
+                      variant="outlined"
+                    />
+                  )}
+                  {emarRouteFilter !== 'ALL' && (
+                    <Chip
+                      size="small"
+                      label={`Route: ${emarRouteFilter}`}
+                      onDelete={() => setEmarRouteFilter('ALL')}
+                      color="info"
+                      variant="outlined"
+                    />
+                  )}
+                  {emarDatePreset !== 'ALL' && (
+                    <Chip
+                      size="small"
+                      label={
+                        emarDatePreset === 'CUSTOM'
+                          ? `Date: ${emarStartDate || 'Start'} to ${emarEndDate || 'Now'}`
+                          : `Date: ${emarDatePreset.replace(/_/g, ' ')}`
+                      }
+                      onDelete={() => { setEmarDatePreset('ALL'); setEmarStartDate(''); setEmarEndDate(''); }}
+                      color="secondary"
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
+              )}
+            </Paper>
+
+            {/* Main Table Container */}
+            <TableContainer component={Paper} sx={{ border: 'none', borderRadius: 2.5, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'action.hover' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Patient Name & MRN</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Medication Description</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Dosage & Route</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Scheduled Slot</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Administered Time</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Status & Details</TableCell>
+                  <TableRow sx={{ bgcolor: alpha('#2563eb', 0.04) }}>
+                    <TableCell sx={{ fontWeight: 800, py: 1.5 }}>Patient Name & MRN</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Medication Description</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Dosage & Route</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Scheduled Slot</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Administered Time</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Status & Details</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }} align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {dashboardData?.pendingMedications?.map((m: any) => (
-                    <TableRow key={m.id} hover>
+                  {paginatedEmarList.map((m: any) => (
+                    <TableRow key={m.id} hover sx={{ '&:hover': { bgcolor: alpha('#2563eb', 0.02) } }}>
+                      {/* Patient Name & MRN */}
                       <TableCell>
-                        <Typography variant="body2" fontWeight={800} color="text.primary">
-                          {m.patient ? `${m.patient.firstName} ${m.patient.lastName}` : 'Ward Patient'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          MRN: {m.patient?.patientNumber || 'N/A'}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                          <Avatar sx={{ width: 32, height: 32, bgcolor: alpha('#2563eb', 0.12), color: 'primary.main', fontSize: '0.8rem', fontWeight: 800 }}>
+                            {m.patient?.firstName?.[0] || 'P'}{m.patient?.lastName?.[0] || ''}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" fontWeight={800} color="text.primary">
+                              {m.patient ? `${m.patient.firstName} ${m.patient.lastName}` : 'Ward Patient'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              MRN: {m.patient?.patientNumber || 'N/A'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+
+                      {/* Medication Description */}
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700} color="primary.main">
+                          {m.medicationName}
                         </Typography>
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>
-                        {m.medicationName}
-                      </TableCell>
+
+                      {/* Dosage & Route */}
                       <TableCell>
-                        <Typography variant="body2">{`${m.dosage} · ${m.route}`}</Typography>
+                        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Chip label={m.dosage} size="small" sx={{ height: 22, fontWeight: 700, bgcolor: 'action.hover' }} />
+                          <Chip label={m.route} size="small" variant="outlined" sx={{ height: 22 }} />
+                        </Stack>
                         {m.site && (
-                          <Typography variant="caption" color="text.secondary" display="block">
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
                             📍 Site: {m.site}
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell>{new Date(m.scheduledTime).toLocaleString()}</TableCell>
+
+                      {/* Scheduled Slot */}
+                      <TableCell>
+                        <Typography variant="body2" color="text.primary">
+                          {new Date(m.scheduledTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {new Date(m.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Administered Time */}
                       <TableCell>
                         {m.administeredTime ? (
-                          <Typography variant="body2" fontWeight={700} color="success.main">
-                            {new Date(m.administeredTime).toLocaleString()}
-                          </Typography>
+                          <Box>
+                            <Typography variant="body2" fontWeight={700} color="success.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <CheckCircle fontSize="inherit" />
+                              {new Date(m.administeredTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(m.administeredTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Typography>
+                          </Box>
                         ) : (
                           <Chip label="Pending" size="small" variant="outlined" color="default" sx={{ height: 22 }} />
                         )}
                       </TableCell>
+
+                      {/* Status & Details */}
                       <TableCell>
                         <Stack spacing={0.5}>
                           <Chip
                             label={m.status}
                             size="small"
-                            color={m.status === 'ADMINISTERED' ? 'success' : m.status === 'OMITTED' ? 'error' : m.status === 'DELAYED' ? 'warning' : 'info'}
+                            color={
+                              m.status === 'ADMINISTERED'
+                                ? 'success'
+                                : m.status === 'OMITTED'
+                                ? 'error'
+                                : m.status === 'DELAYED'
+                                ? 'warning'
+                                : 'info'
+                            }
+                            sx={{ fontWeight: 800, height: 22, maxWidth: 120 }}
                           />
                           {m.omittedReason && (
-                            <Typography variant="caption" color="error.main" fontWeight={600}>
+                            <Typography variant="caption" color="error.main" fontWeight={600} sx={{ display: 'block' }}>
                               Reason: {m.omittedReason}
                             </Typography>
                           )}
                           {m.notes && (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
                               Note: {m.notes}
                             </Typography>
                           )}
                         </Stack>
                       </TableCell>
+
+                      {/* Actions: Edit & Delete Icons */}
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Tooltip title="Edit / Update Administration Record">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleOpenEditEmar(m)}
+                              sx={{ bgcolor: alpha('#2563eb', 0.08), '&:hover': { bgcolor: alpha('#2563eb', 0.18) } }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Record">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleOpenDeleteEmar(m)}
+                              sx={{ bgcolor: alpha('#dc2626', 0.08), '&:hover': { bgcolor: alpha('#dc2626', 0.18) } }}
+                            >
+                              <DeleteOutline fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {(!dashboardData?.pendingMedications || dashboardData?.pendingMedications?.length === 0) && (
-                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>No eMAR medication administration records logged yet today.</TableCell></TableRow>
+
+                  {/* Empty state when no records match filters */}
+                  {filteredEmarList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                          <LocalPharmacy sx={{ fontSize: 44, color: 'text.disabled' }} />
+                          <Typography variant="subtitle1" fontWeight={700} color="text.secondary">
+                            {dashboardData?.pendingMedications?.length === 0
+                              ? 'No eMAR medication administration records logged yet today.'
+                              : 'No medication records match your active filter criteria.'}
+                          </Typography>
+                          {activeEmarFilterCount > 0 && (
+                            <Button size="small" variant="outlined" onClick={handleResetEmarFilters} sx={{ mt: 1 }}>
+                              Reset All Filters
+                            </Button>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>
+
+              {/* Table Pagination */}
+              <TablePagination
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                component="div"
+                count={filteredEmarList.length}
+                rowsPerPage={emarRowsPerPage}
+                page={emarPage}
+                onPageChange={(_, newPage) => setEmarPage(newPage)}
+                onRowsPerPageChange={(e) => {
+                  setEmarRowsPerPage(parseInt(e.target.value, 10));
+                  setEmarPage(0);
+                }}
+                sx={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}
+              />
             </TableContainer>
           </Grid>
         </Grid>
@@ -5672,8 +6197,233 @@ const NursingDashboard = () => {
         </DialogActions>
       </Dialog>
 
-      {/* OpenMed Clinical CoPilot Widget */}
-      <OpenMedUnitCoPilot unitName="Inpatient Ward" />
+      {/* Dialog: Edit eMAR Administration Record */}
+      <Dialog
+        open={editEmarOpen}
+        onClose={() => setEditEmarOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Edit color="primary" />
+          Edit eMAR Administration Record
+        </DialogTitle>
+        <DialogContent dividers>
+          {editingEmarRecord && (
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              {/* Patient Info Banner */}
+              <Box sx={{ p: 1.8, borderRadius: 2, bgcolor: alpha('#2563eb', 0.06), border: '1px solid rgba(37,99,235,0.2)' }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase">
+                  Patient & Hospital Number
+                </Typography>
+                <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                  {editingEmarRecord.patientName} (MRN: {editingEmarRecord.patientNumber})
+                </Typography>
+              </Box>
+
+              {/* Medication Name */}
+              <TextField
+                label="Medication Name *"
+                fullWidth
+                size="small"
+                value={editingEmarRecord.medicationName}
+                onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, medicationName: e.target.value })}
+              />
+
+              {/* Dosage & Route */}
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Dosage *"
+                    fullWidth
+                    size="small"
+                    value={editingEmarRecord.dosage}
+                    onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, dosage: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="edit-route-label">Route *</InputLabel>
+                    <Select
+                      labelId="edit-route-label"
+                      label="Route *"
+                      value={normalizeRouteValue(editingEmarRecord.route || 'Oral')}
+                      onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, route: e.target.value })}
+                    >
+                      <MenuItem value="Oral">Oral (PO / By Mouth)</MenuItem>
+                      <MenuItem value="Intravenous">Intravenous (IV)</MenuItem>
+                      <MenuItem value="Intramuscular">Intramuscular (IM)</MenuItem>
+                      <MenuItem value="Subcutaneous">Subcutaneous (SC / Subcut)</MenuItem>
+                      <MenuItem value="Inhalation">Inhalation (Nebulizer / Inhaler)</MenuItem>
+                      <MenuItem value="Topical">Topical (Cream / Ointment)</MenuItem>
+                      <MenuItem value="Sublingual">Sublingual (SL)</MenuItem>
+                      <MenuItem value="Drops">Drops (Ophthalmic / Otic / Nasal)</MenuItem>
+                      <MenuItem value="Rectal">Rectal (Suppository / PR)</MenuItem>
+                      {editingEmarRecord.route && !['Oral', 'Intravenous', 'Intramuscular', 'Subcutaneous', 'Inhalation', 'Topical', 'Sublingual', 'Drops', 'Rectal'].includes(normalizeRouteValue(editingEmarRecord.route)) && (
+                        <MenuItem value={editingEmarRecord.route}>{editingEmarRecord.route}</MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              {/* Administration Site & Status */}
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Site (e.g. Left Deltoid, IV Line)"
+                    fullWidth
+                    size="small"
+                    value={editingEmarRecord.site}
+                    onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, site: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="edit-status-label">Status *</InputLabel>
+                    <Select
+                      labelId="edit-status-label"
+                      label="Status *"
+                      value={editingEmarRecord.status}
+                      onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, status: e.target.value })}
+                    >
+                      <MenuItem value="ADMINISTERED">ADMINISTERED</MenuItem>
+                      <MenuItem value="SCHEDULED">SCHEDULED</MenuItem>
+                      <MenuItem value="OMITTED">OMITTED / HELD</MenuItem>
+                      <MenuItem value="DELAYED">DELAYED</MenuItem>
+                      <MenuItem value="CANCELLED">CANCELLED</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              {/* Scheduled Time & Administered Time */}
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Scheduled Slot *"
+                    type="datetime-local"
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    value={editingEmarRecord.scheduledTime}
+                    onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, scheduledTime: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Administered Time"
+                    type="datetime-local"
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    disabled={editingEmarRecord.status !== 'ADMINISTERED' && editingEmarRecord.status !== 'DELAYED'}
+                    value={editingEmarRecord.administeredTime}
+                    onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, administeredTime: e.target.value })}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Omission Reason (if not Administered) */}
+              {editingEmarRecord.status !== 'ADMINISTERED' && (
+                <TextField
+                  label="Reason for Delay / Omission"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Patient fasting for surgery (NPO), Patient sleeping, Drug out of stock"
+                  value={editingEmarRecord.omittedReason}
+                  onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, omittedReason: e.target.value })}
+                />
+              )}
+
+              {/* Clinical Notes / Remarks */}
+              <TextField
+                label="Clinical Remarks / Verification Notes"
+                fullWidth
+                multiline
+                rows={2}
+                size="small"
+                value={editingEmarRecord.notes}
+                onChange={(e) => setEditingEmarRecord({ ...editingEmarRecord, notes: e.target.value })}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setEditEmarOpen(false)} disabled={editEmarSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveEditEmar}
+            variant="contained"
+            color="primary"
+            disabled={editEmarSubmitting || !editingEmarRecord?.medicationName}
+            startIcon={editEmarSubmitting ? <CircularProgress size={16} /> : <CheckCircle />}
+            sx={{ fontWeight: 700 }}
+          >
+            {editEmarSubmitting ? 'Saving Changes...' : 'Save Changes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Delete eMAR Record Confirmation */}
+      <Dialog
+        open={deleteEmarOpen}
+        onClose={() => setDeleteEmarOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Warning color="error" />
+          Delete Administration Record?
+        </DialogTitle>
+        <DialogContent dividers>
+          {deletingEmarRecord && (
+            <Stack spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                Are you sure you want to permanently delete this eMAR dose record from the electronic patient chart?
+              </Typography>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#dc2626', 0.05), border: '1px solid rgba(220,38,38,0.2)' }}>
+                <Typography variant="body2" fontWeight={800} color="text.primary">
+                  {deletingEmarRecord.medicationName}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Patient: {deletingEmarRecord.patient ? `${deletingEmarRecord.patient.firstName} ${deletingEmarRecord.patient.lastName}` : 'Ward Patient'} (MRN: {deletingEmarRecord.patient?.patientNumber || 'N/A'})
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Dosage & Route: {deletingEmarRecord.dosage} · {deletingEmarRecord.route}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Scheduled: {new Date(deletingEmarRecord.scheduledTime).toLocaleString()}
+                </Typography>
+              </Box>
+              <Alert severity="warning" sx={{ fontSize: '0.78rem' }}>
+                This action is audited and will remove the record from shift logs and compliance adherence tallies.
+              </Alert>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDeleteEmarOpen(false)} disabled={deleteEmarSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteEmar}
+            variant="contained"
+            color="error"
+            disabled={deleteEmarSubmitting}
+            startIcon={deleteEmarSubmitting ? <CircularProgress size={16} /> : <Delete />}
+            sx={{ fontWeight: 700 }}
+          >
+            {deleteEmarSubmitting ? 'Deleting...' : 'Delete Record'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* OpenMed Clinical CoPilot Widget — Commented out per user request */}
+      {/* <OpenMedUnitCoPilot unitName="Inpatient Ward" /> */}
     </Box>
   );
 };

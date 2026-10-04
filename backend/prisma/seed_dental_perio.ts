@@ -49,7 +49,7 @@ const ADEAZE_PERIO_PROFILE: Record<number, { pd: number; gm: number; bop: boolea
 };
 
 async function main() {
-  console.log('Seeding PostgreSQL dental perio measurements...');
+  console.log('Seeding dental perio measurements...');
 
   const encounters = await prisma.dentalEncounter.findMany({
     include: { patient: true }
@@ -118,7 +118,7 @@ async function main() {
       }
     });
 
-    console.log(`✓ Seeded ${records.length} perio records into PostgreSQL for Encounter #${enc.encounterNumber}!`);
+    console.log(`✓ Seeded ${records.length} perio records into database for Encounter #${enc.encounterNumber}!`);
   }
 }
 

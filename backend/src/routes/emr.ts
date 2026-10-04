@@ -79,7 +79,6 @@ router.get('/summary/:patientId', authMiddleware, async (req, res, next) => {
       prisma.observation.findMany({
         where: { patientId, category: 'vital-signs' },
         orderBy: { createdAt: 'desc' },
-        take: 12, // recent measurements
       }),
       prisma.condition.findMany({
         where: { patientId, clinicalStatus: 'ACTIVE' },
@@ -100,8 +99,12 @@ router.get('/summary/:patientId', authMiddleware, async (req, res, next) => {
       }),
       prisma.triageRecord.findMany({
         where: { patientId },
+        include: {
+          creator: {
+            select: { id: true, firstName: true, lastName: true, designation: true }
+          }
+        },
         orderBy: { createdAt: 'desc' },
-        take: 5,
       }),
       prisma.consultationNote.findMany({
         where: { patientId },

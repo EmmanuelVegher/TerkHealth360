@@ -259,6 +259,31 @@ export interface ExtractedInsuranceRecord {
   approvalStatus?: 'APPROVED' | 'PENDING' | 'REJECTED';
 }
 
+export interface ExtractedJournalLine {
+  id?: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  costCentre?: string;
+  description?: string;
+}
+
+export interface ExtractedJournalVoucher {
+  id?: string;
+  voucherNumber?: string;
+  referenceNumber?: string;
+  date: string;
+  description: string;
+  category?: string;
+  status?: 'DRAFT' | 'POSTED' | 'APPROVED';
+  createdBy?: string;
+  approvedBy?: string;
+  totalDebit?: number;
+  totalCredit?: number;
+  lines: ExtractedJournalLine[];
+}
+
 export interface ExtractedFinanceRecord {
   id?: string;
   transactionDate: string;
@@ -282,6 +307,50 @@ export interface ExtractedAuditRecord {
   complianceScorePercent?: number;
   verificationStatus: 'COMPLIANT' | 'MINOR_DEFICIENCY' | 'MAJOR_DEFICIENCY' | 'REQUIRES_AMENDMENT';
   auditorRemarks?: string;
+}
+
+export interface ExtractedOperationNote {
+  id?: string;
+  operationDate: string;
+  startTime?: string;
+  endTime?: string;
+  operationName: string;
+  preOpDiagnosis?: string;
+  postOpDiagnosis?: string;
+  surgeonName: string;
+  assistantSurgeon?: string;
+  anaesthetistName?: string;
+  scrubNurse?: string;
+  circulatingNurse?: string;
+  anaesthesiaType?: string; // GA | SPINAL | EPIDURAL | LOCAL | SEDATION | REGIONAL
+  findings: string;
+  procedureDetails: string;
+  estimatedBloodLossMl?: number;
+  implantsOrPacks?: string;
+  drainInserted?: string;
+  specimenSentForHistology?: boolean;
+  specimenDescription?: string;
+  sutureMaterials?: string;
+  postOpOrders?: string;
+  complications?: string;
+}
+
+export interface ExtractedSurgicalConsent {
+  id?: string;
+  consentCode?: string;
+  operationName?: string;
+  patientName?: string;
+  signerName?: string;
+  relationship?: 'SELF' | 'SPOUSE' | 'PARENT' | 'CHILD' | 'GUARDIAN' | 'NEXT_OF_KIN' | 'OTHER';
+  benefitsExplained?: boolean;
+  risksExplained?: boolean;
+  anaesthesiaRisksExplained?: boolean;
+  bloodTransfusionConsent?: boolean;
+  surgeonName?: string;
+  witnessName?: string;
+  consentDate?: string;
+  signatureImage?: string;
+  notes?: string;
 }
 
 export interface ExtractedPatientBioData {
@@ -315,6 +384,11 @@ export interface ExtractedPatientBioData {
   emergencyName?: string;
   emergencyPhone?: string;
   hospitalName?: string;
+  isDeceased?: boolean;
+  deceasedDate?: string;
+  causeOfDeath?: string;
+  status?: 'ACTIVE' | 'DECEASED' | 'ARCHIVED';
+  notes?: string;
 }
 
 export interface PageClassificationAudit {
@@ -347,7 +421,10 @@ export interface ExtractedFolderData {
   eyeClinicRecords?: ExtractedEyeClinicRecord[];
   insuranceRecords?: ExtractedInsuranceRecord[];
   financeRecords?: ExtractedFinanceRecord[];
+  journalVouchers?: ExtractedJournalVoucher[];
   auditRecords?: ExtractedAuditRecord[];
+  operationNotes?: ExtractedOperationNote[];
+  surgicalConsents?: ExtractedSurgicalConsent[];
   pageClassifications: Array<{
     pageIndex: number;
     documentType: string;
@@ -357,6 +434,7 @@ export interface ExtractedFolderData {
   overallConfidenceScore: number;
   aiNotes: string;
   detectedHospitalPreset?: string;
+  isPatientFolder?: boolean;
 }
 
 export interface PageFormMapping {
@@ -365,6 +443,8 @@ export interface PageFormMapping {
     | 'BIODATA_COVER'
     | 'SOAP_PROGRESS'
     | 'VITALS_TPR'
+    | 'OPERATING_THEATRE'
+    | 'SURGICAL_CONSENT'
     | 'DISCHARGE'
     | 'BILLING'
     | 'LABS'
@@ -476,6 +556,12 @@ MANDATORY MULTI-PAGE & ALL-ROWS EXTRACTION DIRECTIVES:
         case 'AUDIT':
           return `• [AUDIT] Audit Trail & Chart Completeness: Found on ${pageList} (${pageIdxs.length} page(s)).
   🚨 CRITICAL MANDATE: Extract audit date, auditor name, verification status, compliance score, and chart deficiency list into the "auditRecords" array.`;
+        case 'OPERATING_THEATRE':
+          return `• [OPERATING_THEATRE] Operating Theatre / Operation Note: Found on ${pageList} (${pageIdxs.length} page(s)).
+  🚨 CRITICAL MANDATE: Extract surgical operation date, surgeon name, assistant surgeons, anaesthetist, anaesthesia type, pre/post-op diagnoses, operation name, operative findings, step-by-step procedure description, sutures/closure, estimated blood loss (EBL), drains/packs, specimens for histology, and post-op orders into the "operationNotes" array.`;
+        case 'SURGICAL_CONSENT':
+          return `• [SURGICAL_CONSENT] Operation / Surgical Consent Form: Found on ${pageList} (${pageIdxs.length} page(s)).
+  🚨 CRITICAL MANDATE: Extract proposed surgical operation, patient name, consenting signer name, relationship to patient (Self/Spouse/Parent/Next of Kin/Guardian), confirmation of benefits and risks explained, anaesthesia risk consent, blood transfusion consent, witness name, doctor/surgeon name, consent date, and consent code into the "surgicalConsents" array.`;
         default:
           return `• [${formType}]: Found on ${pageList}. Extract all structured clinical data completely across all pages.`;
       }
@@ -498,6 +584,12 @@ ${pageFormMappings.map(m => {
       break;
     case 'VITALS_TPR':
       instruction = 'Triage / Vitals Observation Sheet (TPR): Extract every single row of time-series BP, Pulse, Temperature, RR, SpO2, and notes from this page.';
+      break;
+    case 'OPERATING_THEATRE':
+      instruction = 'Operating Theatre / Operation Note: Extract surgical date, surgeon name, assistant surgeons, anaesthetist, anaesthesia type (GA, Spinal, Local, Sedation), pre-op & post-op diagnoses, operation name, operative findings, step-by-step operative procedure details, suture materials used, estimated blood loss (EBL), drains/packs inserted, histology specimens, and post-operative orders.';
+      break;
+    case 'SURGICAL_CONSENT':
+      instruction = 'Operation / Surgical Consent Form: Extract proposed operation name, patient name, consenting signer name, relationship to patient (SELF, SPOUSE, PARENT, CHILD, GUARDIAN, NEXT_OF_KIN), acknowledgement that surgical and anaesthetic risks and benefits were explained, blood transfusion consent, witness name, surgeon name, consent date, and consent code.';
       break;
     case 'DISCHARGE':
       instruction = 'Discharge Summary & Referral Slip: Extract admission and discharge dates, clinical course summary, final diagnosis, discharge condition, and discharge medications.';
@@ -592,6 +684,62 @@ HOSPITAL PRESET: [FAITH FOUNDATION MISSION HOSPITAL NSUKKA]
     - "IV Pts" / "PCM" -> medicationName: "IV Pts", genericName: "Paracetamol", route: "IV", dosage: "1g", frequency: "TDS/QDS"
   * Administration Times Grid (eMAR Med Tracker):
     - For each administered checkmark / time documented (e.g. '6/3/26 6am', '12n', '6pm', '12mn'), extract into administrationTimes: [{ date: '2026-03-06', time: '06:00', doseGiven: '500mg', status: 'ADMINISTERED', givenBy: 'Nurse' }, ...].
+- OPERATION NOTE FORMS (FAITH FOUNDATION OPERATING THEATRE):
+  * Header: "FAITH FOUNDATION MISSION HOSPITAL NSUKKA" -> "OPERATION NOTE"
+  * Header Columns: Date | Name of Surgeon | Assistants | Anaesthetist | Anaesthesia | Pre-Op Diagnosis | Post-Op Diagnosis | Operation(s)
+  * Operative Findings: Full macroscopic and anatomical findings during the surgery (e.g. adhesions, organ status, blood/fluid in peritoneal cavity, pathology found).
+  * Procedures: Detailed step-by-step operative narrative (incision type/layer, entry into cavity, surgical dissection/mobilization, excision/repair/delivery, haemostasis, peritoneal/fascial closure, skin closure and suture types).
+  * Metrics & Materials: Suture materials (e.g. Vicryl 2/0, Nylon 2/0, Chromic catgut), Estimated Blood Loss (EBL in mL), Drains/Packs left in situ, Specimens sent for Histology.
+  * Post-Operative Orders: Post-op IV fluids, analgesics, antibiotics, vital signs frequency, drain monitoring, and wound care.
+  * MANDATE: Extract every single field into the "operationNotes" array with 100% fidelity.
+- OPERATION / SURGICAL CONSENT FORMS:
+  * Header: "FAITH FOUNDATION MISSION HOSPITAL NSUKKA" -> "CONSENT TO OPERATION / SURGICAL PROCEDURE"
+  * Content: Extract Proposed Operation name, Patient Name, Consenting Signer Name, Signer Relationship (SELF, SPOUSE, PARENT, CHILD, GUARDIAN, NEXT_OF_KIN), Benefits and Risks Explained acknowledgement (true/false), Anaesthesia risks explained (true/false), Blood Transfusion consent (true/false), Doctor/Surgeon signature, Witness name, Date/time of consent, and Consent Code into "surgicalConsents".
+
+- LABORATORY RESULT FORMS (FAITH FOUNDATION LABORATORY DEPARTMENT & ALL CLINICAL LABS):
+  * Header: "FAITH FOUNDATION MISSION HOSPITAL NSUKKA" -> "LABORATORY RESULT"
+  * Top Demographics: Name (e.g. "Ameh Samuel"), Age (e.g. "18"), Sex ("M" / "F"), Ward, Bed, Date (e.g. "19/07/16" -> "2016-07-19"), Lab No (e.g. "130006").
+  * 🚨 ABSOLUTE MANDATE FOR LAB RESULTS (CHECK ALL SECTIONS ACROSS ENTIRE PAGE):
+    1. EXHAUSTIVELY SCAN EVERY SECTION ON THE FORM:
+       - Header Demographics & Clinical Notes
+       - Hematology & Blood Picture (PCV, Hb, Total WBC, Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils, Platelets, ESR, Blood Film)
+       - Chemical Pathology & Glucose (FBS, RBS, Electrolytes Na+/K+/Cl-/HCO3-, Urea, Creatinine, LFT Bilirubin/AST/ALT/ALP/Protein/Albumin, Lipids)
+       - Urinalysis (Protein/Albumin, Sugar/Glucose, Ketones, Bilirubin, Urobilinogen, Blood, Nitrite, Leukocytes, Pus cells, RBC, Casts, Crystals, Yeast)
+       - Parasitology & Stool (Malaria Parasite MP, Stool Microscopy, Ova, Cysts, Occult Blood)
+       - Microbiology & Serology (Widal Agglutination titres, Sputum AFB/GeneXpert, Gram stain, Wet mount, Swabs, H. pylori, Chlamydia)
+       - Viral & Infectious Screening (HBsAg, Anti-HCV, VDRL/Syphilis, RVS/HIV 1&2 Rapid Screening)
+       - Blood Bank / Transfusion / Donor Profile (ABO Blood Group, Rhesus RhD, Genotype, Cross-Matching Compatibility, Blood Bag Number, Donor Profile)
+       - Handwritten Comments, Remarks, Margins, Stamps, and Signatures
+    2. RULE: Extract EVERY test that has actual handwritten or entered numbers, values, "+", "++", "Nil", "Not Seen", "Clear", "Reactive", "Non-Reactive", "Compatible", etc., regardless of which section it appears in (both inside and outside the Donor Profile section).
+       - Only skip completely blank, untouched printed rows (e.g., if a preprinted row has no writing or tick beside it).
+    3. EXAMPLES OF COMMON HANDWRITTEN LAB ENTRIES:
+       - "Blood Group" / "Blood Group -" -> e.g. "O RhD Pos" or "O Pos" (testName: "Blood Group & Rhesus (ABO/Rh)", resultValue: "O Positive (RhD Pos)", category: "BLOOD_BANK", loincCode: "883-9")
+       - "HBsAg" / "HBs Ag" / "ABrAG" -> e.g. "Non-Reactive" / "Negative" (testName: "Hepatitis B Surface Antigen (HBsAg)", resultValue: "Non-Reactive", category: "IMMUNOLOGY_SEROLOGY", loincCode: "5196-1")
+       - "HCV" -> e.g. "Non-Reactive" / "Negative" (testName: "Hepatitis C Virus Antibody (Anti-HCV)", resultValue: "Non-Reactive", category: "IMMUNOLOGY_SEROLOGY", loincCode: "13955-0")
+       - "VDRL" -> e.g. "Non-Reactive" / "Negative" (testName: "VDRL / Syphilis Rapid Treponemal Test", resultValue: "Non-Reactive", category: "IMMUNOLOGY_SEROLOGY", loincCode: "20507-0")
+       - "RVS" (RetroViral Screening / HIV) -> e.g. "Non-Reactive" / "Negative" (testName: "HIV 1 & 2 Rapid Screening (RVS)", resultValue: "Non-Reactive", category: "IMMUNOLOGY_SEROLOGY", loincCode: "75622-1")
+       - "BAG No" / "BAE No" (Blood Bag ID) -> e.g. "EH-521" (testName: "Blood Bank Donor Unit / Bag Number", resultValue: "EH-521", category: "BLOOD_BANK", dataDictionaryCode: "LAB-BAG-001")
+       - "X-Matching" / "Cross-Matching" / "X-Mathoome" -> e.g. "Compatible" (testName: "Cross-Matching (Compatibility Test)", resultValue: "Compatible", category: "BLOOD_BANK", loincCode: "1007-4", interpretation: "NORMAL")
+       - "Widal" -> Salmonella agglutination titres (testName: "Widal Salmonella Agglutination Test")
+       - "MP" / "Malarial Parasites" -> e.g. "+ / ++ / Not Seen" (testName: "Malaria Parasite (MP / RDT / Microscopy)")
+       - "Genotype" -> e.g. "AA / AS / SS" (testName: "Hemoglobin Genotype / Electrophoresis")
+       - "FBS / RBS" -> testName: "Fasting Blood Sugar" / "Random Blood Sugar"
+    4. Extract every non-blank test into the "labInvestigations" array with 100% fidelity.
+
+- PRESCRIPTIONS / TREATMENT ORDERS ON DOCTOR SOAP NOTES & KARDEX:
+  * Check ALL sources of medication orders: Doctor SOAP Progress Notes under "Plan" or "Rx", Treatment Cards, Kardex Medication Charts, Nursing Sheets, and Discharge Medication summaries.
+  * Standard Prescriptions to parse into "prescriptions" array:
+    - "Tabs Augmentin 625mg bd x 5/7" -> medicationName: "Tabs Augmentin", genericName: "Amoxicillin/Clavulanic Acid", dosage: "625mg", frequency: "BD (12 Hourly)", duration: "5 days", route: "ORAL"
+    - "Tabs Cipro 500mg bd x 5/7" -> medicationName: "Tabs Cipro", genericName: "Ciprofloxacin", dosage: "500mg", frequency: "BD (12 Hourly)", duration: "5 days", route: "ORAL"
+    - "Tabs Flagyl 400mg tds x 5/7" -> medicationName: "Tabs Flagyl", genericName: "Metronidazole", dosage: "400mg", frequency: "TDS (8 Hourly)", duration: "5 days", route: "ORAL"
+    - "Tabs Paracetamol 1g tds x 3/7" -> medicationName: "Tabs Paracetamol", genericName: "Paracetamol", dosage: "1g (1000mg)", frequency: "TDS (8 Hourly)", duration: "3 days", route: "ORAL"
+    - "IV Ceftriaxone 1g iv bd x 3/7" -> medicationName: "IV Ceftriaxone", genericName: "Ceftriaxone", dosage: "1g", frequency: "BD (12 Hourly)", duration: "3 days", route: "IV"
+    - "IV Flagyl 500mg iv tds x 48h" -> medicationName: "IV Flagyl", genericName: "Metronidazole", dosage: "500mg", frequency: "TDS (8 Hourly)", duration: "48 hours", route: "IV"
+    - "IVF 5% D/S 1L 8hrly" -> medicationName: "IVF 5% Dextrose Saline", genericName: "5% Dextrose in 0.9% Normal Saline", dosage: "1 Litre", frequency: "8 Hourly", route: "IV"
+    - "Inj Diclofenac 75mg im stat" -> medicationName: "Inj Diclofenac", genericName: "Diclofenac Sodium", dosage: "75mg", frequency: "STAT / PRN", duration: "1 dose", route: "IM"
+    - "Tabs Coartem 1x2 x 3/7" / "Tabs Lonart" -> medicationName: "Tabs Coartem", genericName: "Artemether / Lumefantrine", dosage: "80/480mg", frequency: "BD (12 Hourly)", duration: "3 days", route: "ORAL"
+    - "Tabs FeSO4 200mg dly", "Tabs Folic Acid 5mg dly", "Tabs Vit C 100mg tds"
+  * MANDATE: You MUST parse every medication line written in the Plan section or Treatment cards into the "prescriptions" array. Do not leave "prescriptions" empty if medications were ordered in the consultation plan!
 `;
   } else if (hospitalPreset === 'BISHOP_SHANAHAN') {
     hospitalSpecificGuidance = `
@@ -623,9 +771,29 @@ ${multiPageDirectives}
 
 ${perPageGuidance}
 
-CRITICAL RULES FOR MULTI-PAGE DOCTOR SOAP NOTES & DATE SEQUENCING:
-- When multiple doctor continuation pages are provided, identify every consultation encounter and sort strictly by DATE SEQUENCE (oldest consultation first, proceeding chronologically to latest).
-- For each encounter, extract the exact clinical text verbatim into visitDate, visitType, doctorName, specialty, chiefComplaint, historyOfPresentIllness, physicalExamination, assessment, plan, and clinicalNotes.
+CRITICAL RULES FOR 100% VERBATIM DOCTOR SOAP NOTES & CONTINUATION SHEETS:
+- You MUST transcribe the doctor's handwriting and handwritten/typed progress notes with 100% EXACT FIDELITY.
+- NEVER summarize, paraphrase, shorten, or replace handwritten notes with generic placeholder text.
+- Transcribe EXACTLY what the doctor wrote for each section:
+  * chiefComplaint: Word-for-word presenting complaints with duration (e.g. 'c/o fever x 4/7, headache x 3/7, general malaise').
+  * historyOfPresentIllness: Exact Subjective history written by the doctor (symptoms, onset, progression, systemic inquiry, past medical/drug history).
+  * physicalExamination: Exact Objective findings (General condition, vitals in note, CVS S1 S2, Chest clear, Abdomen soft/tender, CNS, localized examination).
+  * assessment: Exact Impression / Provisional / Working diagnosis as written by the doctor (e.g. '1. Severe Malaria 2. Enteric Fever').
+  * plan: Exact Plan / Treatment prescribed / Orders (e.g. '1. Admit 2. IV Ceftriaxone 1g BD 3. MP, FBC, Widal 4. IV Fluids').
+  * clinicalNotes: Any ward round notes, consultant reviews, additional remarks, and doctor sign-offs.
+- If multiple consultations or ward round entries exist across continuation sheets, create a separate encounter object for each distinct dated consultation entry, sorted strictly by DATE SEQUENCE (oldest consultation first).
+
+CRITICAL RULES FOR DEATH, R.I.P., & DECEASED FOLDER DETECTION:
+- CAREFULLY INSPECT all page images (especially folder cover, doctor continuation sheets, mortuary records, and discharge summaries) for ANY stamps, handwritten notations, or markings indicating death (e.g. "R.I.P.", "RIP", "DEAD", "DEATH", "DECEASED", "EXPIRED", "BID" / "BROUGHT IN DEAD", "CORPSE", "DEATH CERTIFICATE", "MORTUARY").
+- If ANY death indicator is detected:
+  1. In the "patient" object, set "isDeceased": true and "status": "DECEASED".
+  2. Set "deceasedDate": "YYYY-MM-DD" (if date of demise is present).
+  3. Set "causeOfDeath": "string" (if primary cause of death is stated).
+  4. Also extract full details into the "mortuaryRecords" array with cause of death, date of death, certifying doctor, and corpse tag.
+
+CRITICAL RULES FOR PRESCRIPTION & LAB TEST DATA DICTIONARY MAPPING:
+- For EVERY medication prescribed, extract the exact prescribed medicationName (e.g. 'IV Flagyl 500mg TDS', 'Sc Clexane 40mg', 'Coartem', 'PCM') and map to its standardized genericName (e.g. 'Metronidazole', 'Enoxaparin Sodium (Clexane)', 'Artemether/Lumefantrine', 'Paracetamol'), route, dosage, frequency, and duration.
+- For EVERY lab investigation, extract the exact testName and map to its standardized standardTestName, category (HAEMATOLOGY, CHEMISTRY, MICROBIOLOGY, BLOOD_BANK, PARASITOLOGY), LOINC code, specimen type, and standard units.
 
 CRITICAL RULES FOR MULTI-PAGE VITAL SIGNS (TPR) SHEETS:
 - You MUST extract EVERY row on EVERY vital signs page into the "vitals" array.
@@ -668,7 +836,11 @@ OUTPUT STRICTLY AS VALID JSON MATCHING THIS EXACT SCHEMA (NO MARKDOWN TEXT OUTSI
     "nokAddress": "string",
     "emergencyName": "string",
     "emergencyPhone": "string",
-    "hospitalName": "string"
+    "hospitalName": "string",
+    "isDeceased": false,
+    "deceasedDate": "YYYY-MM-DD",
+    "causeOfDeath": "string",
+    "status": "ACTIVE" | "DECEASED"
   },
   "vitals": [
     {
@@ -917,6 +1089,37 @@ OUTPUT STRICTLY AS VALID JSON MATCHING THIS EXACT SCHEMA (NO MARKDOWN TEXT OUTSI
       "reconciliationNotes": "Payment reconciled against bank daily teller register"
     }
   ],
+  "journalVouchers": [
+    {
+      "voucherNumber": "JV-2026-001",
+      "date": "YYYY-MM-DD",
+      "description": "General Ledger Journal Entry / Monthly Accrual / Supplies Disbursement",
+      "category": "GENERAL_JOURNAL" | "PAYROLL" | "INVENTORY" | "EXPENSE_ACCRUAL",
+      "status": "POSTED",
+      "createdBy": "Accounts Officer",
+      "approvedBy": "Finance Manager",
+      "totalDebit": 150000,
+      "totalCredit": 150000,
+      "lines": [
+        {
+          "accountCode": "5010",
+          "accountName": "Medical Supplies Expense",
+          "debit": 150000,
+          "credit": 0,
+          "costCentre": "Emergency Room",
+          "description": "Purchase of consumables and syringes"
+        },
+        {
+          "accountCode": "1010",
+          "accountName": "Cash and Bank Balances",
+          "debit": 0,
+          "credit": 150000,
+          "costCentre": "Main Accounts",
+          "description": "Payment disbursed via bank"
+        }
+      ]
+    }
+  ],
   "auditRecords": [
     {
       "auditDate": "YYYY-MM-DD",
@@ -928,11 +1131,54 @@ OUTPUT STRICTLY AS VALID JSON MATCHING THIS EXACT SCHEMA (NO MARKDOWN TEXT OUTSI
       "auditorRemarks": "Record passed primary compliance checklist for digital archiving."
     }
   ],
+  "operationNotes": [
+    {
+      "operationDate": "YYYY-MM-DD",
+      "startTime": "09:00",
+      "endTime": "10:30",
+      "operationName": "string",
+      "preOpDiagnosis": "string",
+      "postOpDiagnosis": "string",
+      "surgeonName": "string",
+      "assistantSurgeon": "string",
+      "anaesthetistName": "string",
+      "scrubNurse": "string",
+      "circulatingNurse": "string",
+      "anaesthesiaType": "General Anaesthesia" | "Spinal Anaesthesia" | "Epidural" | "Local Infiltration" | "Sedation",
+      "findings": "string",
+      "procedureDetails": "string",
+      "estimatedBloodLossMl": 150,
+      "implantsOrPacks": "string",
+      "drainInserted": "string",
+      "specimenSentForHistology": true,
+      "specimenDescription": "string",
+      "sutureMaterials": "Vicryl 2/0, Nylon 2/0",
+      "postOpOrders": "string",
+      "complications": "None"
+    }
+  ],
+  "surgicalConsents": [
+    {
+      "consentCode": "CONS-2026-081",
+      "operationName": "string",
+      "patientName": "string",
+      "signerName": "string",
+      "relationship": "SELF" | "SPOUSE" | "PARENT" | "CHILD" | "GUARDIAN" | "NEXT_OF_KIN" | "OTHER",
+      "benefitsExplained": true,
+      "risksExplained": true,
+      "anaesthesiaRisksExplained": true,
+      "bloodTransfusionConsent": true,
+      "surgeonName": "string",
+      "witnessName": "string",
+      "consentDate": "YYYY-MM-DD",
+      "notes": "Patient and next of kin counselled on surgical benefits and anaesthesia risks."
+    }
+  ],
   "pageClassifications": [
     {
       "pageIndex": 0,
-      "documentType": "Folder Cover / Bio-Data",
-      "summary": "Patient registration jacket with family number"
+      "documentType": "Folder Cover / Bio-Data / Finance Journal / Audit Log",
+      "summary": "Page content summary"
     }
   ],
   "pageClassificationAudit": [
@@ -941,13 +1187,13 @@ OUTPUT STRICTLY AS VALID JSON MATCHING THIS EXACT SCHEMA (NO MARKDOWN TEXT OUTSI
       "userMappedForm": "BIODATA_COVER",
       "aiDetectedForm": "BIODATA_COVER",
       "matchStatus": "VERIFIED_MATCH",
-      "detectedElements": ["Folder header", "Family No: 12676", "Demographics"],
+      "detectedElements": ["Header", "Content"],
       "confidence": 98,
-      "notes": "Verified Patient Registration Folder Cover. Extracted bio-data and family account link."
+      "notes": "Verified page content layout."
     }
   ],
   "overallConfidenceScore": 95,
-  "aiNotes": "Summary of extracted clinical records",
+  "aiNotes": "Summary of extracted clinical or financial records",
   "detectedHospitalPreset": "FAITH_FOUNDATION"
 }
 `;
@@ -1050,7 +1296,21 @@ export async function extractHospitalFolder(
           const cleanedJson = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanedJson);
 
-          if (parsed && (parsed.patient || (parsed.encounters && parsed.encounters.length > 0) || (parsed.vitals && parsed.vitals.length > 0))) {
+          const hasValidContent = parsed && (
+            parsed.patient ||
+            (Array.isArray(parsed.encounters) && parsed.encounters.length > 0) ||
+            (Array.isArray(parsed.vitals) && parsed.vitals.length > 0) ||
+            (Array.isArray(parsed.financeRecords) && parsed.financeRecords.length > 0) ||
+            (Array.isArray(parsed.journalVouchers) && parsed.journalVouchers.length > 0) ||
+            (Array.isArray(parsed.auditRecords) && parsed.auditRecords.length > 0) ||
+            (Array.isArray(parsed.mortuaryRecords) && parsed.mortuaryRecords.length > 0) ||
+            (Array.isArray(parsed.insuranceRecords) && parsed.insuranceRecords.length > 0) ||
+            (Array.isArray(parsed.radiologyReports) && parsed.radiologyReports.length > 0) ||
+            (Array.isArray(parsed.pathologyReports) && parsed.pathologyReports.length > 0) ||
+            (Array.isArray(parsed.billingRecords) && parsed.billingRecords.length > 0)
+          );
+
+          if (hasValidContent) {
             console.log(`[FolderVision] ✓ Success with ${tier} (${cleanModel}).`);
             const result = sanitizeAndNormalizeExtractedData(parsed, options);
             result.aiNotes = `[${tier}: ${cleanModel}] ${result.aiNotes}`;
@@ -1175,6 +1435,7 @@ function normalizeClinicalTime(rawTimeStr: any): string {
 export function normalizeDrugGenericName(rawName: string): { genericName: string; route: string; dataDictionaryCode: string } {
   const lower = (rawName || '').toLowerCase().trim();
   
+  // ── 1. ANTIBIOTICS & ANTIMICROBIALS ──
   if (lower.includes('flagyl') || lower.includes('metro')) {
     return { genericName: 'Metronidazole', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-6912' };
   }
@@ -1184,38 +1445,244 @@ export function normalizeDrugGenericName(rawName: string): { genericName: string
   if (lower.includes('ceftriaxone') || lower.includes('rocephin')) {
     return { genericName: 'Ceftriaxone', route: 'IV', dataDictionaryCode: 'RXNORM-309090' };
   }
-  if (lower.includes('diclo')) {
-    return { genericName: 'Diclofenac Sodium', route: lower.includes('inj') || lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-3355' };
+  if (lower.includes('cefuroxime') || lower.includes('zinacef') || lower.includes('zinnat')) {
+    return { genericName: 'Cefuroxime Axetil', route: lower.includes('iv') || lower.includes('inj') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-2193' };
   }
-  if (lower.includes('clexane') || lower.includes('cleanxue') || lower.includes('enoxaparin')) {
-    return { genericName: 'Enoxaparin Sodium (Clexane)', route: 'SC', dataDictionaryCode: 'RXNORM-67108' };
+  if (lower.includes('cefixime')) {
+    return { genericName: 'Cefixime', route: 'Oral', dataDictionaryCode: 'RXNORM-2051' };
   }
-  if (lower.includes('pts') || lower.includes('pcm') || lower.includes('paracetamol') || lower.includes('panadol')) {
-    return { genericName: 'Paracetamol', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-312965' };
+  if (lower.includes('ceftazidime') || lower.includes('fortum')) {
+    return { genericName: 'Ceftazidime', route: 'IV', dataDictionaryCode: 'RXNORM-2194' };
+  }
+  if (lower.includes('meropenem') || lower.includes('meronem')) {
+    return { genericName: 'Meropenem', route: 'IV', dataDictionaryCode: 'RXNORM-29561' };
+  }
+  if (lower.includes('augmentin') || lower.includes('co-amoxiclav') || lower.includes('clavulan')) {
+    return { genericName: 'Amoxicillin/Clavulanic Acid', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-617314' };
+  }
+  if (lower.includes('ampiclox') || lower.includes('ampicillin/cloxacillin') || lower.includes('cloxacillin')) {
+    return { genericName: 'Ampicillin/Cloxacillin', route: lower.includes('iv') || lower.includes('inj') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-669' };
   }
   if (lower.includes('amoxil') || lower.includes('amoxicillin')) {
     return { genericName: 'Amoxicillin', route: 'Oral', dataDictionaryCode: 'RXNORM-197361' };
   }
-  if (lower.includes('augmentin') || lower.includes('co-amoxiclav')) {
-    return { genericName: 'Amoxicillin/Clavulanic Acid', route: 'Oral', dataDictionaryCode: 'RXNORM-617314' };
+  if (lower.includes('azithromycin') || lower.includes('zithromax')) {
+    return { genericName: 'Azithromycin', route: 'Oral', dataDictionaryCode: 'RXNORM-18631' };
   }
-  if (lower.includes('artemether') || lower.includes('lumefantrine') || lower.includes('coartem') || lower.includes('act')) {
-    return { genericName: 'Artemether/Lumefantrine', route: 'Oral', dataDictionaryCode: 'RXNORM-141870' };
-  }
-  if (lower.includes('tramal') || lower.includes('tramadol')) {
-    return { genericName: 'Tramadol', route: lower.includes('inj') || lower.includes('im') || lower.includes('iv') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-10689' };
+  if (lower.includes('erythromycin')) {
+    return { genericName: 'Erythromycin', route: 'Oral', dataDictionaryCode: 'RXNORM-4053' };
   }
   if (lower.includes('genta')) {
-    return { genericName: 'Gentamicin', route: 'IM', dataDictionaryCode: 'RXNORM-4648' };
+    return { genericName: 'Gentamicin', route: lower.includes('iv') ? 'IV' : 'IM', dataDictionaryCode: 'RXNORM-4648' };
   }
-  if (lower.includes('hydrocort')) {
-    return { genericName: 'Hydrocortisone', route: 'IV', dataDictionaryCode: 'RXNORM-5492' };
+  if (lower.includes('levofloxacin') || lower.includes('tavanic')) {
+    return { genericName: 'Levofloxacin', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-82122' };
   }
-  if (lower.includes('omeprazole')) {
+  if (lower.includes('doxycycline')) {
+    return { genericName: 'Doxycycline', route: 'Oral', dataDictionaryCode: 'RXNORM-3640' };
+  }
+  if (lower.includes('septrin') || lower.includes('cotrimoxazole') || lower.includes('co-trimoxazole') || lower.includes('bactrim')) {
+    return { genericName: 'Co-trimoxazole (Sulfamethoxazole/Trimethoprim)', route: 'Oral', dataDictionaryCode: 'RXNORM-10180' };
+  }
+
+  // ── 2. ANTIMALARIALS ──
+  if (lower.includes('artemether') && lower.includes('lumefantrine') || lower.includes('coartem') || lower.includes('act') || lower.includes('amatem') || lower.includes('lonart')) {
+    return { genericName: 'Artemether/Lumefantrine', route: 'Oral', dataDictionaryCode: 'RXNORM-141870' };
+  }
+  if (lower.includes('artesunate')) {
+    return { genericName: 'Artesunate', route: lower.includes('iv') ? 'IV' : lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-141865' };
+  }
+  if (lower.includes('dihydroartemisinin') || lower.includes('p-alaxin') || lower.includes('artequick') || lower.includes('dha-ppq')) {
+    return { genericName: 'Dihydroartemisinin/Piperaquine', route: 'Oral', dataDictionaryCode: 'RXNORM-141875' };
+  }
+  if (lower.includes('fansidar') || lower.includes('sulfadoxine') || lower.includes('sulphadoxine')) {
+    return { genericName: 'Sulfadoxine/Pyrimethamine (SP/Fansidar)', route: 'Oral', dataDictionaryCode: 'RXNORM-10178' };
+  }
+  if (lower.includes('quinine')) {
+    return { genericName: 'Quinine Dihydrochloride', route: lower.includes('iv') ? 'IV Infusion' : 'Oral', dataDictionaryCode: 'RXNORM-9051' };
+  }
+
+  // ── 3. ANALGESICS, NSAIDS & OPIOIDS ──
+  if (lower.includes('pts') || lower.includes('pcm') || lower.includes('paracetamol') || lower.includes('panadol') || lower.includes('perfalgan')) {
+    return { genericName: 'Paracetamol', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-312965' };
+  }
+  if (lower.includes('diclo')) {
+    return { genericName: 'Diclofenac Sodium', route: lower.includes('inj') || lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-3355' };
+  }
+  if (lower.includes('ibuprofen') || lower.includes('brufen')) {
+    return { genericName: 'Ibuprofen', route: 'Oral', dataDictionaryCode: 'RXNORM-5640' };
+  }
+  if (lower.includes('tramal') || lower.includes('tramadol')) {
+    return { genericName: 'Tramadol Hydrochloride', route: lower.includes('inj') || lower.includes('im') || lower.includes('iv') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-10689' };
+  }
+  if (lower.includes('pentazocine') || lower.includes('fortwin')) {
+    return { genericName: 'Pentazocine (Fortwin)', route: 'IM', dataDictionaryCode: 'RXNORM-8039' };
+  }
+  if (lower.includes('morphine')) {
+    return { genericName: 'Morphine Sulphate', route: lower.includes('iv') ? 'IV' : 'IM', dataDictionaryCode: 'RXNORM-7052' };
+  }
+  if (lower.includes('piroxicam') || lower.includes('feldene')) {
+    return { genericName: 'Piroxicam', route: lower.includes('inj') || lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-8356' };
+  }
+  if (lower.includes('aspirin') || lower.includes('disprin') || lower.includes('vasoprin')) {
+    return { genericName: 'Aspirin (Acetylsalicylic Acid)', route: 'Oral', dataDictionaryCode: 'RXNORM-1191' };
+  }
+  if (lower.includes('celecoxib') || lower.includes('celebrex')) {
+    return { genericName: 'Celecoxib', route: 'Oral', dataDictionaryCode: 'RXNORM-140587' };
+  }
+
+  // ── 4. CARDIOVASCULAR & ANTIHYPERTENSIVES ──
+  if (lower.includes('amlodipine') || lower.includes('norvasc') || lower.includes('amlo')) {
+    return { genericName: 'Amlodipine Besylate', route: 'Oral', dataDictionaryCode: 'RXNORM-17767' };
+  }
+  if (lower.includes('lisinopril') || lower.includes('zestril')) {
+    return { genericName: 'Lisinopril', route: 'Oral', dataDictionaryCode: 'RXNORM-29046' };
+  }
+  if (lower.includes('losartan') || lower.includes('cozaar')) {
+    return { genericName: 'Losartan Potassium', route: 'Oral', dataDictionaryCode: 'RXNORM-5224' };
+  }
+  if (lower.includes('hydrochlorothiazide') || lower.includes('hctz')) {
+    return { genericName: 'Hydrochlorothiazide', route: 'Oral', dataDictionaryCode: 'RXNORM-5487' };
+  }
+  if (lower.includes('furosemide') || lower.includes('lasix')) {
+    return { genericName: 'Furosemide (Lasix)', route: lower.includes('iv') || lower.includes('inj') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-4603' };
+  }
+  if (lower.includes('spironolactone') || lower.includes('aldactone')) {
+    return { genericName: 'Spironolactone', route: 'Oral', dataDictionaryCode: 'RXNORM-9997' };
+  }
+  if (lower.includes('nifedipine') || lower.includes('adalat')) {
+    return { genericName: 'Nifedipine', route: 'Oral', dataDictionaryCode: 'RXNORM-7417' };
+  }
+  if (lower.includes('atenolol') || lower.includes('tenormin')) {
+    return { genericName: 'Atenolol', route: 'Oral', dataDictionaryCode: 'RXNORM-1202' };
+  }
+  if (lower.includes('carvedilol')) {
+    return { genericName: 'Carvedilol', route: 'Oral', dataDictionaryCode: 'RXNORM-20352' };
+  }
+  if (lower.includes('methyldopa') || lower.includes('aldomet')) {
+    return { genericName: 'Methyldopa (Aldomet)', route: 'Oral', dataDictionaryCode: 'RXNORM-6876' };
+  }
+  if (lower.includes('hydralazine')) {
+    return { genericName: 'Hydralazine', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-5470' };
+  }
+  if (lower.includes('clexane') || lower.includes('cleanxue') || lower.includes('enoxaparin')) {
+    return { genericName: 'Enoxaparin Sodium (Clexane)', route: 'SC', dataDictionaryCode: 'RXNORM-67108' };
+  }
+  if (lower.includes('heparin')) {
+    return { genericName: 'Unfractionated Heparin', route: 'IV/SC', dataDictionaryCode: 'RXNORM-5229' };
+  }
+  if (lower.includes('warfarin') || lower.includes('coumadin')) {
+    return { genericName: 'Warfarin Sodium', route: 'Oral', dataDictionaryCode: 'RXNORM-11289' };
+  }
+  if (lower.includes('atorvastatin') || lower.includes('lipitor')) {
+    return { genericName: 'Atorvastatin Calcium', route: 'Oral', dataDictionaryCode: 'RXNORM-83367' };
+  }
+
+  // ── 5. ANTIDIABETICS ──
+  if (lower.includes('metformin') || lower.includes('glucophage')) {
+    return { genericName: 'Metformin Hydrochloride', route: 'Oral', dataDictionaryCode: 'RXNORM-6809' };
+  }
+  if (lower.includes('glibenclamide') || lower.includes('daonil')) {
+    return { genericName: 'Glibenclamide (Glyburide)', route: 'Oral', dataDictionaryCode: 'RXNORM-4815' };
+  }
+  if (lower.includes('glimepiride') || lower.includes('amaryl')) {
+    return { genericName: 'Glimepiride', route: 'Oral', dataDictionaryCode: 'RXNORM-25789' };
+  }
+  if (lower.includes('insulin') || lower.includes('actrapid') || lower.includes('mixtard') || lower.includes('insulatard')) {
+    return { genericName: 'Soluble / Isophane Human Insulin', route: 'SC', dataDictionaryCode: 'RXNORM-5856' };
+  }
+
+  // ── 6. GASTROINTESTINAL & ANTIEMETICS ──
+  if (lower.includes('omeprazole') || lower.includes('losec')) {
     return { genericName: 'Omeprazole', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-7646' };
   }
+  if (lower.includes('pantoprazole')) {
+    return { genericName: 'Pantoprazole', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-40790' };
+  }
+  if (lower.includes('esomeprazole') || lower.includes('nexium')) {
+    return { genericName: 'Esomeprazole', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-283742' };
+  }
+  if (lower.includes('cimetidine') || lower.includes('tagamet')) {
+    return { genericName: 'Cimetidine', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-2541' };
+  }
+  if (lower.includes('buscopan') || lower.includes('hyoscine')) {
+    return { genericName: 'Hyoscine Butylbromide (Buscopan)', route: lower.includes('im') || lower.includes('iv') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-5521' };
+  }
+  if (lower.includes('plasil') || lower.includes('metoclopramide')) {
+    return { genericName: 'Metoclopramide Hydrochloride', route: lower.includes('iv') || lower.includes('im') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-6915' };
+  }
+  if (lower.includes('ondansetron') || lower.includes('zofran')) {
+    return { genericName: 'Ondansetron', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-7577' };
+  }
+  if (lower.includes('phenergan') || lower.includes('promethazine')) {
+    return { genericName: 'Promethazine Hydrochloride', route: lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-8716' };
+  }
+  if (lower.includes('mmt') || lower.includes('magnesium trisilicate') || lower.includes('antacid') || lower.includes('gaviscon')) {
+    return { genericName: 'Magnesium Trisilicate Compound (Antacid)', route: 'Oral', dataDictionaryCode: 'RXNORM-6585' };
+  }
+
+  // ── 7. STEROIDS & RESPIRATORY ──
+  if (lower.includes('hydrocort')) {
+    return { genericName: 'Hydrocortisone Sodium Succinate', route: 'IV', dataDictionaryCode: 'RXNORM-5492' };
+  }
+  if (lower.includes('dexamethasone') || lower.includes('dexa')) {
+    return { genericName: 'Dexamethasone Sodium Phosphate', route: lower.includes('iv') || lower.includes('im') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-3264' };
+  }
+  if (lower.includes('prednisolone')) {
+    return { genericName: 'Prednisolone', route: 'Oral', dataDictionaryCode: 'RXNORM-8640' };
+  }
+  if (lower.includes('salbutamol') || lower.includes('ventolin')) {
+    return { genericName: 'Salbutamol Sulphate (Albuterol)', route: lower.includes('neb') ? 'Nebulized' : lower.includes('inhal') ? 'Inhalation' : 'Oral', dataDictionaryCode: 'RXNORM-435' };
+  }
+  if (lower.includes('aminophylline')) {
+    return { genericName: 'Aminophylline', route: 'IV Infusion', dataDictionaryCode: 'RXNORM-703' };
+  }
+  if (lower.includes('piriton') || lower.includes('chlorpheniramine') || lower.includes('cpm')) {
+    return { genericName: 'Chlorpheniramine Maleate (Piriton)', route: lower.includes('iv') || lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-2403' };
+  }
+
+  // ── 8. OBSTETRICS, GYNECOLOGY & EMERGENCY ──
+  if (lower.includes('oxytocin') || lower.includes('pitocin') || lower.includes('syntocinon')) {
+    return { genericName: 'Oxytocin', route: 'IV Infusion / IM', dataDictionaryCode: 'RXNORM-7806' };
+  }
+  if (lower.includes('misoprostol') || lower.includes('cytotec')) {
+    return { genericName: 'Misoprostol', route: 'Oral/Sublingual/PR', dataDictionaryCode: 'RXNORM-6984' };
+  }
+  if (lower.includes('mgso4') || lower.includes('magnesium sulphate') || lower.includes('magnesium sulfate')) {
+    return { genericName: 'Magnesium Sulphate (MgSO4)', route: 'IV/IM (Pritchard Regimen)', dataDictionaryCode: 'RXNORM-6582' };
+  }
+  if (lower.includes('tranexamic') || lower.includes('cyklokapron')) {
+    return { genericName: 'Tranexamic Acid', route: lower.includes('iv') ? 'IV' : 'Oral', dataDictionaryCode: 'RXNORM-10763' };
+  }
+
+  // ── 9. HEMATINICS, VITAMINS & IV FLUIDS ──
+  if (lower.includes('ferrous') || lower.includes('iron') || lower.includes('fe')) {
+    return { genericName: 'Ferrous Sulphate (Iron)', route: 'Oral', dataDictionaryCode: 'RXNORM-4340' };
+  }
+  if (lower.includes('folic')) {
+    return { genericName: 'Folic Acid', route: 'Oral', dataDictionaryCode: 'RXNORM-4512' };
+  }
+  if (lower.includes('vitamin c') || lower.includes('ascorbic')) {
+    return { genericName: 'Ascorbic Acid (Vitamin C)', route: 'Oral', dataDictionaryCode: 'RXNORM-1151' };
+  }
+  if (lower.includes('b-complex') || lower.includes('vitamin b') || lower.includes('neurobion')) {
+    return { genericName: 'Vitamin B-Complex', route: lower.includes('im') ? 'IM' : 'Oral', dataDictionaryCode: 'RXNORM-1153' };
+  }
+  if (lower.includes('normal saline') || lower.includes('0.9%') || lower.includes('n/s')) {
+    return { genericName: '0.9% Normal Saline (Sodium Chloride IV)', route: 'IV Infusion', dataDictionaryCode: 'RXNORM-313002' };
+  }
+  if (lower.includes('ringers') || lower.includes('hartmann') || lower.includes('r/l')) {
+    return { genericName: 'Ringers Lactate (Hartmanns Solution)', route: 'IV Infusion', dataDictionaryCode: 'RXNORM-313005' };
+  }
+  if (lower.includes('dextrose') || lower.includes('5% d/w') || lower.includes('50% dextrose')) {
+    return { genericName: 'Dextrose IV Infusion', route: 'IV Infusion', dataDictionaryCode: 'RXNORM-313010' };
+  }
   
-  return { genericName: rawName || 'Standard Medication', route: lower.includes('iv') ? 'IV' : lower.includes('im') ? 'IM' : lower.includes('sc') ? 'SC' : 'Oral', dataDictionaryCode: 'RXNORM-GENERAL' };
+  return {
+    genericName: rawName || 'Standard Medication',
+    route: lower.includes('iv') ? 'IV' : lower.includes('im') ? 'IM' : lower.includes('sc') ? 'SC' : lower.includes('neb') ? 'Nebulized' : 'Oral',
+    dataDictionaryCode: 'RXNORM-GENERAL'
+  };
 }
 
 export function normalizeLabTest(
@@ -1552,8 +2019,8 @@ export function normalizeLabTest(
     };
   }
 
-  // 19. Hepatitis B / HBsAg
-  if (nameLower.includes('hbsag') || nameLower.includes('hepatitis b')) {
+  // 19. Hepatitis B / HBsAg / ABrAG
+  if (nameLower.includes('hbsag') || nameLower.includes('hepatitis b') || nameLower.includes('abrag') || nameLower.includes('hbs ag') || nameLower.includes('hbs-ag') || nameLower === 'hbs') {
     const isPos = valLower.includes('react') || valLower.includes('pos') || valLower.includes('+');
     return {
       standardTestName: 'Hepatitis B Surface Antigen (HBsAg)',
@@ -1568,7 +2035,7 @@ export function normalizeLabTest(
   }
 
   // 20. Hepatitis C / HCV
-  if (nameLower.includes('hcv') || nameLower.includes('hepatitis c')) {
+  if (nameLower.includes('hcv') || nameLower.includes('hepatitis c') || nameLower.includes('anti-hcv')) {
     const isPos = valLower.includes('react') || valLower.includes('pos') || valLower.includes('+');
     return {
       standardTestName: 'Hepatitis C Virus Antibody (Anti-HCV)',
@@ -1582,7 +2049,22 @@ export function normalizeLabTest(
     };
   }
 
-  // 21. HIV 1/2 / Retroviral Screening (RVS)
+  // 21. VDRL / Syphilis / TPHA / Treponema
+  if (nameLower.includes('vdrl') || nameLower.includes('syphilis') || nameLower.includes('tpha') || nameLower.includes('treponema') || nameLower.includes('rpr')) {
+    const isPos = valLower.includes('react') || valLower.includes('pos') || valLower.includes('+');
+    return {
+      standardTestName: 'VDRL / Syphilis Rapid Treponemal Test',
+      category: 'IMMUNOLOGY_SEROLOGY',
+      loincCode: '20507-0',
+      dataDictionaryCode: 'LAB-VDRL-001',
+      specimenType: rawSpecimen || 'Serum',
+      unit: rawUnit || 'Qualitative',
+      referenceRange: rawRef || 'Non-Reactive / Negative',
+      interpretation: isPos ? 'POSITIVE' : 'NEGATIVE'
+    };
+  }
+
+  // 22. HIV 1/2 / Retroviral Screening (RVS)
   if (nameLower.includes('hiv') || nameLower.includes('rvs') || nameLower.includes('retroviral') || nameLower.includes('determine')) {
     const isPos = valLower.includes('react') || valLower.includes('pos') || valLower.includes('+');
     return {
@@ -1594,6 +2076,35 @@ export function normalizeLabTest(
       unit: rawUnit || 'Qualitative',
       referenceRange: rawRef || 'Non-Reactive / Negative',
       interpretation: isPos ? 'POSITIVE' : 'NEGATIVE'
+    };
+  }
+
+  // 22b. Cross-Matching / Compatibility Testing
+  if (nameLower.includes('cross-match') || nameLower.includes('cross match') || nameLower.includes('x-match') || nameLower.includes('x match') || nameLower.includes('x-math') || nameLower.includes('x-matching') || nameLower.includes('compatibility')) {
+    const isCompat = valLower.includes('compat') || valLower.includes('ok') || valLower.includes('pass') || valLower.includes('good');
+    return {
+      standardTestName: 'Cross-Matching (Compatibility Test)',
+      category: 'BLOOD_BANK',
+      loincCode: '1007-4',
+      dataDictionaryCode: 'LAB-XMATCH-001',
+      specimenType: rawSpecimen || 'Donor Blood / Recipient Serum',
+      unit: rawUnit || 'Compatibility',
+      referenceRange: rawRef || 'Compatible',
+      interpretation: isCompat ? 'NORMAL' : 'ABNORMAL'
+    };
+  }
+
+  // 22c. Blood Bank Bag Number / Donor Unit Number
+  if (nameLower.includes('bag no') || nameLower.includes('bae no') || nameLower.includes('bag number') || nameLower.includes('donor bag') || nameLower.includes('unit no')) {
+    return {
+      standardTestName: 'Blood Bank Donor Unit / Bag Number',
+      category: 'BLOOD_BANK',
+      loincCode: '9000-1',
+      dataDictionaryCode: 'LAB-BAG-001',
+      specimenType: rawSpecimen || 'Whole Blood / Packed Cells',
+      unit: rawUnit || 'Unit ID',
+      referenceRange: rawRef || 'Assigned Donor Bag Unit',
+      interpretation: 'NORMAL'
     };
   }
 
@@ -1761,6 +2272,90 @@ export function normalizeLabTest(
     referenceRange: rawRef || 'Standard Reference Limits',
     interpretation: 'NORMAL'
   };
+}
+
+// ── Extraction of Prescriptions from Clinical Text (e.g. Doctor SOAP Note Plan) ──
+export function extractPrescriptionsFromText(text: string, defaultDate?: string): ExtractedPrescription[] {
+  if (!text || typeof text !== 'string') return [];
+  const results: ExtractedPrescription[] = [];
+
+  // Split by line breaks, semicolons, or numbered list markers
+  const lines = text.split(/\r?\n|;|\b(?=\d+\.\s|\([ivx]+\)\s|•|-)/i);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim().replace(/^[-•*]|\d+\.\s*|\([ivx]+\)\s*/i, '').trim();
+    if (!line || line.length < 3) continue;
+
+    // Check if line looks like a medication (has Tabs, Caps, Inj, IV, IM, Syr, known drugs, or dose/frequency)
+    const hasMedKeyword = /\b(tab|tabs|tablet|tablets|cap|caps|capsule|capsules|inj|injection|injections|iv|im|sc|syr|syrup|susp|suspension|drops|gutt|cream|ointment|infusion|ivf|supp|suppository|pcm|flagyl|cipro|augmentin|ceftriaxone|diclo|amoxil|septrin|coartem|amatem|lonart|clexane|paracetamol|tramadol|lasix|hydrochlorothiazide|amlodipine|lisinopril|insulin|multivitamin|b-complex|vit\s*c|fe\s*so4|folic\s*acid|prednisolone|dexamethasone|salbutamol|omeprazole|buscopan|plasil|metoclopramide)\b/i.test(line);
+    const hasDoseOrFreq = /\b(\d+\s*(?:mg|g|mcg|ml|mls|iu|litres?|l|tabs?|caps?)|bd|tds|qds|nocte|dly|daily|stat|prn|man|8\s*hrly|12\s*hrly|6\s*hrly|x\s*\d+\/\d+)\b/i.test(line);
+
+    if (hasMedKeyword || hasDoseOrFreq) {
+      // Extract dosage (e.g. 625mg, 1g, 500mg, 100mls, 1L, 2 tabs)
+      const doseMatch = line.match(/(\d+(?:\.\d+)?\s*(?:mg|g|mcg|ml|mls|iu|litres?|l|tabs?|caps?))/i);
+      const dosage = doseMatch ? doseMatch[1].trim() : 'Standard dose';
+
+      // Extract frequency
+      let frequency = 'Daily';
+      if (/\bbd\b|12\s*hrly|twice\s*daily/i.test(line)) frequency = 'BD (12 Hourly)';
+      else if (/\btds\b|8\s*hrly|thrice\s*daily/i.test(line)) frequency = 'TDS (8 Hourly)';
+      else if (/\bqds\b|6\s*hrly|four\s*times\s*daily/i.test(line)) frequency = 'QDS (6 Hourly)';
+      else if (/\bnocte\b|at\s*night/i.test(line)) frequency = 'Nocte (At Night)';
+      else if (/\bman\b|in\s*the\s*morning/i.test(line)) frequency = 'Mane (Morning)';
+      else if (/\bstat\b/i.test(line)) frequency = 'STAT (Immediately)';
+      else if (/\bprn\b|as\s*needed/i.test(line)) frequency = 'PRN (As Needed)';
+      else if (/\bdly\b|daily|once\s*daily|od\b/i.test(line)) frequency = 'Daily';
+
+      // Extract duration
+      let duration = '5 days';
+      const durMatch = line.match(/(?:x|for)\s*(\d+(?:\/\d+)?(?:\s*(?:days?|weeks?|months?|hrs?|hours?|d|w|m))?)/i);
+      if (durMatch) {
+        const rawDur = durMatch[1];
+        if (rawDur.includes('/7')) {
+          const days = rawDur.split('/')[0];
+          duration = `${days} days`;
+        } else if (rawDur.includes('/52')) {
+          const weeks = rawDur.split('/')[0];
+          duration = `${weeks} weeks`;
+        } else {
+          duration = rawDur;
+        }
+      }
+
+      // Extract route
+      let route = 'Oral';
+      if (/\b(iv|intravenous|infusion|ivf)\b/i.test(line)) route = 'IV';
+      else if (/\b(im|intramuscular)\b/i.test(line)) route = 'IM';
+      else if (/\b(sc|subcutaneous)\b/i.test(line)) route = 'SC';
+      else if (/\b(topical|cream|ointment)\b/i.test(line)) route = 'Topical';
+      else if (/\b(gutt|drops|eye\s*drops|ear\s*drops)\b/i.test(line)) route = 'Drops';
+      else if (/\b(supp|suppository|rectal)\b/i.test(line)) route = 'Rectal';
+
+      // Clean medication name
+      let medName = line
+        .replace(/(?:x|for)\s*\d+(?:\/\d+)?(?:\s*(?:days?|weeks?|months?|hrs?|hours?|d|w|m))?/gi, '')
+        .replace(/\b(bd|tds|qds|nocte|dly|daily|stat|prn|man|8\s*hrly|12\s*hrly|6\s*hrly)\b/gi, '')
+        .trim();
+
+      if (medName.length >= 2) {
+        const dict = normalizeDrugGenericName(medName);
+        results.push({
+          id: `rx-${Date.now()}-${results.length + 1}`,
+          medicationName: medName,
+          genericName: dict.genericName,
+          dataDictionaryCode: dict.dataDictionaryCode,
+          dosage,
+          frequency,
+          route: dict.route || route,
+          duration,
+          instructions: `Administer ${dosage} ${frequency} via ${dict.route || route}`,
+          prescribedDate: defaultDate || new Date().toISOString().split('T')[0],
+          administrationTimes: []
+        });
+      }
+    }
+  }
+  return results;
 }
 
 function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionOptions): ExtractedFolderData {
@@ -2033,6 +2628,29 @@ function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionO
     };
   }) : [];
 
+  // Supplement prescriptions from Doctor SOAP encounter plans if any medication lines were written
+  if (encounters.length > 0) {
+    for (const enc of encounters) {
+      const planText = `${enc.plan || ''}\n${enc.clinicalNotes || ''}`;
+      if (planText.trim()) {
+        const parsedFromPlan = extractPrescriptionsFromText(planText, enc.visitDate);
+        for (const rx of parsedFromPlan) {
+          const alreadyExists = prescriptions.some(p =>
+            p.medicationName.toLowerCase().includes(rx.medicationName.toLowerCase()) ||
+            rx.medicationName.toLowerCase().includes(p.medicationName.toLowerCase()) ||
+            (rx.genericName && p.genericName && p.genericName.toLowerCase() === rx.genericName.toLowerCase())
+          );
+          if (!alreadyExists) {
+            prescriptions.push({
+              ...rx,
+              id: `rx-${prescriptions.length + 1}`
+            });
+          }
+        }
+      }
+    }
+  }
+
   const labInvestigations: ExtractedLabResult[] = Array.isArray(raw.labInvestigations) ? raw.labInvestigations.map((l: any, idx: number) => {
     const rawTestName = l.testName || 'Routine Laboratory Investigation';
     const dictMap = normalizeLabTest(rawTestName, l.resultValue, l.unit, l.specimenType, l.referenceRange);
@@ -2212,6 +2830,103 @@ function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionO
     auditorRemarks: aud.auditorRemarks || 'Records verified for medical completeness.'
   })) : [];
 
+  const operationNotes: ExtractedOperationNote[] = Array.isArray(raw.operationNotes) ? raw.operationNotes.map((op: any, idx: number) => ({
+    id: `op-${idx + 1}`,
+    operationDate: normalizeClinicalDate(op.operationDate),
+    startTime: op.startTime || undefined,
+    endTime: op.endTime || undefined,
+    operationName: op.operationName || 'Surgical Operation',
+    preOpDiagnosis: op.preOpDiagnosis || '',
+    postOpDiagnosis: op.postOpDiagnosis || op.preOpDiagnosis || '',
+    surgeonName: op.surgeonName || 'Consultant Surgeon',
+    assistantSurgeon: op.assistantSurgeon || '',
+    anaesthetistName: op.anaesthetistName || '',
+    scrubNurse: op.scrubNurse || '',
+    circulatingNurse: op.circulatingNurse || '',
+    anaesthesiaType: op.anaesthesiaType || 'General Anaesthesia',
+    findings: op.findings || '',
+    procedureDetails: op.procedureDetails || '',
+    estimatedBloodLossMl: typeof op.estimatedBloodLossMl === 'number' ? op.estimatedBloodLossMl : (parseInt(String(op.estimatedBloodLossMl || '').replace(/[^0-9]/g, ''), 10) || 0),
+    implantsOrPacks: op.implantsOrPacks || '',
+    drainInserted: op.drainInserted || '',
+    specimenSentForHistology: Boolean(op.specimenSentForHistology || op.specimenDescription),
+    specimenDescription: op.specimenDescription || '',
+    sutureMaterials: op.sutureMaterials || '',
+    postOpOrders: op.postOpOrders || '',
+    complications: op.complications || ''
+  })) : [];
+
+  const surgicalConsents: ExtractedSurgicalConsent[] = Array.isArray(raw.surgicalConsents) ? raw.surgicalConsents.map((sc: any, idx: number) => ({
+    id: `sc-${idx + 1}`,
+    consentCode: sc.consentCode || `CONS-${Math.floor(1000 + Math.random() * 9000)}`,
+    operationName: sc.operationName || 'Surgical Procedure',
+    patientName: sc.patientName || (rawFirstName && rawLastName ? `${rawFirstName} ${rawLastName}` : ''),
+    signerName: sc.signerName || (rawFirstName && rawLastName ? `${rawFirstName} ${rawLastName}` : ''),
+    relationship: ['SELF', 'SPOUSE', 'PARENT', 'CHILD', 'GUARDIAN', 'NEXT_OF_KIN', 'OTHER'].includes(sc.relationship?.toUpperCase()) ? sc.relationship.toUpperCase() : 'SELF',
+    benefitsExplained: sc.benefitsExplained !== false,
+    risksExplained: sc.risksExplained !== false,
+    anaesthesiaRisksExplained: sc.anaesthesiaRisksExplained !== false,
+    bloodTransfusionConsent: Boolean(sc.bloodTransfusionConsent),
+    surgeonName: sc.surgeonName || 'Dr. Consultant Surgeon',
+    witnessName: sc.witnessName || '',
+    consentDate: normalizeClinicalDate(sc.consentDate),
+    signatureImage: sc.signatureImage || undefined,
+    notes: sc.notes || 'Informed surgical and anaesthetic consent granted'
+  })) : [];
+
+  const journalVouchers: ExtractedJournalVoucher[] = Array.isArray(raw.journalVouchers) ? raw.journalVouchers.map((jv: any, idx: number) => ({
+    id: `jv-${idx + 1}`,
+    voucherNumber: jv.voucherNumber || `JV-${Math.floor(1000 + Math.random() * 9000)}`,
+    date: normalizeClinicalDate(jv.date),
+    description: jv.description || 'General Ledger / Journal Entry',
+    category: jv.category || 'GENERAL_JOURNAL',
+    status: ['DRAFT', 'POSTED', 'APPROVED'].includes(jv.status?.toUpperCase()) ? jv.status.toUpperCase() : 'POSTED',
+    createdBy: jv.createdBy || 'Accounts Officer',
+    approvedBy: jv.approvedBy || 'Finance Manager',
+    totalDebit: Number(jv.totalDebit) || 0,
+    totalCredit: Number(jv.totalCredit) || Number(jv.totalDebit) || 0,
+    lines: Array.isArray(jv.lines) ? jv.lines.map((l: any, lIdx: number) => ({
+      id: `jvl-${idx + 1}-${lIdx + 1}`,
+      accountCode: l.accountCode || '1010',
+      accountName: l.accountName || 'Cash and Bank Balances',
+      debit: Number(l.debit) || 0,
+      credit: Number(l.credit) || 0,
+      costCentre: l.costCentre || 'Main Accounts',
+      description: l.description || jv.description || ''
+    })) : []
+  })) : [];
+
+  // Death / RIP / Deceased Detection across folder cover, mortuary records, diagnoses, encounters, notes
+  const deathRegex = /\b(rip|r\.i\.p|dead|death|deceased|demise|expired|corpse|bid|brought in dead|cert of death|mortuary)\b/i;
+  const isMarkedDeceased = Boolean(
+    patientRaw.isDeceased === true ||
+    patientRaw.status === 'DECEASED' ||
+    (mortuaryRecords && mortuaryRecords.length > 0) ||
+    (dischargeSummaries && dischargeSummaries.some(ds => ds.dischargeCondition === 'DECEASED')) ||
+    (patientRaw.notes && deathRegex.test(patientRaw.notes)) ||
+    (raw.aiNotes && deathRegex.test(raw.aiNotes)) ||
+    (diagnoses && diagnoses.some(d => deathRegex.test(d.diagnosisName))) ||
+    (encounters && encounters.some(e => deathRegex.test(e.assessment) || deathRegex.test(e.clinicalNotes || '') || deathRegex.test(e.plan)))
+  );
+
+  patient.isDeceased = isMarkedDeceased;
+  patient.status = isMarkedDeceased ? 'DECEASED' : (patientRaw.status || 'ACTIVE');
+  if (isMarkedDeceased) {
+    patient.deceasedDate = patientRaw.deceasedDate || (mortuaryRecords.length > 0 ? mortuaryRecords[0].dateOfDeath : undefined) || (dischargeSummaries.find(ds => ds.dischargeCondition === 'DECEASED')?.dischargeDate);
+    patient.causeOfDeath = patientRaw.causeOfDeath || (mortuaryRecords.length > 0 ? mortuaryRecords[0].causeOfDeath : undefined) || (diagnoses.length > 0 ? diagnoses[0].diagnosisName : undefined);
+  }
+
+  const hasPatientIdentity = Boolean(rawFirstName && rawLastName);
+  const hasClinicalRecords = (encounters.length > 0 || vitals.length > 0 || prescriptions.length > 0 || labInvestigations.length > 0 || maternityRecords.length > 0 || ancRecords.length > 0 || dentalRecords.length > 0 || eyeClinicRecords.length > 0 || operationNotes.length > 0 || surgicalConsents.length > 0);
+  const isPatientFolder = hasPatientIdentity || hasClinicalRecords;
+
+  if (!isPatientFolder && !hasPatientIdentity) {
+    patient.firstName = '';
+    patient.lastName = '';
+    patient.folderNumber = '';
+    patient.patientNumber = '';
+  }
+
   const pageClassifications = Array.isArray(raw.pageClassifications) ? raw.pageClassifications : [];
 
   const pageClassificationAudit: PageClassificationAudit[] = Array.isArray(raw.pageClassificationAudit)
@@ -2224,7 +2939,7 @@ function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionO
           matchStatus: ['VERIFIED_MATCH', 'RECLASSIFIED_SMART_MAPPED', 'MIXED_CONTENT'].includes(a.matchStatus) ? a.matchStatus : (userMap === a.aiDetectedForm || userMap === 'AUTO_DETECT' ? 'VERIFIED_MATCH' : 'RECLASSIFIED_SMART_MAPPED'),
           detectedElements: Array.isArray(a.detectedElements) ? a.detectedElements : ['Clinical form elements recognized'],
           confidence: Number(a.confidence) || 95,
-          notes: a.notes || `Page ${idx + 1} transcribed and mapped into structured clinical records.`
+          notes: a.notes || `Page ${idx + 1} transcribed and mapped into structured records.`
         };
       })
     : (options?.pageFormMappings || []).map((m, idx) => ({
@@ -2232,7 +2947,7 @@ function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionO
         userMappedForm: m.formType,
         aiDetectedForm: m.formType,
         matchStatus: 'VERIFIED_MATCH' as const,
-        detectedElements: ['Clinical document verified'],
+        detectedElements: ['Document verified'],
         confidence: 96,
         notes: `Page ${idx + 1} processed as ${m.label || m.formType}.`
       }));
@@ -2257,12 +2972,16 @@ function sanitizeAndNormalizeExtractedData(raw: any, options?: FolderExtractionO
     eyeClinicRecords,
     insuranceRecords,
     financeRecords,
+    journalVouchers,
     auditRecords,
+    operationNotes,
+    surgicalConsents,
     pageClassifications,
     pageClassificationAudit,
     overallConfidenceScore: Math.min(100, Math.max(80, Number(raw.overallConfidenceScore) || 95.0)),
-    aiNotes: raw.aiNotes || 'AI successfully extracted and structured physical folder pages into digital clinical records.',
-    detectedHospitalPreset: raw.detectedHospitalPreset || options?.hospitalPreset || 'FAITH_FOUNDATION'
+    aiNotes: raw.aiNotes || 'AI successfully extracted and structured physical folder pages into digital records.',
+    detectedHospitalPreset: raw.detectedHospitalPreset || options?.hospitalPreset || 'FAITH_FOUNDATION',
+    isPatientFolder
   };
 }
 
@@ -2312,6 +3031,8 @@ function generateOfflineFallbackDraft(pageCount: number, options?: FolderExtract
     insuranceRecords: [],
     financeRecords: [],
     auditRecords: [],
+    operationNotes: [],
+    surgicalConsents: [],
     pageClassifications: Array.from({ length: pageCount }, (_, i) => ({
       pageIndex: i,
       documentType: options?.pageLabels?.[i] || (i === 0 ? 'Folder Cover & Bio-Data' : i === 1 ? 'Doctor SOAP Continuation Sheet' : 'Triage Vitals Chart'),
@@ -2322,3 +3043,4 @@ function generateOfflineFallbackDraft(pageCount: number, options?: FolderExtract
     detectedHospitalPreset: options?.hospitalPreset || 'FAITH_FOUNDATION'
   };
 }
+

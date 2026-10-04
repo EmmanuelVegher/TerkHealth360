@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { extractHospitalFolder, ExtractedFolderData, FolderExtractionOptions, normalizeLabTest } from '../utils/folderVisionExtractor.js';
+import { extractHospitalFolder, ExtractedFolderData, FolderExtractionOptions, normalizeLabTest, normalizeDrugGenericName } from '../utils/folderVisionExtractor.js';
+import { addMigratedJournalVoucher } from './finance.js';
+import { addMigratedMortuaryAdmission } from './mortuary.js';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -299,6 +301,9 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       insuranceRecords,
       financeRecords,
       auditRecords,
+      journalVouchers,
+      operationNotes,
+      surgicalConsents,
       scannedPages,
       mergeOption, // 'CREATE_NEW' | 'MERGE_APPEND'
       existingPatientId,
@@ -324,14 +329,38 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       insuranceRecords?: ExtractedFolderData['insuranceRecords'];
       financeRecords?: ExtractedFolderData['financeRecords'];
       auditRecords?: ExtractedFolderData['auditRecords'];
+      journalVouchers?: ExtractedFolderData['journalVouchers'];
+      operationNotes?: ExtractedFolderData['operationNotes'];
+      surgicalConsents?: ExtractedFolderData['surgicalConsents'];
       scannedPages: Array<{ pageIndex: number; dataUrl: string; label?: string }>;
       mergeOption?: string;
       existingPatientId?: string;
       hospitalPreset?: string;
     };
 
-    if (!patient || !patient.firstName || !patient.lastName) {
-      return res.status(400).json({ success: false, message: 'Patient firstName and lastName are required' });
+    const hasPatient = Boolean(
+      patient &&
+      patient.firstName &&
+      patient.lastName &&
+      patient.firstName !== 'Unknown' &&
+      patient.lastName !== 'Record' &&
+      patient.firstName.trim().length > 0 &&
+      patient.lastName.trim().length > 0
+    );
+
+    const hasInstitutionalRecords = Boolean(
+      (journalVouchers && journalVouchers.length > 0) ||
+      (financeRecords && financeRecords.length > 0) ||
+      (auditRecords && auditRecords.length > 0) ||
+      (insuranceRecords && insuranceRecords.length > 0) ||
+      (mortuaryRecords && mortuaryRecords.length > 0)
+    );
+
+    if (!hasPatient && !hasInstitutionalRecords) {
+      return res.status(400).json({
+        success: false,
+        message: 'Either patient demographics (firstName, lastName) or valid institutional records (Finance Journals, Receipts, Audit Logs, Insurance Plans, or Mortuary Registers) are required for migration.'
+      });
     }
 
     let clerkStaff = await prisma.staff.findFirst({
@@ -344,85 +373,99 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
     const result = await prisma.$transaction(async (tx) => {
       let targetPatient: any = null;
+      let familyAccountResult: any = null;
 
-      // 1. Resolve or Create Patient Record
-      if (mergeOption === 'MERGE_APPEND' && existingPatientId) {
-        targetPatient = await tx.patient.findUnique({ where: { id: existingPatientId } });
-        if (targetPatient) {
-          targetPatient = await tx.patient.update({
-            where: { id: existingPatientId },
+      // 1. Resolve or Create Patient Record (if patient record present)
+      if (hasPatient) {
+        const isDeceasedPatient = Boolean(
+          patient.isDeceased === true ||
+          patient.status === 'DECEASED' ||
+          (Array.isArray(mortuaryRecords) && mortuaryRecords.length > 0) ||
+          (Array.isArray(dischargeSummaries) && dischargeSummaries.some((d: any) => d.dischargeCondition === 'DECEASED')) ||
+          (patient.notes && /\b(rip|r\.i\.p|dead|death|deceased|expired|corpse|bid|brought in dead)\b/i.test(patient.notes))
+        );
+
+        if (mergeOption === 'MERGE_APPEND' && existingPatientId) {
+          targetPatient = await tx.patient.findUnique({ where: { id: existingPatientId } });
+          if (targetPatient) {
+            targetPatient = await tx.patient.update({
+              where: { id: existingPatientId },
+              data: {
+                status: isDeceasedPatient ? 'DECEASED' : targetPatient.status,
+                isActive: isDeceasedPatient ? false : targetPatient.isActive,
+                bloodGroup: patient.bloodGroup ? (patient.bloodGroup as any) : targetPatient.bloodGroup,
+                genotype: patient.genotype || targetPatient.genotype,
+                maritalStatus: patient.maritalStatus ? (patient.maritalStatus as any) : targetPatient.maritalStatus,
+                occupation: patient.occupation || targetPatient.occupation,
+                religion: patient.religion || targetPatient.religion,
+                spokenLanguage: patient.spokenLanguage || targetPatient.spokenLanguage,
+                stateOfOrigin: patient.stateOfOrigin || targetPatient.stateOfOrigin,
+                lga: patient.lga || targetPatient.lga,
+                nokName: patient.nokName || targetPatient.nokName,
+                nokRelationship: patient.nokRelationship || targetPatient.nokRelationship,
+                nokPhone: patient.nokPhone || targetPatient.nokPhone,
+                nokAddress: patient.nokAddress || targetPatient.nokAddress,
+                emergencyName: patient.emergencyName || targetPatient.emergencyName,
+                emergencyPhone: patient.emergencyPhone || targetPatient.emergencyPhone,
+              }
+            });
+          }
+        }
+
+        if (!targetPatient) {
+          let finalPatientNumber = patient.patientNumber || patient.folderNumber || `FFH-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+          const existingWithNum = await tx.patient.findUnique({ where: { patientNumber: finalPatientNumber } });
+          if (existingWithNum) {
+            finalPatientNumber = `${finalPatientNumber}-MIG${Math.floor(100 + Math.random() * 900)}`;
+          }
+
+          const username = `${patient.firstName.toLowerCase()}.${patient.lastName.toLowerCase()}.${Math.floor(100 + Math.random() * 900)}`.replace(/[^a-z0-9.]/g, '');
+          const email = `${username}@hospital.local`;
+          const dummyPasswordHash = await bcrypt.hash('TerkHealth360@' + new Date().getFullYear(), 10);
+
+          const newUser = await tx.user.create({
             data: {
-              bloodGroup: patient.bloodGroup ? (patient.bloodGroup as any) : targetPatient.bloodGroup,
-              genotype: patient.genotype || targetPatient.genotype,
-              maritalStatus: patient.maritalStatus ? (patient.maritalStatus as any) : targetPatient.maritalStatus,
-              occupation: patient.occupation || targetPatient.occupation,
-              religion: patient.religion || targetPatient.religion,
-              spokenLanguage: patient.spokenLanguage || targetPatient.spokenLanguage,
-              stateOfOrigin: patient.stateOfOrigin || targetPatient.stateOfOrigin,
-              lga: patient.lga || targetPatient.lga,
-              nokName: patient.nokName || targetPatient.nokName,
-              nokRelationship: patient.nokRelationship || targetPatient.nokRelationship,
-              nokPhone: patient.nokPhone || targetPatient.nokPhone,
-              nokAddress: patient.nokAddress || targetPatient.nokAddress,
-              emergencyName: patient.emergencyName || targetPatient.emergencyName,
-              emergencyPhone: patient.emergencyPhone || targetPatient.emergencyPhone,
+              username,
+              email,
+              passwordHash: dummyPasswordHash,
+              role: 'PATIENT',
+              isActive: !isDeceasedPatient,
             }
           });
-        }
-      }
 
-      if (!targetPatient) {
-        let finalPatientNumber = patient.patientNumber || patient.folderNumber || `FFH-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-        const existingWithNum = await tx.patient.findUnique({ where: { patientNumber: finalPatientNumber } });
-        if (existingWithNum) {
-          finalPatientNumber = `${finalPatientNumber}-MIG${Math.floor(100 + Math.random() * 900)}`;
-        }
+          const parsedDob = patient.birthDate ? new Date(patient.birthDate) : new Date(Date.now() - (patient.ageYears || 35) * 365.25 * 24 * 60 * 60 * 1000);
 
-        const username = `${patient.firstName.toLowerCase()}.${patient.lastName.toLowerCase()}.${Math.floor(100 + Math.random() * 900)}`.replace(/[^a-z0-9.]/g, '');
-        const email = `${username}@hospital.local`;
-        const dummyPasswordHash = await bcrypt.hash('TerkHealth360@' + new Date().getFullYear(), 10);
-
-        const newUser = await tx.user.create({
-          data: {
-            username,
-            email,
-            passwordHash: dummyPasswordHash,
-            role: 'PATIENT',
-            isActive: true,
-          }
-        });
-
-        const parsedDob = patient.birthDate ? new Date(patient.birthDate) : new Date(Date.now() - (patient.ageYears || 35) * 365.25 * 24 * 60 * 60 * 1000);
-
-        targetPatient = await tx.patient.create({
-          data: {
-            userId: newUser.id,
-            patientNumber: finalPatientNumber,
-            firstName: patient.firstName,
-            lastName: patient.lastName,
-            middleName: patient.middleName || null,
-            maidenName: patient.maidenName || null,
-            birthDate: isNaN(parsedDob.getTime()) ? new Date('1990-01-01') : parsedDob,
-            gender: (['MALE', 'FEMALE', 'OTHER', 'UNKNOWN'].includes(patient.gender) ? patient.gender : 'MALE') as any,
-            maritalStatus: (['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED'].includes(patient.maritalStatus as string) ? patient.maritalStatus : 'MARRIED') as any,
-            bloodGroup: patient.bloodGroup as any,
-            genotype: patient.genotype || 'AA',
-            nationality: 'Nigerian',
-            stateOfOrigin: patient.stateOfOrigin || null,
-            lga: patient.lga || null,
-            occupation: patient.occupation || null,
-            religion: patient.religion || null,
-            spokenLanguage: patient.spokenLanguage || 'English',
-            nin: patient.nin || null,
-            nokName: patient.nokName || null,
-            nokRelationship: patient.nokRelationship || null,
-            nokPhone: patient.nokPhone || null,
-            nokAddress: patient.nokAddress || null,
-            emergencyName: patient.emergencyName || patient.nokName || null,
-            emergencyPhone: patient.emergencyPhone || patient.nokPhone || null,
-            createdById: clerkUser?.id || null,
-          }
-        });
+          targetPatient = await tx.patient.create({
+            data: {
+              userId: newUser.id,
+              patientNumber: finalPatientNumber,
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              middleName: patient.middleName || null,
+              maidenName: patient.maidenName || null,
+              birthDate: isNaN(parsedDob.getTime()) ? new Date('1990-01-01') : parsedDob,
+              gender: (['MALE', 'FEMALE', 'OTHER', 'UNKNOWN'].includes(patient.gender) ? patient.gender : 'MALE') as any,
+              maritalStatus: (['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED'].includes(patient.maritalStatus as string) ? patient.maritalStatus : 'MARRIED') as any,
+              bloodGroup: patient.bloodGroup as any,
+              genotype: patient.genotype || 'AA',
+              nationality: 'Nigerian',
+              stateOfOrigin: patient.stateOfOrigin || null,
+              lga: patient.lga || null,
+              occupation: patient.occupation || null,
+              religion: patient.religion || null,
+              spokenLanguage: patient.spokenLanguage || 'English',
+              nin: patient.nin || null,
+              status: isDeceasedPatient ? 'DECEASED' : (patient.status || 'ACTIVE'),
+              isActive: !isDeceasedPatient,
+              nokName: patient.nokName || null,
+              nokRelationship: patient.nokRelationship || null,
+              nokPhone: patient.nokPhone || null,
+              nokAddress: patient.nokAddress || null,
+              emergencyName: patient.emergencyName || patient.nokName || null,
+              emergencyPhone: patient.emergencyPhone || patient.nokPhone || null,
+              createdById: clerkUser?.id || null,
+            }
+          });
 
         if (patient.phone) {
           await tx.patientTelecom.create({
@@ -507,8 +550,9 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
           }
         }
       }
+    }
 
-      const patientId = targetPatient.id;
+      const patientId = targetPatient ? targetPatient.id : null;
       const createdVisits: any[] = [];
       const createdEncounters: any[] = [];
       const createdVitals: any[] = [];
@@ -519,7 +563,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       const createdAttachments: any[] = [];
 
       // 2. Map Doctor Encounters / SOAP Notes into Visits & ConsultationNotes
-      if (Array.isArray(encounters) && encounters.length > 0) {
+      if (patientId && Array.isArray(encounters) && encounters.length > 0) {
         for (let i = 0; i < encounters.length; i++) {
           const enc = encounters[i];
           const visitDate = enc.visitDate ? new Date(enc.visitDate) : new Date();
@@ -579,7 +623,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       }
 
       // 3. Map Discharge Summaries
-      if (Array.isArray(dischargeSummaries) && dischargeSummaries.length > 0) {
+      if (patientId && Array.isArray(dischargeSummaries) && dischargeSummaries.length > 0) {
         for (const ds of dischargeSummaries) {
           const dDate = ds.dischargeDate ? new Date(ds.dischargeDate) : new Date();
           const validDDate = isNaN(dDate.getTime()) ? new Date() : dDate;
@@ -622,7 +666,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       let primaryVisitId = createdVisits.length > 0 ? createdVisits[0].id : null;
       let primaryEncounterId = createdEncounters.length > 0 ? createdEncounters[0].id : null;
 
-      if (!primaryVisitId) {
+      if (patientId && !primaryVisitId) {
         const firstVitalDate = vitals && vitals.length > 0 && vitals[0].recordedDate ? new Date(vitals[0].recordedDate) : new Date();
         const validAnchorDate = isNaN(firstVitalDate.getTime()) ? new Date() : firstVitalDate;
         const anchorVisit = await tx.visit.create({
@@ -655,8 +699,8 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         primaryEncounterId = anchorEncounter.id;
       }
 
-      // 4. Map Billing Forms & Invoices
-      if (Array.isArray(billingRecords) && billingRecords.length > 0) {
+      // 4. Map Billing Forms & Invoices (if patient exists)
+      if (patientId && Array.isArray(billingRecords) && billingRecords.length > 0) {
         for (const b of billingRecords) {
           const bDate = b.billDate ? new Date(b.billDate) : new Date();
           const validBDate = isNaN(bDate.getTime()) ? new Date() : bDate;
@@ -677,7 +721,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       }
 
       // 5. Insert Time-Series Vitals (TriageRecords & Observations)
-      if (Array.isArray(vitals) && vitals.length > 0) {
+      if (patientId && Array.isArray(vitals) && vitals.length > 0) {
         for (const v of vitals) {
           const vDate = v.recordedDate ? new Date(v.recordedDate) : new Date();
           const validVDate = isNaN(vDate.getTime()) ? new Date() : vDate;
@@ -709,7 +753,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       }
 
       // 6. Insert Diagnoses (Conditions)
-      if (Array.isArray(diagnoses) && diagnoses.length > 0) {
+      if (patientId && Array.isArray(diagnoses) && diagnoses.length > 0) {
         for (const d of diagnoses) {
           const dDate = d.date ? new Date(d.date) : new Date();
           const validDDate = isNaN(dDate.getTime()) ? new Date() : dDate;
@@ -733,13 +777,15 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 7. Insert Prescriptions (PharmacyPrescriptions, PharmacyPrescriptionItems, and eMAR Med Tracker)
       const createdEmarRecords: any[] = [];
-      if (Array.isArray(prescriptions) && prescriptions.length > 0) {
+      if (patientId && Array.isArray(prescriptions) && prescriptions.length > 0) {
         for (const p of prescriptions) {
           const rxDate = p.prescribedDate ? new Date(p.prescribedDate) : new Date();
           const validRxDate = isNaN(rxDate.getTime()) ? new Date() : rxDate;
 
-          const genericDrugName = p.genericName || p.medicationName || 'Standard Medication';
-          const cleanDrugSearch = genericDrugName.split('/')[0].trim();
+          const dictMed = normalizeDrugGenericName(p.medicationName || p.genericName || '');
+          const genericDrugName = p.genericName || dictMed.genericName || p.medicationName || 'Standard Medication';
+          const cleanDrugSearch = genericDrugName.split('/')[0].split('(')[0].trim();
+          const drugRoute = p.route || dictMed.route || 'Oral';
 
           // 1. Match or Auto-Create Pharmacy Inventory Item / Data Dictionary
           let medItem = await tx.pharmacyInventoryItem.findFirst({
@@ -755,14 +801,14 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
           if (!medItem) {
             const shortCode = cleanDrugSearch.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() || 'MED';
-            const itemCode = `MED-${shortCode}-${Math.floor(100 + Math.random() * 900)}`;
+            const itemCode = dictMed.dataDictionaryCode || `MED-${shortCode}-${Math.floor(100 + Math.random() * 900)}`;
             medItem = await tx.pharmacyInventoryItem.create({
               data: {
                 itemCode,
                 genericName: genericDrugName,
                 brandName: p.medicationName || genericDrugName,
-                classification: p.route === 'IV' ? 'Injectables / Infusions' : 'General Pharmacy',
-                dosageForm: p.route === 'IV' ? 'IV Fluid/Vial' : p.route === 'IM' ? 'Injectable' : p.route === 'SC' ? 'Pre-filled Syringe' : 'Tablet/Capsule',
+                classification: drugRoute === 'IV' ? 'Injectables / Infusions' : 'General Pharmacy',
+                dosageForm: drugRoute === 'IV' ? 'IV Fluid/Vial' : drugRoute === 'IM' ? 'Injectable' : drugRoute === 'SC' ? 'Pre-filled Syringe' : 'Tablet/Capsule',
                 strength: p.dosage || 'Standard',
                 price: 500,
                 unitOfMeasure: 'Unit',
@@ -854,7 +900,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       // 8. Insert Laboratory Investigations & Results (Mapped to Data Dictionary & LabTestCatalog)
       const createdLabOrders: any[] = [];
       const createdLabResults: any[] = [];
-      if (Array.isArray(labInvestigations) && labInvestigations.length > 0) {
+      if (patientId && Array.isArray(labInvestigations) && labInvestigations.length > 0) {
         for (const lab of labInvestigations) {
           const rawTestName = lab.testName || 'Routine Laboratory Investigation';
           const dictLookup = normalizeLabTest(
@@ -956,7 +1002,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       }
 
       // 9. Insert Allergies
-      if (Array.isArray(allergies) && allergies.length > 0) {
+      if (patientId && Array.isArray(allergies) && allergies.length > 0) {
         for (const a of allergies) {
           if (a.allergen && !a.allergen.toLowerCase().includes('no known') && !a.allergen.toLowerCase().includes('nkda')) {
             await tx.allergy.create({
@@ -975,7 +1021,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 10. Map ANC (Antenatal Care) Records
       const createdAncVisits: any[] = [];
-      if (Array.isArray(ancRecords) && ancRecords.length > 0) {
+      if (patientId && Array.isArray(ancRecords) && ancRecords.length > 0) {
         let pregnancy = await tx.pregnancyRecord.findFirst({
           where: { patientId, status: 'ACTIVE' }
         });
@@ -1022,7 +1068,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 11. Map Radiology & Imaging Reports
       const createdRadiologyReports: any[] = [];
-      if (Array.isArray(radiologyReports) && radiologyReports.length > 0) {
+      if (patientId && Array.isArray(radiologyReports) && radiologyReports.length > 0) {
         for (const r of radiologyReports) {
           const rDate = r.examDate ? new Date(r.examDate) : new Date();
           const validRDate = isNaN(rDate.getTime()) ? new Date() : rDate;
@@ -1079,35 +1125,62 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         }
       }
 
-      // 12. Map Mortuary & Deceased Records
+      // 12. Map Mortuary & Deceased Records (Handles both patient folders and standalone mortuary registers)
       const createdMortuaryRecords: any[] = [];
       if (Array.isArray(mortuaryRecords) && mortuaryRecords.length > 0) {
         for (const m of mortuaryRecords) {
           const dDate = m.dateOfDeath ? new Date(m.dateOfDeath) : new Date();
           const validDDate = isNaN(dDate.getTime()) ? new Date() : dDate;
 
-          const mortNote = await tx.consultationNote.create({
-            data: {
-              patientId,
-              authorId: defaultStaffId,
-              subjective: `[Mortuary Record / Date of Death]: ${m.dateOfDeath} ${m.timeOfDeath || ''}\n[Cause of Death]: ${m.causeOfDeath}\n[Immediate Cause]: ${m.immediateCause || 'N/A'}\n[Antecedent Cause]: ${m.antecedentCause || 'N/A'}`,
-              objective: `[Corpse Tag #]: ${m.corpseTagNumber || 'N/A'}\n[Mortuary Chamber]: ${m.mortuaryChamberNumber || 'Chamber 1'}\n[Date Brought In]: ${m.dateBroughtIn || m.dateOfDeath}`,
-              assessment: `[Clinical Death Certified by]: ${m.certifyingDoctor || 'Attending Physician'}`,
-              plan: `[Brought In By]: ${m.broughtInBy || 'Next of Kin'}\n[NOK Notified]: ${m.nextOfKinNotified ? 'YES' : 'NO'}\n[Notes]: ${m.notes || 'Deceased records transferred to digital repository'}`,
-              signature: m.certifyingDoctor || 'Dr. Attending Physician',
-              signedAt: validDDate,
-              isFinalized: true,
-              createdAt: validDDate,
-              updatedAt: validDDate
-            }
-          });
-          createdMortuaryRecords.push(mortNote);
+          if (patientId) {
+            const mortNote = await tx.consultationNote.create({
+              data: {
+                patientId,
+                authorId: defaultStaffId,
+                subjective: `[Mortuary Record / Date of Death]: ${m.dateOfDeath} ${m.timeOfDeath || ''}\n[Cause of Death]: ${m.causeOfDeath}\n[Immediate Cause]: ${m.immediateCause || 'N/A'}\n[Antecedent Cause]: ${m.antecedentCause || 'N/A'}`,
+                objective: `[Corpse Tag #]: ${m.corpseTagNumber || 'N/A'}\n[Mortuary Chamber]: ${m.mortuaryChamberNumber || 'Chamber 1'}\n[Date Brought In]: ${m.dateBroughtIn || m.dateOfDeath}`,
+                assessment: `[Clinical Death Certified by]: ${m.certifyingDoctor || 'Attending Physician'}`,
+                plan: `[Brought In By]: ${m.broughtInBy || 'Next of Kin'}\n[NOK Notified]: ${m.nextOfKinNotified ? 'YES' : 'NO'}\n[Notes]: ${m.notes || 'Deceased records transferred to digital repository'}`,
+                signature: m.certifyingDoctor || 'Dr. Attending Physician',
+                signedAt: validDDate,
+                isFinalized: true,
+                createdAt: validDDate,
+                updatedAt: validDDate
+              }
+            });
+            createdMortuaryRecords.push(mortNote);
+          }
+
+          // Register in mortuary storage / logbook
+          const admissionObj = {
+            id: `AD-MIG-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`,
+            mrn: m.corpseTagNumber || `MOR-${validDDate.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+            patientId: patientId || null,
+            name: (m as any).deceasedName || (targetPatient ? `${targetPatient.firstName} ${targetPatient.lastName}` : 'Unidentified Deceased'),
+            gender: (m as any).gender || targetPatient?.gender || 'UNKNOWN',
+            age: (m as any).age || (targetPatient?.birthDate ? new Date().getFullYear() - new Date(targetPatient.birthDate).getFullYear() : 50),
+            admittedAt: m.dateBroughtIn || validDDate.toISOString().replace('T', ' ').substring(0, 16),
+            admittingPersonnel: 'Record Migration System',
+            certifyingClinician: m.certifyingDoctor || 'Attending Physician',
+            causeOfDeath: m.causeOfDeath || 'Clinical Death Recorded',
+            medicoLegalStatus: (m as any).medicoLegalStatus || 'NONE',
+            identifyingFeatures: m.notes || 'Migrated paper mortuary register record',
+            personalEffects: [],
+            nextOfKin: { name: m.broughtInBy || 'Next of Kin', relationship: 'Family', phone: '—' },
+            status: 'ADMITTED',
+            storageLocation: m.mortuaryChamberNumber || 'Cold Storage Bay 04',
+            certificateIssued: Boolean(m.certifyingDoctor)
+          };
+          addMigratedMortuaryAdmission(admissionObj);
+          if (!patientId) {
+            createdMortuaryRecords.push(admissionObj);
+          }
         }
       }
 
       // 13. Map Pathology & Histology Reports
       const createdPathologyReports: any[] = [];
-      if (Array.isArray(pathologyReports) && pathologyReports.length > 0) {
+      if (patientId && Array.isArray(pathologyReports) && pathologyReports.length > 0) {
         for (const p of pathologyReports) {
           const pDate = p.collectionDate ? new Date(p.collectionDate) : new Date();
           const validPDate = isNaN(pDate.getTime()) ? new Date() : pDate;
@@ -1172,7 +1245,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 14. Map Physiotherapy & Rehabilitation
       const createdPhysioRecords: any[] = [];
-      if (Array.isArray(physiotherapyRecords) && physiotherapyRecords.length > 0) {
+      if (patientId && Array.isArray(physiotherapyRecords) && physiotherapyRecords.length > 0) {
         for (const pt of physiotherapyRecords) {
           const ptDate = pt.sessionDate ? new Date(pt.sessionDate) : new Date();
           const validPtDate = isNaN(ptDate.getTime()) ? new Date() : ptDate;
@@ -1198,7 +1271,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 15. Map Dental Records
       const createdDentalRecords: any[] = [];
-      if (Array.isArray(dentalRecords) && dentalRecords.length > 0) {
+      if (patientId && Array.isArray(dentalRecords) && dentalRecords.length > 0) {
         for (const d of dentalRecords) {
           const dDate = d.examDate ? new Date(d.examDate) : new Date();
           const validDDate = isNaN(dDate.getTime()) ? new Date() : dDate;
@@ -1235,7 +1308,7 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
 
       // 16. Map Eye Clinic & Ophthalmology
       const createdEyeRecords: any[] = [];
-      if (Array.isArray(eyeClinicRecords) && eyeClinicRecords.length > 0) {
+      if (patientId && Array.isArray(eyeClinicRecords) && eyeClinicRecords.length > 0) {
         for (const e of eyeClinicRecords) {
           const eDate = e.examDate ? new Date(e.examDate) : new Date();
           const validEDDate = isNaN(eDate.getTime()) ? new Date() : eDate;
@@ -1287,7 +1360,179 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         }
       }
 
-      // 17. Map Insurance & HMO Policies
+      // 16b. Map Operating Theatre / Operation Notes
+      const createdOperationNotes: any[] = [];
+      const createdSurgicalBookings: Array<{ id: string; operationName: string }> = [];
+      if (patientId && Array.isArray(operationNotes) && operationNotes.length > 0) {
+        for (const op of operationNotes) {
+          const opDate = op.operationDate ? new Date(op.operationDate) : new Date();
+          const validOpDate = isNaN(opDate.getTime()) ? new Date() : opDate;
+
+          const surgReq = await tx.surgicalRequest.create({
+            data: {
+              requestNumber: `SURG-REQ-MIG-${validOpDate.getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+              patientId,
+              surgeonId: defaultStaffId,
+              diagnosis: op.preOpDiagnosis || op.postOpDiagnosis || op.operationName || 'Surgical Case',
+              proposedProcedure: op.operationName || 'Surgical Operation',
+              urgency: 'ELECTIVE',
+              estimatedDurationMin: 60,
+              anaesthesiaReqs: op.anaesthesiaType || 'General Anaesthesia',
+              preferredDate: validOpDate,
+              status: 'COMPLETED',
+              createdAt: validOpDate
+            }
+          });
+
+          const surgBooking = await tx.surgicalBooking.create({
+            data: {
+              requestId: surgReq.id,
+              patientId,
+              surgeonId: defaultStaffId,
+              anaesthetistId: defaultStaffId,
+              operatingRoom: 'Operating Theatre 1',
+              scheduledStart: validOpDate,
+              scheduledEnd: new Date(validOpDate.getTime() + 60 * 60 * 1000),
+              status: 'COMPLETED',
+              createdAt: validOpDate
+            }
+          });
+
+          createdSurgicalBookings.push({ id: surgBooking.id, operationName: op.operationName || 'Operation' });
+
+          const intraOp = await tx.intraOpRecord.create({
+            data: {
+              bookingId: surgBooking.id,
+              anaesthesiaStart: validOpDate,
+              anaesthesiaEnd: new Date(validOpDate.getTime() + 60 * 60 * 1000),
+              surgicalIncision: validOpDate,
+              surgicalClosure: new Date(validOpDate.getTime() + 50 * 60 * 1000),
+              initialInstrumentCount: 20,
+              closureInstrumentCount: 20,
+              instrumentReconciled: true,
+              initialSwabCount: 10,
+              closureSwabCount: 10,
+              swabsReconciled: true,
+              estimatedBloodLossML: op.estimatedBloodLossMl ? Number(op.estimatedBloodLossMl) : 0,
+              primaryProcedureNotes: `[OPERATION]: ${op.operationName}\n[SURGEON]: ${op.surgeonName || 'Surgeon'}\n[ASSISTANT(S)]: ${op.assistantSurgeon || 'N/A'}\n[ANAESTHETIST]: ${op.anaesthetistName || 'N/A'}\n[SCRUB NURSE]: ${op.scrubNurse || 'N/A'}\n[ANAESTHESIA TYPE]: ${op.anaesthesiaType || 'N/A'}\n[PRE-OP DIAGNOSIS]: ${op.preOpDiagnosis || 'N/A'}\n[POST-OP DIAGNOSIS]: ${op.postOpDiagnosis || 'N/A'}\n\n[OPERATIVE FINDINGS]:\n${op.findings || 'N/A'}\n\n[PROCEDURE DETAILS]:\n${op.procedureDetails || 'N/A'}\n\n[SUTURES / CLOSURE]: ${op.sutureMaterials || 'Standard'}\n[DRAINS / PACKS]: ${op.drainInserted || op.implantsOrPacks || 'None'}\n[POST-OP ORDERS]:\n${op.postOpOrders || 'Standard post-operative recovery orders'}`
+            }
+          });
+
+          if (op.specimenSentForHistology || op.specimenDescription) {
+            await tx.surgicalSpecimen.create({
+              data: {
+                intraOpRecordId: intraOp.id,
+                anatomicalSource: op.specimenDescription || op.operationName || 'Surgical Tissue',
+                specimenLabelCode: `SPEC-SURG-MIG-${validOpDate.getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+                collectedAt: validOpDate,
+                chainOfCustodyLogs: `Specimen collected during ${op.operationName} and transferred to Histopathology.`
+              }
+            });
+          }
+
+          // Also record in Consultation Notes so it is accessible in the patient's continuous medical notes timeline
+          await tx.consultationNote.create({
+            data: {
+              patientId,
+              authorId: defaultStaffId,
+              subjective: `[Operation Note - Pre-Op Diagnosis]: ${op.preOpDiagnosis || op.operationName}\n[Surgeon]: ${op.surgeonName || 'Surgeon'}\n[Assistants]: ${op.assistantSurgeon || 'N/A'}\n[Anaesthetist]: ${op.anaesthetistName || 'N/A'} (${op.anaesthesiaType || 'General'})`,
+              objective: `[Operative Findings]:\n${op.findings || 'No gross abnormality reported'}\n[Estimated Blood Loss]: ${op.estimatedBloodLossMl ? op.estimatedBloodLossMl + ' mL' : 'Minimal'}\n[Drains/Packs]: ${op.drainInserted || op.implantsOrPacks || 'None'}`,
+              assessment: `[Post-Op Diagnosis]: ${op.postOpDiagnosis || op.preOpDiagnosis || op.operationName}`,
+              plan: `[Operation Performed]: ${op.operationName}\n[Procedure Steps]:\n${op.procedureDetails || 'Procedure completed uneventfully'}\n[Sutures / Closure]: ${op.sutureMaterials || 'Standard'}\n[Post-Operative Orders]:\n${op.postOpOrders || 'Monitor vitals, analgesia and wound dressing'}`,
+              signature: op.surgeonName || 'Consultant Surgeon',
+              signedAt: validOpDate,
+              isFinalized: true,
+              createdAt: validOpDate,
+              updatedAt: validOpDate
+            }
+          });
+
+          createdOperationNotes.push(intraOp);
+        }
+      }
+
+      // 16c. Map Surgical / Operation Consents
+      const createdSurgicalConsents: any[] = [];
+      if (patientId && Array.isArray(surgicalConsents) && surgicalConsents.length > 0) {
+        for (const consent of surgicalConsents) {
+          const consentDate = consent.consentDate ? new Date(consent.consentDate) : new Date();
+          const validConsentDate = isNaN(consentDate.getTime()) ? new Date() : consentDate;
+
+          // Find or create booking
+          let targetBookingId = createdSurgicalBookings[0]?.id;
+          if (!targetBookingId) {
+            const surgReq = await tx.surgicalRequest.create({
+              data: {
+                requestNumber: `SURG-REQ-MIG-${validConsentDate.getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+                patientId,
+                surgeonId: defaultStaffId,
+                diagnosis: consent.operationName || 'Surgical Procedure Consent',
+                proposedProcedure: consent.operationName || 'Surgical Procedure',
+                urgency: 'ELECTIVE',
+                estimatedDurationMin: 60,
+                anaesthesiaReqs: 'General Anaesthesia / Sedation',
+                preferredDate: validConsentDate,
+                status: 'COMPLETED',
+                createdAt: validConsentDate
+              }
+            });
+
+            const surgBooking = await tx.surgicalBooking.create({
+              data: {
+                requestId: surgReq.id,
+                patientId,
+                surgeonId: defaultStaffId,
+                anaesthetistId: defaultStaffId,
+                operatingRoom: 'Operating Theatre 1',
+                scheduledStart: validConsentDate,
+                scheduledEnd: new Date(validConsentDate.getTime() + 60 * 60 * 1000),
+                status: 'COMPLETED',
+                createdAt: validConsentDate
+              }
+            });
+            targetBookingId = surgBooking.id;
+          }
+
+          const consentCode = consent.consentCode || `CONSENT-MIG-${validConsentDate.getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+          const createdConsent = await tx.surgicalConsent.create({
+            data: {
+              bookingId: targetBookingId,
+              patientId,
+              consentCode,
+              benefitsExplained: consent.benefitsExplained !== false,
+              risksExplained: consent.risksExplained !== false,
+              signaturePatient: true,
+              signatureSurgeon: true,
+              signerName: consent.signerName || consent.patientName || (patient ? `${patient.firstName} ${patient.lastName}` : 'Patient'),
+              relationship: consent.relationship || 'SELF',
+              signatureImage: consent.signatureImage || null,
+              signedAt: validConsentDate
+            }
+          });
+
+          // Also record in Consultation Notes so it is accessible in the patient's continuous medical notes timeline
+          await tx.consultationNote.create({
+            data: {
+              patientId,
+              authorId: defaultStaffId,
+              subjective: `[Informed Consent for Operation / Theatre]\n[Procedure / Operation]: ${consent.operationName || 'Surgical Operation'}\n[Signatory / Patient]: ${consent.signerName || consent.patientName || 'Patient'} (Relationship: ${consent.relationship || 'SELF'})\n[Consent Code]: ${consentCode}`,
+              objective: `[Benefits Explained]: ${consent.benefitsExplained !== false ? 'Yes' : 'No'}\n[Risks Explained]: ${consent.risksExplained !== false ? 'Yes' : 'No'}\n[Anaesthesia Risks Explained]: ${consent.anaesthesiaRisksExplained !== false ? 'Yes' : 'No'}\n[Blood Transfusion Consent]: ${consent.bloodTransfusionConsent !== false ? 'Yes' : 'No'}`,
+              assessment: `[Informed Consent Status]: Fully Executed and Authorized`,
+              plan: `[Authorized Surgeon]: ${consent.surgeonName || 'Consultant Surgeon'}\n[Witness]: ${consent.witnessName || 'Theatre Staff'}\n[Consent Notes]: ${consent.notes || 'Informed consent obtained without coercion after full explanation.'}`,
+              signature: consent.surgeonName || 'Consultant Surgeon',
+              signedAt: validConsentDate,
+              isFinalized: true,
+              createdAt: validConsentDate,
+              updatedAt: validConsentDate
+            }
+          });
+
+          createdSurgicalConsents.push(createdConsent);
+        }
+      }
+
+      // 17. Map Insurance & HMO Policies (Master Catalogs & Patient Policies)
       const createdInsuranceRecords: any[] = [];
       if (Array.isArray(insuranceRecords) && insuranceRecords.length > 0) {
         for (const ins of insuranceRecords) {
@@ -1328,32 +1573,36 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
             });
           }
 
-          const policy = await tx.patientInsurancePolicy.create({
-            data: {
-              patientId,
-              providerId: prov.id,
-              planId: plan.id,
-              membershipNumber: ins.policyNumber || `POL-${Math.floor(10000 + Math.random() * 90000)}`,
-              enrolleeNumber: ins.enrolleeNumber || null,
-              effectiveDate: isNaN(effDate.getTime()) ? new Date('2026-01-01') : effDate,
-              expiryDate: isNaN(expDate.getTime()) ? new Date('2026-12-31') : expDate,
-              isActive: true,
-              isPrimary: true
-            }
-          });
-          createdInsuranceRecords.push(policy);
-
-          if (ins.claimAmount && Number(ins.claimAmount) > 0) {
-            await tx.claim.create({
+          if (patientId) {
+            const policy = await tx.patientInsurancePolicy.create({
               data: {
                 patientId,
-                policyId: policy.id,
-                status: ins.approvalStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
-                totalAmount: Number(ins.claimAmount),
-                approvedAmount: ins.approvalStatus === 'APPROVED' ? Number(ins.claimAmount) : 0,
-                createdAt: isNaN(effDate.getTime()) ? new Date() : effDate
+                providerId: prov.id,
+                planId: plan.id,
+                membershipNumber: ins.policyNumber || `POL-${Math.floor(10000 + Math.random() * 90000)}`,
+                enrolleeNumber: ins.enrolleeNumber || null,
+                effectiveDate: isNaN(effDate.getTime()) ? new Date('2026-01-01') : effDate,
+                expiryDate: isNaN(expDate.getTime()) ? new Date('2026-12-31') : expDate,
+                isActive: true,
+                isPrimary: true
               }
             });
+            createdInsuranceRecords.push(policy);
+
+            if (ins.claimAmount && Number(ins.claimAmount) > 0) {
+              await tx.claim.create({
+                data: {
+                  patientId,
+                  policyId: policy.id,
+                  status: ins.approvalStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
+                  totalAmount: Number(ins.claimAmount),
+                  approvedAmount: ins.approvalStatus === 'APPROVED' ? Number(ins.claimAmount) : 0,
+                  createdAt: isNaN(effDate.getTime()) ? new Date() : effDate
+                }
+              });
+            }
+          } else {
+            createdInsuranceRecords.push({ provider: prov, plan });
           }
         }
       }
@@ -1365,22 +1614,56 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
           const fDate = f.transactionDate ? new Date(f.transactionDate) : new Date();
           const validFDate = isNaN(fDate.getTime()) ? new Date() : fDate;
 
-          const finInv = await tx.invoice.create({
-            data: {
-              patientId,
-              status: f.paymentStatus === 'PAID' || f.paymentStatus === 'CLEARED' ? 'PAID' : 'ISSUED',
-              total: Number(f.amountDue) || Number(f.amountPaid) || 0,
-              amountPaid: Number(f.amountPaid) || 0,
-              reasonText: `[FINANCE LEDGER] Receipt #${f.receiptNumber || 'N/A'} (Method: ${f.paymentMethod || 'CASH'}, Revenue Head: ${f.revenueHead || 'General'}, Cashier: ${f.cashierName || 'Cashier'})`,
-              createdAt: validFDate,
-              updatedAt: validFDate
-            }
-          });
-          createdFinanceRecords.push(finInv);
+          if (patientId) {
+            const finInv = await tx.invoice.create({
+              data: {
+                patientId,
+                status: f.paymentStatus === 'PAID' || f.paymentStatus === 'CLEARED' ? 'PAID' : 'ISSUED',
+                total: Number(f.amountDue) || Number(f.amountPaid) || 0,
+                amountPaid: Number(f.amountPaid) || 0,
+                reasonText: `[FINANCE LEDGER] Receipt #${f.receiptNumber || 'N/A'} (Method: ${f.paymentMethod || 'CASH'}, Revenue Head: ${f.revenueHead || 'General'}, Cashier: ${f.cashierName || 'Cashier'})`,
+                createdAt: validFDate,
+                updatedAt: validFDate
+              }
+            });
+            createdFinanceRecords.push(finInv);
+          } else {
+            createdFinanceRecords.push(f);
+          }
         }
       }
 
-      // 19. Map Audit & Governance Records
+      // 19. Map General Journal Vouchers & Double-Entry Ledgers (Financial Forms)
+      const createdJournals: any[] = [];
+      if (Array.isArray(journalVouchers) && journalVouchers.length > 0) {
+        for (let i = 0; i < journalVouchers.length; i++) {
+          const jv = journalVouchers[i];
+          const jvDate = jv.date ? new Date(jv.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+          const validJv = {
+            id: jv.voucherNumber || `JV-MIG-${Date.now().toString().slice(-4)}-${i + 1}`,
+            reference: jv.referenceNumber || `REF-MIG-${i + 1}`,
+            description: jv.description || 'Migrated General Journal Voucher',
+            date: jvDate,
+            status: 'POSTED',
+            createdBy: clerkUser?.username || 'RecordClerk',
+            approvedBy: clerkUser?.username || 'Admin',
+            lines: Array.isArray(jv.lines) && jv.lines.length > 0 ? jv.lines.map((l: any) => ({
+              accountCode: l.accountCode || '1010',
+              accountName: l.accountName || 'General Ledger',
+              debit: Number(l.debit) || 0,
+              credit: Number(l.credit) || 0,
+              costCentre: l.costCentre || 'Central Administration'
+            })) : [
+              { accountCode: '1010', accountName: 'Cash and Bank Balances', debit: Number(jv.totalDebit) || 0, credit: 0, costCentre: 'Central Administration' },
+              { accountCode: '4010', accountName: 'Patient Service Revenue', debit: 0, credit: Number(jv.totalCredit) || Number(jv.totalDebit) || 0, costCentre: 'Central Administration' }
+            ]
+          };
+          addMigratedJournalVoucher(validJv);
+          createdJournals.push(validJv);
+        }
+      }
+
+      // 20. Map Audit & Governance Records
       const createdAuditRecords: any[] = [];
       if (Array.isArray(auditRecords) && auditRecords.length > 0) {
         for (const aud of auditRecords) {
@@ -1390,9 +1673,9 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
           const auditEntry = await tx.auditLog.create({
             data: {
               userId: clerkUser?.id || null,
-              action: 'CLINICAL_CHART_AUDIT',
-              resourceType: 'PatientCaseNote',
-              resourceId: patientId,
+              action: patientId ? 'CLINICAL_CHART_AUDIT' : 'INSTITUTIONAL_COMPLIANCE_AUDIT',
+              resourceType: patientId ? 'PatientCaseNote' : 'HospitalDepartmentAudit',
+              resourceId: patientId || `AUD-${Date.now()}`,
               changes: {
                 auditorName: aud.auditorName,
                 auditType: aud.auditType,
@@ -1409,8 +1692,8 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         }
       }
 
-      // 20. Store Original Scanned Page Images in ClinicalAttachment
-      if (Array.isArray(scannedPages) && scannedPages.length > 0) {
+      // 21. Store Original Scanned Page Images in ClinicalAttachment (if patient folder)
+      if (patientId && Array.isArray(scannedPages) && scannedPages.length > 0) {
         for (let i = 0; i < scannedPages.length; i++) {
           const page = scannedPages[i];
           const pageUrl = page.dataUrl || (page as any);
@@ -1429,18 +1712,20 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         }
       }
 
-      // 21. Main Audit Log
+      // 22. Main Audit Log
       await tx.auditLog.create({
         data: {
           userId: clerkUser?.id || null,
-          action: 'MIGRATE_HOSPITAL_PAPER_FOLDER',
-          resourceType: 'Patient',
-          resourceId: patientId,
+          action: hasPatient ? 'MIGRATE_HOSPITAL_PAPER_FOLDER' : 'MIGRATE_INSTITUTIONAL_RECORDS',
+          resourceType: hasPatient ? 'Patient' : 'InstitutionalLedger',
+          resourceId: patientId || `INST-${Date.now()}`,
           changes: {
-            patientNumber: targetPatient.patientNumber,
-            fullName: `${targetPatient.firstName} ${targetPatient.lastName}`,
-            familyNumber: patient.familyNumber || null,
-            familyAccountId: targetPatient.familyAccountId || null,
+            isInstitutionalRecord: !hasPatient,
+            patientNumber: targetPatient?.patientNumber || null,
+            fullName: targetPatient ? `${targetPatient.firstName} ${targetPatient.lastName}` : 'Institutional Upload',
+            familyNumber: patient?.familyNumber || null,
+            familyAccountId: targetPatient?.familyAccountId || null,
+            journalVouchersCount: createdJournals.length,
             encountersCount: createdEncounters.length,
             vitalsCount: createdVitals.length,
             prescriptionsCount: createdPrescriptions.length,
@@ -1456,6 +1741,8 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
             insuranceCount: createdInsuranceRecords.length,
             financeCount: createdFinanceRecords.length,
             auditCount: createdAuditRecords.length,
+            operationNotesCount: createdOperationNotes.length,
+            surgicalConsentsCount: createdSurgicalConsents.length,
             attachmentsCount: createdAttachments.length,
             hospitalPreset: hospitalPreset || 'FAITH_FOUNDATION'
           }
@@ -1463,8 +1750,10 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
       });
 
       return {
+        isInstitutionalRecord: !hasPatient,
         patient: targetPatient,
         familyAccount: familyAccountResult,
+        journalVouchersCreated: createdJournals.length,
         encountersCreated: createdEncounters.length,
         vitalsCreated: createdVitals.length,
         consultationNotesCreated: createdNotes.length,
@@ -1483,13 +1772,19 @@ router.post('/commit-migration', authMiddleware, superAdminGuard, async (req: an
         insuranceCreated: createdInsuranceRecords.length,
         financeCreated: createdFinanceRecords.length,
         auditCreated: createdAuditRecords.length,
+        operationNotesCreated: createdOperationNotes.length,
+        surgicalConsentsCreated: createdSurgicalConsents.length,
         scannedPagesArchived: createdAttachments.length
       };
     });
 
+    const message = result.isInstitutionalRecord
+      ? `🎉 Successfully migrated institutional records (${result.journalVouchersCreated} Journal Vouchers, ${result.financeCreated} Receipts, ${result.auditCreated} Audit Logs, ${result.insuranceCreated} HMO Tariffs, ${result.mortuaryCreated} Mortuary Records) into the hospital database & accounting ledger!`
+      : `🎉 Successfully migrated patient folder "${result.patient.firstName} ${result.patient.lastName}" (${result.patient.patientNumber}) across all clinical departments & data dictionary!`;
+
     return res.json({
       success: true,
-      message: `🎉 Successfully migrated patient folder "${result.patient.firstName} ${result.patient.lastName}" (${result.patient.patientNumber}) across all clinical departments & data dictionary!`,
+      message,
       data: result
     });
   } catch (err: any) {

@@ -172,6 +172,7 @@ model Patient {
   triageRecords                TriageRecord[]
   visits                       Visit[]
   dentalEncounters             DentalEncounter[]
+  dentalConsents               DentalConsent[]
   eyeEncounters                EyeEncounter[]
 
   @@index([familyAccountId])
@@ -4414,6 +4415,7 @@ model DentalEncounter {
   perioRecords     DentalPerioMeasurement[]
   labOrders        DentalLabOrder[]
   treatmentPlans   DentalTreatmentPlanItem[]
+  consents         DentalConsent[]
 
   @@index([patientId])
   @@index([status])
@@ -4525,6 +4527,45 @@ model DentalTreatmentPlanItem {
   @@map("dental_treatment_plan_items")
 }
 
+model DentalConsent {
+  id                    String           @id @default(uuid())
+  consentNumber         String           @unique
+  dentalEncounterId     String?
+  patientId             String
+  consentType           String           @default("GENERAL_TREATMENT")
+  title                 String           @default("Chairside Digital Informed Consent & Treatment Agreement")
+  procedureNames        String?          @db.Text
+  toothNumbers          String?
+  treatmentDescription  String?          @db.Text
+  risksDisclosed        String?          @db.Text
+  alternativesDiscussed String?          @db.Text
+  estimatedCost         Decimal          @default(0) @db.Decimal(12, 2)
+  signerName            String
+  signerRelationship    String           @default("PATIENT")
+  signerPhone           String?
+  signatureData         String           @db.Text
+  witnessName           String?
+  clinicianId           String?
+  clinicianName         String?
+  termsAgreed           Boolean          @default(true)
+  anesthesiaConsent     Boolean          @default(true)
+  radiographConsent     Boolean          @default(true)
+  status                String           @default("SIGNED")
+  signedAt              DateTime         @default(now())
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  patient               Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentalEncounter       DentalEncounter? @relation(fields: [dentalEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([dentalEncounterId])
+  @@index([consentType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@map("dental_consents")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 👁️ Eye Clinic (Ophthalmology & Optometry) Management
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4556,6 +4597,7 @@ model EyeEncounter {
   iopMeasurements         EyeIopMeasurement[]
   drawings                EyeAnatomicalDrawing[]
   opticalPrescriptions    EyeOpticalPrescription[]
+  telemetryScans          EyeTelemetryScan[]
 
   @@index([patientId])
   @@index([status])
@@ -4635,11 +4677,12 @@ model EyeAnatomicalDrawing {
 }
 
 model EyeOpticalPrescription {
-  id             String       @id @default(uuid())
-  rxNumber       String       @unique
-  eyeEncounterId String
-  patientId      String
-  prescribedById String
+  id                 String       @id @default(uuid())
+  rxNumber           String       @unique
+  prescriptionNumber String?
+  eyeEncounterId     String
+  patientId          String
+  prescribedById     String
   lensType       String       @default("PROGRESSIVE")
   lensMaterial   String       @default("POLYCARBONATE_159")
   coatings       String[]
@@ -4668,3 +4711,72 @@ model EyeOpticalPrescription {
   @@index([patientId, createdAt])
   @@map("eye_optical_prescriptions")
 }
+
+model EyeTelemetryScan {
+  id               String       @id @default(uuid())
+  scanNumber       String       @unique
+  eyeEncounterId   String
+  patientId        String
+  deviceModel      String       @default("Spectralis OCT Plus (Heidelberg)")
+  deviceSerial     String?
+  modality         String       @default("OCT_MACULA")
+  eyeSide          String       @default("OU")
+  centralThickness Int?
+  rnflAverage      Int?
+  cupDiscRatio     Decimal?     @db.Decimal(3, 2)
+  signalQuality    Int?         @default(9)
+  findingsSummary  String       @db.Text
+  clinicalNotes    String?      @db.Text
+  imageUrl         String?      @db.Text
+  dicomMetadata    Json?
+  clinicianId      String?
+  status           String       @default("FINAL_INTERPRETED")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  eyeEncounter     EyeEncounter @relation(fields: [eyeEncounterId], references: [id], onDelete: Cascade)
+
+  @@index([eyeEncounterId])
+  @@index([patientId, modality])
+  @@index([patientId, createdAt])
+  @@map("eye_telemetry_scans")
+}
+
+model GrantTrancheCategory {
+  id           String    @id
+  categoryName String    @map("category_name")
+  categoryType String?   @map("category_type")
+  grantId      String?   @map("grant_id")
+  description  String?
+  displayOrder Int?      @map("display_order")
+  isActive     Boolean?  @default(true) @map("is_active")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  @@map("grant_tranche_categories")
+}
+
+model TaxFiling {
+  id           String    @id
+  taxType      String    @map("tax_type")
+  period       String
+  taxAmount    Decimal   @map("tax_amount") @db.Decimal(15, 2)
+  taxableBase  Decimal?  @map("taxable_base") @db.Decimal(15, 2)
+  taxRate      Decimal?  @map("tax_rate") @db.Decimal(6, 3)
+  status       String    @default("DRAFT")
+  filingDate   DateTime? @map("filing_date") @db.Date
+  dueDate      DateTime? @map("due_date") @db.Date
+  referenceNo  String?   @map("reference_no")
+  tinNo        String?   @map("tin_no")
+  taxAuthority String?   @map("tax_authority")
+  glAccount    String?   @map("gl_account")
+  bankAccount  String?   @map("bank_account")
+  notes        String?   @db.Text
+  createdBy    String?   @map("created_by")
+  approvedBy   String?   @map("approved_by")
+  filedBy      String?   @map("filed_by")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  @@map("tax_filings")
+}
+

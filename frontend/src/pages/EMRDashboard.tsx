@@ -3,14 +3,15 @@ import {
   Typography, Box, Card, CardContent, Button, Grid, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Chip, IconButton,
   TextField, Stack, Tab, Tabs, Divider, CircularProgress, Autocomplete,
-  Avatar, Alert, Paper, Tooltip, Badge, alpha
+  Avatar, Alert, Paper, Tooltip, Badge, alpha, TablePagination,
 } from '@mui/material';
 import {
   Search, History, Portrait, Print, Warning, CheckCircle, Refresh,
   AutoAwesome, Analytics, TrendingUp, ShowChart, Biotech, Medication,
   ContentCut, ChildCare, LocalHospital, Favorite, Thermostat, Opacity,
   Speed, LocalPharmacy, Healing, MedicalInformation, Assessment, ArrowForward,
-  MedicalServices, Science, Receipt, Launch
+  MedicalServices, Science, Receipt, Launch, MonitorHeart, Air, Scale,
+  FitnessCenter, RestartAlt, FilterAlt, Close,
 } from '@mui/icons-material';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -49,15 +50,40 @@ const getProcedureOpNoteFallback = (procedureName: string = '') => {
   return `Under sterile operating theatre conditions, ${procedureName || 'the procedure'} was successfully performed following standard surgical technique. Intra-operative haemostasis secured. Tissue layers reconstructed. Swab and instrument counts verified and reconciled x2.`;
 };
 
-const EMRDashboard: React.FC = () => {
+export interface EMRDashboardProps {
+  patientId?: string;
+  patientData?: any;
+  isDialogMode?: boolean;
+  onClose?: () => void;
+}
+
+export const EMRDashboard: React.FC<EMRDashboardProps> = ({
+  patientId: propPatientId,
+  patientData: propPatientData,
+  isDialogMode = false,
+  onClose,
+}) => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
   const urlPatientId = searchParams.get('patientId') || searchParams.get('id');
+  const effectivePatientId = propPatientId || urlPatientId;
 
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
-  const [selectedPat, setSelectedPat] = useState<PatientOption | null>(null);
+  const [selectedPat, setSelectedPat] = useState<PatientOption | null>(() => {
+    if (propPatientData) {
+      return {
+        id: propPatientData.id,
+        mrn: propPatientData.patientNumber || propPatientData.patientId || propPatientData.mrn || (propPatientData.id ? propPatientData.id.substring(0, 8).toUpperCase() : 'MRN'),
+        firstName: propPatientData.firstName || propPatientData.name?.[0]?.given?.[0] || 'Patient',
+        lastName: propPatientData.lastName || propPatientData.name?.[0]?.family || '',
+        gender: propPatientData.gender,
+        birthDate: propPatientData.birthDate,
+      };
+    }
+    return null;
+  });
 
   // Patient EMR & Clinical Records
   const [emrData, setEmrData] = useState<any | null>(null);
@@ -71,6 +97,77 @@ const EMRDashboard: React.FC = () => {
   // Active Tab value
   const [activeTab, setActiveTab] = useState(0);
   const [chartMetric, setChartMetric] = useState<'vitals' | 'labs'>('vitals');
+
+  // Vitals Tab Filter & Pagination State
+  const [vitalsSearchQuery, setVitalsSearchQuery] = useState('');
+  const [vitalsFilterPreset, setVitalsFilterPreset] = useState<'ALL' | 'FEVER' | 'HIGH_BP' | 'TACHYCARDIA' | 'LOW_SPO2' | 'MIGRATED'>('ALL');
+  const [vitalsPage, setVitalsPage] = useState(0);
+  const [vitalsRowsPerPage, setVitalsRowsPerPage] = useState(10);
+
+  // Clinical Vitals Range & Color Evaluation Helpers
+  const getBpAssessment = (systolic?: number | null, diastolic?: number | null) => {
+    if (systolic == null || diastolic == null || !systolic || !diastolic) {
+      return { label: 'Not Recorded', color: 'default' as const, textColor: 'text.secondary', text: '—' };
+    }
+    if (systolic >= 180 || diastolic >= 120) {
+      return { label: 'HTN Crisis (≥180/120)', color: 'error' as const, textColor: '#991b1b', text: `${systolic}/${diastolic}` };
+    }
+    if (systolic >= 140 || diastolic >= 90) {
+      return { label: 'Stage 2 HTN (≥140/90)', color: 'error' as const, textColor: '#dc2626', text: `${systolic}/${diastolic}` };
+    }
+    if (systolic >= 130 || diastolic >= 85) {
+      return { label: 'Stage 1 HTN (130-139)', color: 'warning' as const, textColor: '#c2410c', text: `${systolic}/${diastolic}` };
+    }
+    if (systolic > 120 && systolic <= 129 && diastolic <= 80) {
+      return { label: 'Elevated BP (121-129)', color: 'warning' as const, textColor: '#b45309', text: `${systolic}/${diastolic}` };
+    }
+    if (systolic < 90 || diastolic < 60) {
+      return { label: 'Hypotension (<90/60)', color: 'info' as const, textColor: '#1d4ed8', text: `${systolic}/${diastolic}` };
+    }
+    // 120/80 and below down to 90/60 is Normal / Optimal
+    return { label: 'Normal / Optimal (≤120/80)', color: 'success' as const, textColor: '#15803d', text: `${systolic}/${diastolic}` };
+  };
+
+  const getPulseAssessment = (pulseRate?: number | null) => {
+    if (pulseRate == null) return { label: 'Not Recorded', color: 'default' as const, textColor: 'text.secondary', text: '—' };
+    if (pulseRate > 120) return { label: 'Severe Tachycardia (>120)', color: 'error' as const, textColor: '#dc2626', text: `${pulseRate} bpm` };
+    if (pulseRate > 100) return { label: 'Tachycardia (>100)', color: 'warning' as const, textColor: '#c2410c', text: `${pulseRate} bpm` };
+    if (pulseRate < 50) return { label: 'Severe Bradycardia (<50)', color: 'error' as const, textColor: '#dc2626', text: `${pulseRate} bpm` };
+    if (pulseRate < 60) return { label: 'Bradycardia (<60)', color: 'warning' as const, textColor: '#c2410c', text: `${pulseRate} bpm` };
+    return { label: 'Normal Sinus (60-100)', color: 'success' as const, textColor: 'text.primary', text: `${pulseRate} bpm` };
+  };
+
+  const getTempAssessment = (temperature?: number | null) => {
+    if (temperature == null) return { label: 'Not Recorded', color: 'default' as const, textColor: 'text.secondary', text: '—' };
+    if (temperature >= 38.5) return { label: 'High Pyrexia (≥38.5°C)', color: 'error' as const, textColor: '#dc2626', text: `${temperature}°C` };
+    if (temperature >= 37.5) return { label: 'Low-grade Fever (37.5-38.4°C)', color: 'warning' as const, textColor: '#c2410c', text: `${temperature}°C` };
+    if (temperature < 35.5) return { label: 'Hypothermia (<35.5°C)', color: 'info' as const, textColor: '#1d4ed8', text: `${temperature}°C` };
+    return { label: 'Afebrile (Normal)', color: 'success' as const, textColor: 'text.primary', text: `${temperature}°C` };
+  };
+
+  const getSpo2Assessment = (spo2?: number | null) => {
+    if (spo2 == null) return { label: 'Not Recorded', color: 'default' as const, textColor: 'text.secondary', text: '—' };
+    if (spo2 < 90) return { label: 'Severe Hypoxemia (<90%)', color: 'error' as const, textColor: '#dc2626', text: `${spo2}%` };
+    if (spo2 < 95) return { label: 'Mild Hypoxia (90-94%)', color: 'warning' as const, textColor: '#c2410c', text: `${spo2}%` };
+    return { label: 'Normal Saturation (≥95%)', color: 'success' as const, textColor: '#15803d', text: `${spo2}%` };
+  };
+
+  const getRespRateAssessment = (rr?: number | null) => {
+    if (rr == null) return { label: 'Not Recorded', color: 'default' as const, textColor: 'text.secondary', text: '—' };
+    if (rr > 24) return { label: 'Severe Tachypnea (>24)', color: 'error' as const, textColor: '#dc2626', text: `${rr} cpm` };
+    if (rr > 20) return { label: 'Tachypnea (21-24)', color: 'warning' as const, textColor: '#c2410c', text: `${rr} cpm` };
+    if (rr < 10) return { label: 'Severe Bradypnea (<10)', color: 'error' as const, textColor: '#dc2626', text: `${rr} cpm` };
+    if (rr < 12) return { label: 'Bradypnea (10-11)', color: 'warning' as const, textColor: '#c2410c', text: `${rr} cpm` };
+    return { label: 'Normal Rate (12-20)', color: 'success' as const, textColor: 'text.primary', text: `${rr} cpm` };
+  };
+
+  const getBmiAssessment = (bmi?: number | null) => {
+    if (bmi == null) return { label: 'N/A', color: 'default' as const };
+    if (bmi >= 30) return { label: 'Obese (≥30)', color: 'error' as const };
+    if (bmi >= 25) return { label: 'Overweight (25-29.9)', color: 'warning' as const };
+    if (bmi >= 18.5) return { label: 'Normal BMI (18.5-24.9)', color: 'success' as const };
+    return { label: 'Underweight (<18.5)', color: 'info' as const };
+  };
 
   // Patient search query
   const fetchPatients = async (query: string = '') => {
@@ -132,8 +229,17 @@ const EMRDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (urlPatientId) {
-      api.get(`/patients/${urlPatientId}`)
+    if (propPatientData) {
+      setSelectedPat({
+        id: propPatientData.id,
+        mrn: propPatientData.patientNumber || propPatientData.patientId || propPatientData.mrn || (propPatientData.id ? propPatientData.id.substring(0, 8).toUpperCase() : 'MRN'),
+        firstName: propPatientData.firstName || propPatientData.name?.[0]?.given?.[0] || 'Patient',
+        lastName: propPatientData.lastName || propPatientData.name?.[0]?.family || '',
+        gender: propPatientData.gender,
+        birthDate: propPatientData.birthDate,
+      });
+    } else if (effectivePatientId) {
+      api.get(`/patients/${effectivePatientId}`)
         .then(res => {
           const p = res.data?.data || res.data;
           if (p && p.id) {
@@ -149,7 +255,7 @@ const EMRDashboard: React.FC = () => {
         })
         .catch(() => {});
     }
-  }, [urlPatientId]);
+  }, [effectivePatientId, propPatientData]);
 
   useEffect(() => {
     if (selectedPat) {
@@ -164,9 +270,116 @@ const EMRDashboard: React.FC = () => {
     }
   }, [selectedPat]);
 
+  // Unified Longitudinal Vitals calculation (combines Triage records, Bedside observations & Migrated Folder Vitals)
+  const unifiedVitalsList = useMemo(() => {
+    if (!emrData) return [];
+    const triageList: any[] = (emrData.triageRecords || []).map((t: any) => ({
+      id: t.id,
+      date: t.createdAt || t.triageStart || t.recordedDate,
+      systolic: t.systolic != null ? Number(t.systolic) : null,
+      diastolic: t.diastolic != null ? Number(t.diastolic) : null,
+      temperature: t.temperature != null ? Number(t.temperature) : null,
+      pulseRate: (t.pulseRate != null ? Number(t.pulseRate) : null) ?? (t.heartRate != null ? Number(t.heartRate) : null),
+      respiratoryRate: t.respiratoryRate != null ? Number(t.respiratoryRate) : null,
+      spo2: (t.spo2 != null ? Number(t.spo2) : null) ?? (t.oxygenSaturation != null ? Number(t.oxygenSaturation) : null),
+      weight: t.weight != null ? Number(t.weight) : null,
+      height: t.height != null ? Number(t.height) : null,
+      bmi: t.bmi != null ? Number(t.bmi) : (t.weight && t.height ? Math.round((Number(t.weight) / Math.pow(Number(t.height) > 3 ? Number(t.height) / 100 : Number(t.height), 2)) * 10) / 10 : null),
+      painScore: t.painScore ?? 0,
+      consciousnessLevel: t.consciousnessLevel || 'ALERT',
+      mobility: t.mobility || null,
+      hydration: t.hydration || null,
+      nutrition: t.nutrition || null,
+      priority: t.priority || 'STANDARD',
+      news2Score: t.news2Score ?? 0,
+      news2Risk: t.news2Risk || 'LOW',
+      presentingComplaints: t.presentingComplaints || '',
+      triageType: t.triageType || 'OUTPATIENT',
+      source: t.presentingComplaints?.includes('Treatment Sheet') || t.presentingComplaints?.includes('migrat') || t.triageType === 'MIGRATED'
+        ? 'MIGRATED FOLDER'
+        : (t.triageType === 'INPATIENT' ? 'WARD INPATIENT' : 'TRIAGE DESK'),
+      recordedBy: t.creator ? `${t.creator.firstName} ${t.creator.lastName}${t.creator.designation ? ` (${t.creator.designation})` : ''}` : 'Triage / Ward Staff',
+      isObservation: false,
+    }));
+
+    const obsList: any[] = (emrData.recentVitals || []).filter((o: any) => {
+      return !triageList.some(t => t.id === o.id);
+    }).map((o: any) => {
+      let systolic = o.systolicBp || (o.component?.find((c: any) => c.code?.coding?.[0]?.code === '8480-6')?.valueQuantity?.value);
+      let diastolic = o.diastolicBp || (o.component?.find((c: any) => c.code?.coding?.[0]?.code === '8462-4')?.valueQuantity?.value);
+      if (!systolic && o.valueString && o.valueString.includes('/')) {
+        const parts = o.valueString.split('/');
+        systolic = parseFloat(parts[0]);
+        diastolic = parseFloat(parts[1]);
+      }
+      return {
+        id: o.id,
+        date: o.effectiveDateTime || o.createdAt,
+        systolic: systolic || (o.code === '8480-6' ? o.valueQuantity?.value : null),
+        diastolic: diastolic || (o.code === '8462-4' ? o.valueQuantity?.value : null),
+        temperature: o.temp || (o.code === '8310-5' ? o.valueQuantity?.value : null),
+        pulseRate: o.pulse || (o.code === '8867-4' ? o.valueQuantity?.value : null),
+        respiratoryRate: o.respRate || (o.code === '9279-1' ? o.valueQuantity?.value : null),
+        spo2: o.spo2 || (o.code === '2708-6' || o.code === '59408-5' ? o.valueQuantity?.value : null),
+        weight: o.weight || (o.code === '29463-7' ? o.valueQuantity?.value : null),
+        height: o.height || (o.code === '8302-2' ? o.valueQuantity?.value : null),
+        bmi: o.bmi || null,
+        painScore: o.painScore ?? 0,
+        consciousnessLevel: o.consciousnessAlert ? 'ALERT' : 'ALTERED',
+        priority: 'STANDARD',
+        news2Score: 0,
+        news2Risk: 'LOW',
+        presentingComplaints: o.notes || o.comment || 'Clinical vital signs observation',
+        source: 'BEDSIDE OBSERVATION',
+        recordedBy: o.performerName || 'Ward Nurse',
+        isObservation: true,
+      };
+    });
+
+    const combined = [...triageList, ...obsList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return combined;
+  }, [emrData]);
+
+  const filteredVitalsList = useMemo(() => {
+    return unifiedVitalsList.filter((v: any) => {
+      if (vitalsSearchQuery.trim()) {
+        const q = vitalsSearchQuery.toLowerCase().trim();
+        const complaints = (v.presentingComplaints || '').toLowerCase();
+        const recordedBy = (v.recordedBy || '').toLowerCase();
+        const source = (v.source || '').toLowerCase();
+        const consciousness = (v.consciousnessLevel || '').toLowerCase();
+        const matches = complaints.includes(q) || recordedBy.includes(q) || source.includes(q) || consciousness.includes(q);
+        if (!matches) return false;
+      }
+
+      if (vitalsFilterPreset === 'FEVER') {
+        if (!v.temperature || v.temperature < 37.5) return false;
+      } else if (vitalsFilterPreset === 'HIGH_BP') {
+        if (!v.systolic || (v.systolic < 140 && (v.diastolic ? v.diastolic < 90 : true))) return false;
+      } else if (vitalsFilterPreset === 'TACHYCARDIA') {
+        if (!v.pulseRate || v.pulseRate < 100) return false;
+      } else if (vitalsFilterPreset === 'LOW_SPO2') {
+        if (!v.spo2 || v.spo2 >= 95) return false;
+      } else if (vitalsFilterPreset === 'MIGRATED') {
+        if (!v.source?.toLowerCase().includes('migrat')) return false;
+      }
+
+      return true;
+    });
+  }, [unifiedVitalsList, vitalsSearchQuery, vitalsFilterPreset]);
+
+  const paginatedVitalsList = useMemo(() => {
+    const start = vitalsPage * vitalsRowsPerPage;
+    return filteredVitalsList.slice(start, start + vitalsRowsPerPage);
+  }, [filteredVitalsList, vitalsPage, vitalsRowsPerPage]);
+
+  const latestVital = useMemo(() => {
+    return unifiedVitalsList.length > 0 ? unifiedVitalsList[0] : null;
+  }, [unifiedVitalsList]);
+
   // Transform recent vitals into Recharts chart dataset
   const vitalsChartData = useMemo(() => {
-    if (!emrData?.recentVitals || emrData.recentVitals.length === 0) {
+    if (unifiedVitalsList.length === 0) {
       // Mock historical trend if empty for visualization
       return [
         { date: '1 Month Ago', sbp: 135, dbp: 85, pulse: 78, temp: 36.8, spo2: 98, news2: 1 },
@@ -177,18 +390,18 @@ const EMRDashboard: React.FC = () => {
       ];
     }
 
-    return [...emrData.recentVitals]
+    return [...unifiedVitalsList]
       .reverse()
       .map((v: any) => ({
-        date: new Date(v.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-        sbp: v.systolicBp || 120,
-        dbp: v.diastolicBp || 80,
-        pulse: v.pulse || 75,
-        temp: v.temp || 36.6,
+        date: new Date(v.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        sbp: v.systolic || 120,
+        dbp: v.diastolic || 80,
+        pulse: v.pulseRate || 75,
+        temp: v.temperature || 36.6,
         spo2: v.spo2 || 98,
         news2: v.news2Score || 0,
       }));
-  }, [emrData]);
+  }, [unifiedVitalsList]);
 
   // Transform lab orders into Recharts diagnostic lab trend dataset
   const labChartData = useMemo(() => {
@@ -407,39 +620,83 @@ const EMRDashboard: React.FC = () => {
             </Typography>
           </Box>
 
-          {/* Patient Search Autocomplete */}
-          <Autocomplete
-            options={patients}
-            getOptionLabel={(o) => `${o.mrn} — ${o.lastName}, ${o.firstName}`}
-            filterOptions={(x) => x}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
-            loading={loadingSearch}
-            onInputChange={(_, val, reason) => {
-              if (reason === 'input' || reason === 'clear') {
-                fetchPatients(val);
-              }
-            }}
-            onChange={(_, val) => setSelectedPat(val)}
-            value={selectedPat}
-            sx={{ width: 380, bgcolor: 'rgba(255, 255, 255, 0.08)', borderRadius: 2, '& .MuiOutlinedInput-root': { color: '#fff' } }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                size="small"
-                placeholder="Search patient by MRN or Name..."
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: <Search sx={{ mr: 1, color: '#38bdf8' }} />,
-                  endAdornment: (
-                    <>
-                      {loadingSearch ? <CircularProgress color="inherit" size={16} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            {/* Patient Search Autocomplete */}
+            <Autocomplete
+              options={patients}
+              getOptionLabel={(o) => `${o.mrn} — ${o.lastName}, ${o.firstName}`}
+              filterOptions={(x) => x}
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
+              loading={loadingSearch}
+              onInputChange={(_, val, reason) => {
+                if (reason === 'input' || reason === 'clear') {
+                  fetchPatients(val);
+                }
+              }}
+              onChange={(_, val) => setSelectedPat(val)}
+              value={selectedPat}
+              sx={{ width: isDialogMode ? 280 : 380, bgcolor: 'rgba(255, 255, 255, 0.08)', borderRadius: 2, '& .MuiOutlinedInput-root': { color: '#fff' } }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  placeholder="Search patient by MRN or Name..."
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: <Search sx={{ mr: 1, color: '#38bdf8' }} />,
+                    endAdornment: (
+                      <>
+                        {loadingSearch ? <CircularProgress color="inherit" size={16} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+
+            {isDialogMode && (
+              <>
+                <Tooltip title="Open this patient EMR in a separate browser tab for dual monitor view">
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<Launch />}
+                    onClick={() => {
+                      const patId = selectedPat?.id || effectivePatientId;
+                      if (patId) window.open(`/emr-workspace?patientId=${patId}`, '_blank');
+                    }}
+                    sx={{
+                      bgcolor: 'rgba(255,255,255,0.15)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      whiteSpace: 'nowrap',
+                      borderRadius: 2,
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' }
+                    }}
+                  >
+                    Open in Tab
+                  </Button>
+                </Tooltip>
+
+                {onClose && (
+                  <Tooltip title="Close EMR Workspace Dialog (Esc)">
+                    <IconButton
+                      onClick={onClose}
+                      sx={{
+                        color: '#fff',
+                        bgcolor: 'rgba(255,255,255,0.12)',
+                        '&:hover': { bgcolor: 'rgba(239,68,68,0.4)' }
+                      }}
+                    >
+                      <Close />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </>
             )}
-          />
+          </Stack>
         </Box>
       </Card>
 
@@ -742,6 +999,7 @@ const EMRDashboard: React.FC = () => {
                 }}
               >
                 <Tab icon={<History fontSize="small" />} iconPosition="start" label={`Encounters & SOAP Notes (${emrData.consultationNotes?.length || 0})`} />
+                <Tab icon={<MonitorHeart fontSize="small" />} iconPosition="start" label={`Vitals & Triage History (${unifiedVitalsList.length})`} />
                 <Tab icon={<Medication fontSize="small" />} iconPosition="start" label={`Prescriptions (${prescriptions.length || emrData.recentMeds?.length || 0})`} />
                 <Tab icon={<Biotech fontSize="small" />} iconPosition="start" label={`Lab Diagnostics (${labOrders.length || 0})`} />
                 <Tab icon={<MedicalServices fontSize="small" />} iconPosition="start" label={`🦷 Dental & Odontogram (${dentalEncounters.length})`} />
@@ -850,8 +1108,435 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 1: PRESCRIPTIONS & PHARMACY HISTORY ─────────────────── */}
+              {/* ── TAB 1: LONGITUDINAL VITALS & TRIAGE HISTORY ─────────────── */}
               {activeTab === 1 && (
+                <Stack spacing={2.5}>
+                  {/* Tab Header */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <MonitorHeart color="primary" />
+                        Longitudinal Vital Signs & Triage Observations ({unifiedVitalsList.length} Total Readings)
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Comprehensive chronological vitals audit trail · OPD Triage · Inpatient Bedside Logs · Migrated Paper Records
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Quick Vitals Summary KPI Cards */}
+                  {latestVital && (() => {
+                    const bpStatus = getBpAssessment(latestVital.systolic, latestVital.diastolic);
+                    const pulseStatus = getPulseAssessment(latestVital.pulseRate);
+                    const tempStatus = getTempAssessment(latestVital.temperature);
+                    const spo2Status = getSpo2Assessment(latestVital.spo2);
+                    const bmiStatus = getBmiAssessment(latestVital.bmi);
+                    const isNewsCritical = latestVital.news2Score >= 7 || latestVital.news2Risk === 'HIGH';
+                    const isNewsMedium = latestVital.news2Score >= 5 || latestVital.news2Risk === 'MEDIUM';
+
+                    return (
+                      <Grid container spacing={2}>
+                        {/* Blood Pressure */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">Blood Pressure</Typography>
+                              <Favorite sx={{ fontSize: 18, color: '#dc2626' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color={bpStatus.color === 'error' ? 'error.main' : bpStatus.color === 'warning' ? '#c2410c' : bpStatus.color === 'info' ? '#1d4ed8' : 'text.primary'}>
+                              {latestVital.systolic && latestVital.diastolic ? `${latestVital.systolic}/${latestVital.diastolic}` : 'N/A'} <Typography component="span" variant="caption" color="text.secondary">mmHg</Typography>
+                            </Typography>
+                            {latestVital.systolic != null && (
+                              <Chip
+                                size="small"
+                                label={bpStatus.label}
+                                color={bpStatus.color}
+                                variant={bpStatus.color === 'success' ? 'outlined' : 'filled'}
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, mt: 0.5 }}
+                              />
+                            )}
+                          </Paper>
+                        </Grid>
+
+                        {/* Pulse / Heart Rate */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">Pulse / Heart Rate</Typography>
+                              <Speed sx={{ fontSize: 18, color: '#2563eb' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color={pulseStatus.color === 'error' ? 'error.main' : pulseStatus.color === 'warning' ? '#c2410c' : 'text.primary'}>
+                              {latestVital.pulseRate != null ? `${latestVital.pulseRate}` : 'N/A'} <Typography component="span" variant="caption" color="text.secondary">BPM</Typography>
+                            </Typography>
+                            {latestVital.pulseRate != null && (
+                              <Chip
+                                size="small"
+                                label={pulseStatus.label}
+                                color={pulseStatus.color}
+                                variant={pulseStatus.color === 'success' ? 'outlined' : 'filled'}
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, mt: 0.5 }}
+                              />
+                            )}
+                          </Paper>
+                        </Grid>
+
+                        {/* Temperature */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">Body Temperature</Typography>
+                              <Thermostat sx={{ fontSize: 18, color: '#ea580c' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color={tempStatus.color === 'error' ? 'error.main' : tempStatus.color === 'warning' ? '#c2410c' : tempStatus.color === 'info' ? '#1d4ed8' : 'text.primary'}>
+                              {latestVital.temperature != null ? `${latestVital.temperature}°C` : 'N/A'}
+                            </Typography>
+                            {latestVital.temperature != null && (
+                              <Chip
+                                size="small"
+                                label={tempStatus.label}
+                                color={tempStatus.color}
+                                variant={tempStatus.color === 'success' ? 'outlined' : 'filled'}
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, mt: 0.5 }}
+                              />
+                            )}
+                          </Paper>
+                        </Grid>
+
+                        {/* Oxygen SpO2 & Respiratory Rate */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">SpO₂ & Resp. Rate</Typography>
+                              <Air sx={{ fontSize: 18, color: '#0d9488' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color={spo2Status.color === 'error' ? 'error.main' : spo2Status.color === 'warning' ? '#c2410c' : 'text.primary'}>
+                              {latestVital.spo2 != null ? `${latestVital.spo2}%` : 'N/A'} <Typography component="span" variant="caption" color="text.secondary">/ {latestVital.respiratoryRate ?? '—'} cpm</Typography>
+                            </Typography>
+                            {latestVital.spo2 != null && (
+                              <Chip
+                                size="small"
+                                label={spo2Status.label}
+                                color={spo2Status.color}
+                                variant={spo2Status.color === 'success' ? 'outlined' : 'filled'}
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, mt: 0.5 }}
+                              />
+                            )}
+                          </Paper>
+                        </Grid>
+
+                        {/* Weight, Height & BMI */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">Weight & BMI</Typography>
+                              <Scale sx={{ fontSize: 18, color: '#7c3aed' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color="text.primary">
+                              {latestVital.weight != null ? `${latestVital.weight} kg` : 'N/A'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {latestVital.bmi != null ? `BMI: ${latestVital.bmi} kg/m²` : (latestVital.height ? `Ht: ${latestVital.height}cm` : 'Height: N/A')}
+                            </Typography>
+                            {latestVital.bmi != null && (
+                              <Chip
+                                size="small"
+                                label={bmiStatus.label}
+                                color={bmiStatus.color}
+                                variant={bmiStatus.color === 'success' ? 'outlined' : 'filled'}
+                                sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800, mt: 0.5 }}
+                              />
+                            )}
+                          </Paper>
+                        </Grid>
+
+                        {/* NEWS2 Score & Priority */}
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Paper variant="outlined" sx={{ p: 1.8, borderRadius: 2.5, bgcolor: '#f8fafc', height: '100%' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                              <Typography variant="caption" fontWeight={700} color="text.secondary">NEWS2 Risk Score</Typography>
+                              <Analytics sx={{ fontSize: 18, color: '#2563eb' }} />
+                            </Stack>
+                            <Typography variant="h6" fontWeight={900} color={isNewsCritical ? 'error.main' : isNewsMedium ? '#c2410c' : 'success.main'}>
+                              Score: {latestVital.news2Score ?? 0}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={`${latestVital.news2Risk || (latestVital.news2Score >= 7 ? 'HIGH' : latestVital.news2Score >= 5 ? 'MEDIUM' : 'LOW')} RISK`}
+                              color={isNewsCritical ? 'error' : isNewsMedium ? 'warning' : 'success'}
+                              variant={isNewsCritical || isNewsMedium ? 'filled' : 'outlined'}
+                              sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, mt: 0.5 }}
+                            />
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                    );
+                  })()}
+
+                  {/* Filter Toolbar */}
+                  <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#fafafa' }}>
+                    <Grid container spacing={1.5} alignItems="center">
+                      <Grid item xs={12} sm={6} md={4}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="Search complaints, nurse, notes, source..."
+                          value={vitalsSearchQuery}
+                          onChange={e => { setVitalsSearchQuery(e.target.value); setVitalsPage(0); }}
+                          InputProps={{
+                            startAdornment: (
+                              <Search fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                            ),
+                            endAdornment: vitalsSearchQuery ? (
+                              <IconButton size="small" onClick={() => { setVitalsSearchQuery(''); setVitalsPage(0); }}>
+                                <Close fontSize="small" />
+                              </IconButton>
+                            ) : null
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={8}>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+                          <Typography variant="caption" fontWeight={700} color="text.secondary">Quick Filter:</Typography>
+                          {[
+                            { label: 'All Vitals', val: 'ALL' },
+                            { label: 'Fever (≥37.5°C)', val: 'FEVER' },
+                            { label: 'High BP (≥140/90)', val: 'HIGH_BP' },
+                            { label: 'Tachycardia (≥100)', val: 'TACHYCARDIA' },
+                            { label: 'Low SpO₂ (<95%)', val: 'LOW_SPO2' },
+                            { label: '📁 Migrated Records', val: 'MIGRATED' },
+                          ].map(f => (
+                            <Chip
+                              key={f.val}
+                              label={f.label}
+                              size="small"
+                              clickable
+                              variant={vitalsFilterPreset === f.val ? 'filled' : 'outlined'}
+                              color={vitalsFilterPreset === f.val ? 'primary' : 'default'}
+                              onClick={() => { setVitalsFilterPreset(f.val as any); setVitalsPage(0); }}
+                              sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                            />
+                          ))}
+                          {(vitalsSearchQuery || vitalsFilterPreset !== 'ALL') && (
+                            <Button
+                              size="small"
+                              startIcon={<RestartAlt />}
+                              onClick={() => { setVitalsSearchQuery(''); setVitalsFilterPreset('ALL'); setVitalsPage(0); }}
+                              sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                            >
+                              Reset
+                            </Button>
+                          )}
+                        </Stack>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+
+                  {/* Vitals History Table */}
+                  {filteredVitalsList.length > 0 ? (
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
+                      <Table size="small">
+                        <TableHead sx={{ bgcolor: alpha('#2563eb', 0.05) }}>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 800 }}>Date & Time</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>BP (mmHg)</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Pulse (bpm)</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Temp (°C)</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Resp Rate</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>SpO₂ (%)</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Weight / Height / BMI</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Pain / Alertness</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>NEWS2 Score</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Source & Type</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Recorded By</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Presenting Complaints / Remarks</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {paginatedVitalsList.map((v: any, idx: number) => {
+                            const bpStatus = getBpAssessment(v.systolic, v.diastolic);
+                            const pulseStatus = getPulseAssessment(v.pulseRate);
+                            const tempStatus = getTempAssessment(v.temperature);
+                            const spo2Status = getSpo2Assessment(v.spo2);
+                            const rrStatus = getRespRateAssessment(v.respiratoryRate);
+                            const bmiStatus = getBmiAssessment(v.bmi);
+                            const isNewsCritical = (v.news2Score != null && v.news2Score >= 7) || v.news2Risk === 'HIGH';
+                            const isNewsMedium = (v.news2Score != null && v.news2Score >= 5) || v.news2Risk === 'MEDIUM';
+
+                            return (
+                              <TableRow key={v.id || idx} hover sx={{ '&:hover': { bgcolor: alpha('#2563eb', 0.02) } }}>
+                                {/* Date & Time */}
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight={800} color="text.primary">
+                                    {new Date(v.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {new Date(v.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </Typography>
+                                </TableCell>
+
+                                {/* Blood Pressure */}
+                                <TableCell>
+                                  {v.systolic && v.diastolic ? (
+                                    <Chip
+                                      label={`${v.systolic}/${v.diastolic}`}
+                                      size="small"
+                                      color={bpStatus.color}
+                                      variant={bpStatus.color === 'success' ? 'outlined' : 'filled'}
+                                      sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                                    />
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* Pulse */}
+                                <TableCell>
+                                  {v.pulseRate != null ? (
+                                    <Typography variant="body2" fontWeight={700} color={pulseStatus.color === 'error' ? 'error.main' : pulseStatus.color === 'warning' ? '#c2410c' : 'text.primary'}>
+                                      {v.pulseRate} <Typography component="span" variant="caption" color="text.secondary">bpm</Typography>
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* Temperature */}
+                                <TableCell>
+                                  {v.temperature != null ? (
+                                    <Typography variant="body2" fontWeight={700} color={tempStatus.color === 'error' ? 'error.main' : tempStatus.color === 'warning' ? '#c2410c' : tempStatus.color === 'info' ? '#1d4ed8' : 'text.primary'}>
+                                      {v.temperature}°C
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* Resp Rate */}
+                                <TableCell>
+                                  {v.respiratoryRate != null ? (
+                                    <Typography variant="body2" fontWeight={rrStatus.color !== 'success' ? 700 : 500} color={rrStatus.color === 'error' ? 'error.main' : rrStatus.color === 'warning' ? '#c2410c' : 'text.primary'}>
+                                      {v.respiratoryRate} <Typography component="span" variant="caption" color="text.secondary">cpm</Typography>
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* SpO2 */}
+                                <TableCell>
+                                  {v.spo2 != null ? (
+                                    <Chip
+                                      label={`${v.spo2}%`}
+                                      size="small"
+                                      color={spo2Status.color}
+                                      variant={spo2Status.color === 'success' ? 'outlined' : 'filled'}
+                                      sx={{ fontWeight: 800, height: 22, fontSize: '0.7rem' }}
+                                    />
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* Weight & Height & BMI */}
+                                <TableCell>
+                                  <Typography variant="caption" fontWeight={700} display="block">
+                                    {v.weight != null ? `${v.weight} kg` : ''} {v.height != null ? `• ${v.height}cm` : ''}
+                                  </Typography>
+                                  {v.bmi != null && (
+                                    <Chip
+                                      label={`BMI ${v.bmi}`}
+                                      size="small"
+                                      color={bmiStatus.color}
+                                      variant="outlined"
+                                      sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800 }}
+                                    />
+                                  )}
+                                  {!v.weight && !v.height && (
+                                    <Typography variant="caption" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+
+                                {/* Pain & Consciousness */}
+                                <TableCell>
+                                  <Typography variant="caption" display="block">
+                                    Pain: <strong>{v.painScore}/10</strong>
+                                  </Typography>
+                                  <Chip
+                                    label={v.consciousnessLevel || 'ALERT'}
+                                    size="small"
+                                    color={v.consciousnessLevel === 'ALERT' ? 'default' : 'warning'}
+                                    sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700 }}
+                                  />
+                                </TableCell>
+
+                                {/* NEWS2 Score */}
+                                <TableCell>
+                                  <Chip
+                                    label={`Score: ${v.news2Score ?? 0}`}
+                                    size="small"
+                                    color={isNewsCritical ? 'error' : isNewsMedium ? 'warning' : 'success'}
+                                    variant={isNewsCritical || isNewsMedium ? 'filled' : 'outlined'}
+                                    sx={{ fontWeight: 800, fontSize: '0.68rem', height: 22 }}
+                                  />
+                                </TableCell>
+
+                                {/* Source & Type */}
+                                <TableCell>
+                                  <Chip
+                                    label={v.source}
+                                    size="small"
+                                    variant="outlined"
+                                    color={v.source?.includes('MIGRATED') ? 'secondary' : 'primary'}
+                                    sx={{ fontWeight: 700, fontSize: '0.65rem', height: 22 }}
+                                  />
+                                </TableCell>
+
+                                {/* Recorded By */}
+                                <TableCell>
+                                  <Typography variant="caption" fontWeight={600} color="text.primary">
+                                    {v.recordedBy}
+                                  </Typography>
+                                </TableCell>
+
+                                {/* Presenting Complaints / Remarks */}
+                                <TableCell sx={{ maxWidth: 220 }}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                    {v.presentingComplaints || 'Routine vital signs ingestion'}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+
+                      {/* Pagination */}
+                      <TablePagination
+                        rowsPerPageOptions={[10, 25, 50, 100]}
+                        component="div"
+                        count={filteredVitalsList.length}
+                        rowsPerPage={vitalsRowsPerPage}
+                        page={vitalsPage}
+                        onPageChange={(_, newPage) => setVitalsPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                          setVitalsRowsPerPage(parseInt(e.target.value, 10));
+                          setVitalsPage(0);
+                        }}
+                        sx={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}
+                      />
+                    </TableContainer>
+                  ) : (
+                    <Alert severity="info" sx={{ borderRadius: 2 }}>
+                      {unifiedVitalsList.length === 0
+                        ? 'No vital signs or triage records documented yet for this patient.'
+                        : 'No vital sign records match your filter criteria.'}
+                    </Alert>
+                  )}
+                </Stack>
+              )}
+
+              {/* ── TAB 2: PRESCRIPTIONS & PHARMACY HISTORY ─────────────────── */}
+              {activeTab === 2 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Medication Orders & Pharmacy Prescription History
@@ -905,8 +1590,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 2: LABORATORY DIAGNOSTICS & ORDERS ──────────────────── */}
-              {activeTab === 2 && (
+              {/* ── TAB 3: LABORATORY DIAGNOSTICS & ORDERS ──────────────────── */}
+              {activeTab === 3 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Laboratory Diagnostics & Investigation Results History
@@ -1060,8 +1745,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 3: DENTAL & ODONTOGRAM CLINICAL RECORDS ─────────────── */}
-              {activeTab === 3 && (
+              {/* ── TAB 4: DENTAL & ODONTOGRAM CLINICAL RECORDS ─────────────── */}
+              {activeTab === 4 && (
                 <Stack spacing={2.5}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                     <Box>
@@ -1328,8 +2013,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 4: SURGICAL HISTORY ─────────────────────────────────── */}
-              {activeTab === 4 && (
+              {/* ── TAB 5: SURGICAL HISTORY ─────────────────────────────────── */}
+              {activeTab === 5 && (
                 <Stack spacing={2.5}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle1" fontWeight={800}>
@@ -1537,8 +2222,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 5: ANC & MATERNITY / OBSTETRIC HISTORY ──────────────── */}
-              {activeTab === 5 && (
+              {/* ── TAB 6: ANC & MATERNITY / OBSTETRIC HISTORY ──────────────── */}
+              {activeTab === 6 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Antenatal Care (ANC) & Obstetric Profile
@@ -1567,8 +2252,8 @@ const EMRDashboard: React.FC = () => {
                 </Stack>
               )}
 
-              {/* ── TAB 6: ALLERGIES & CLINICAL ALERTS REGISTRY ─────────────── */}
-              {activeTab === 6 && (
+              {/* ── TAB 7: ALLERGIES & CLINICAL ALERTS REGISTRY ─────────────── */}
+              {activeTab === 7 && (
                 <Stack spacing={2.5}>
                   <Typography variant="subtitle1" fontWeight={800}>
                     Documented Allergies & Active Clinical Alerts

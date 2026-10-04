@@ -133,7 +133,7 @@ router.get('/dashboard', authMiddleware, async (req: any, res, next) => {
       where: emarWhereClause,
       include: { patient: true, administerer: true },
       orderBy: { scheduledTime: 'desc' },
-      take: 100
+      take: 500
     });
 
     res.json({

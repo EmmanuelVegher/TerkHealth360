@@ -127,7 +127,7 @@ const staffAccounts = [
 ];
 
 async function main() {
-  console.log('Seeding / Upserting staff and administrator accounts in PostgreSQL...');
+  console.log('Seeding / Upserting staff and administrator accounts in database...');
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
   for (const acc of staffAccounts) {

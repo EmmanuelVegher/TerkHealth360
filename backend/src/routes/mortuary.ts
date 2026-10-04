@@ -99,6 +99,11 @@ let mortuaryAdmissions: any[] = [
   }
 ];
 
+export function addMigratedMortuaryAdmission(admission: any) {
+  mortuaryAdmissions.unshift(admission);
+  return admission;
+}
+
 let storageCabinets: any[] = [
   { code: 'Cabinet A - Tray 1', capacity: 1, occupied: false, tempCelsius: 3.9, humidityPercent: 65, status: 'NORMAL', chamberType: 'Standard Mortuary Refrigeration (2°C to 4°C)' },
   { code: 'Cabinet A - Tray 2', capacity: 1, occupied: false, tempCelsius: 4.1, humidityPercent: 66, status: 'NORMAL', chamberType: 'Standard Mortuary Refrigeration (2°C to 4°C)' },

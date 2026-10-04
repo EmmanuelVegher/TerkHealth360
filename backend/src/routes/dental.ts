@@ -1665,4 +1665,200 @@ router.put('/radiology/:id', authMiddleware, async (req: Request, res: Response)
   }
 });
 
+// ── 12. GET /api/dental/consents ─────────────────────────────────────────────
+// List signed dental consent forms with patient & encounter info
+router.get('/consents', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { patientId, dentalEncounterId, status, consentType } = req.query as {
+      patientId?: string;
+      dentalEncounterId?: string;
+      status?: string;
+      consentType?: string;
+    };
+
+    const where: any = {};
+    if (patientId) where.patientId = patientId;
+    if (dentalEncounterId) where.dentalEncounterId = dentalEncounterId;
+    if (status) where.status = status;
+    if (consentType) where.consentType = consentType;
+
+    const consents = await prisma.dentalConsent.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            patientNumber: true,
+            firstName: true,
+            lastName: true,
+            gender: true,
+            birthDate: true,
+            emergencyPhone: true,
+          }
+        },
+        dentalEncounter: {
+          select: {
+            id: true,
+            encounterNumber: true,
+            dentistName: true,
+            chiefComplaint: true,
+            createdAt: true
+          }
+        }
+      },
+      take: 100
+    });
+
+    return res.json({ success: true, data: consents });
+  } catch (err: any) {
+    console.error('[Dental] List consents error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to list dental consents' });
+  }
+});
+
+// ── 13. GET /api/dental/consents/:id ─────────────────────────────────────────
+// Retrieve a single signed consent form by ID
+router.get('/consents/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const consent = await prisma.dentalConsent.findUnique({
+      where: { id },
+      include: {
+        patient: true,
+        dentalEncounter: true
+      }
+    });
+
+    if (!consent) {
+      return res.status(404).json({ success: false, message: 'Dental consent record not found' });
+    }
+
+    return res.json({ success: true, data: consent });
+  } catch (err: any) {
+    console.error('[Dental] GET consent error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to get dental consent' });
+  }
+});
+
+// ── 14. POST /api/dental/consents ────────────────────────────────────────────
+// Create and archive a chairside digital informed consent in PostgreSQL
+router.post('/consents', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const {
+      patientId,
+      dentalEncounterId,
+      consentType = 'GENERAL_TREATMENT',
+      title = 'Chairside Digital Informed Consent & Treatment Agreement',
+      procedureNames,
+      toothNumbers,
+      treatmentDescription,
+      risksDisclosed,
+      alternativesDiscussed,
+      estimatedCost = 0,
+      signerName,
+      signerRelationship = 'PATIENT',
+      signerPhone,
+      signatureData,
+      witnessName,
+      clinicianId,
+      clinicianName,
+      termsAgreed = true,
+      anesthesiaConsent = true,
+      radiographConsent = true,
+    } = req.body;
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'Patient ID is required to save digital consent' });
+    }
+    if (!signatureData) {
+      return res.status(400).json({ success: false, message: 'A valid patient or guardian signature is required' });
+    }
+
+    // Verify patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true, firstName: true, lastName: true, patientNumber: true, emergencyPhone: true }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    const effectiveSignerName = signerName?.trim() || `${patient.firstName} ${patient.lastName}`;
+    const effectiveSignerPhone = signerPhone || patient.emergencyPhone || '';
+
+    // Generate readable, unique consent numbering
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const consentNumber = `DNT-CNS-${dateStr}-${randomSuffix}`;
+
+    const user = (req as any).user;
+    const effectiveClinicianId = clinicianId || user?.id || null;
+    const effectiveClinicianName = clinicianName || (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Attending Dental Surgeon');
+
+    const newConsent = await prisma.dentalConsent.create({
+      data: {
+        consentNumber,
+        dentalEncounterId: dentalEncounterId || null,
+        patientId,
+        consentType,
+        title,
+        procedureNames: Array.isArray(procedureNames) ? procedureNames.join(', ') : procedureNames || null,
+        toothNumbers: Array.isArray(toothNumbers) ? toothNumbers.join(', ') : toothNumbers || null,
+        treatmentDescription: treatmentDescription || null,
+        risksDisclosed: risksDisclosed || 'Bleeding, postoperative discomfort, infection, temporary or permanent nerve numbness, and need for secondary intervention.',
+        alternativesDiscussed: alternativesDiscussed || 'Non-intervention, conservative monitoring, alternate restoration options, or specialist referral.',
+        estimatedCost: Number(estimatedCost) || 0,
+        signerName: effectiveSignerName,
+        signerRelationship,
+        signerPhone: effectiveSignerPhone,
+        signatureData,
+        witnessName: witnessName || null,
+        clinicianId: effectiveClinicianId,
+        clinicianName: effectiveClinicianName,
+        termsAgreed: Boolean(termsAgreed),
+        anesthesiaConsent: Boolean(anesthesiaConsent),
+        radiographConsent: Boolean(radiographConsent),
+        status: 'SIGNED',
+        signedAt: new Date(),
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            patientNumber: true,
+            firstName: true,
+            lastName: true,
+            gender: true,
+            birthDate: true
+          }
+        },
+        dentalEncounter: true
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Digital consent ${consentNumber} signed and archived into Patient EHR file.`,
+      data: newConsent
+    });
+  } catch (err: any) {
+    console.error('[Dental] POST consent error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to archive digital consent' });
+  }
+});
+
+// ── 15. DELETE /api/dental/consents/:id ──────────────────────────────────────
+router.delete('/consents/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.dentalConsent.delete({ where: { id } });
+    return res.json({ success: true, message: 'Dental consent record deleted' });
+  } catch (err: any) {
+    console.error('[Dental] DELETE consent error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to delete dental consent' });
+  }
+});
+
 export default router;

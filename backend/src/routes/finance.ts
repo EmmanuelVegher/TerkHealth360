@@ -71,6 +71,24 @@ export function addPayrollJournalVoucher(jv: any) {
   return jv;
 }
 
+export function addMigratedJournalVoucher(jv: any) {
+  journalVouchers.unshift(jv);
+  // Also reflect line balances in chart of accounts if matched
+  if (Array.isArray(jv.lines)) {
+    for (const l of jv.lines) {
+      const acc = chartOfAccounts.find(a => a.code === l.accountCode);
+      if (acc) {
+        if (acc.type === 'ASSET' || acc.type === 'EXPENSE') {
+          acc.balance += (Number(l.debit) || 0) - (Number(l.credit) || 0);
+        } else {
+          acc.balance += (Number(l.credit) || 0) - (Number(l.debit) || 0);
+        }
+      }
+    }
+  }
+  return jv;
+}
+
 let budgets: any[] = [
   { id: 'BUD-001', costCentre: 'Pharmacy', category: 'Medical Supplies', allocated: 25000000, committed: 4500000, actual: 18500000, period: 'FY2026' },
   { id: 'BUD-002', costCentre: 'Laboratory', category: 'Reagents & Kits', allocated: 15000000, committed: 2100000, actual: 11000000, period: 'FY2026' },

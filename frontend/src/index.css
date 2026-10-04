@@ -136,6 +136,24 @@ img, canvas, svg, video {
   #printable-journal-voucher, #printable-journal-voucher * {
     visibility: visible !important;
   }
+  #printable-refraction-certificate, #printable-refraction-certificate * {
+    visibility: visible !important;
+  }
+  .printable-refraction-certificate, .printable-refraction-certificate * {
+    visibility: visible !important;
+  }
+  #dental-consent-print-document, #dental-consent-print-document * {
+    visibility: visible !important;
+  }
+  .dental-consent-print-document, .dental-consent-print-document * {
+    visibility: visible !important;
+  }
+  #printable-dental-consent, #printable-dental-consent * {
+    visibility: visible !important;
+  }
+  .printable-dental-consent, .printable-dental-consent * {
+    visibility: visible !important;
+  }
   .printable-patient-id-card {
     position: fixed !important;
     left: 50% !important;
@@ -161,7 +179,13 @@ img, canvas, svg, video {
   .printable-statement,
   .printable-journal-voucher,
   #printable-statement,
-  #printable-journal-voucher {
+  #printable-journal-voucher,
+  #printable-refraction-certificate,
+  .printable-refraction-certificate,
+  #dental-consent-print-document,
+  .dental-consent-print-document,
+  #printable-dental-consent,
+  .printable-dental-consent {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { assetUrl } from '../utils/assetUrl';
 import {
   Box, Typography, Grid, Card, Button, Chip, TextField,
   Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem,
   FormControl, InputLabel, IconButton, Alert,
   Table, TableHead, TableRow, TableCell, TableBody, Paper, Switch,
-  FormControlLabel, Slider, Divider, Stack, Autocomplete, CircularProgress, Tooltip
+  FormControlLabel, Slider, Divider, Stack, Autocomplete, CircularProgress, Tooltip,
+  Tabs, Tab, TableContainer
 } from '@mui/material';
 import {
   MedicalServices, PersonalVideo, Science,
@@ -14,7 +16,8 @@ import {
   ZoomIn, Contrast, Layers, Close, Speed, Biotech, HistoryEdu,
   ArrowForward, Remove, FlashOn, FilterList, Bloodtype, Assessment,
   CloudUpload, PhotoLibrary, Description, Mic, MicOff, AutoAwesome, SmartToy,
-  Delete, LocalShipping, HourglassEmpty, Storage
+  Delete, LocalShipping, HourglassEmpty, Storage, Print, Visibility, Lock,
+  AssignmentTurnedIn, History, LocalHospital, VerifiedUser, Gavel, Draw, FactCheck, PictureAsPdf
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { api } from '../services/api';
@@ -182,6 +185,89 @@ const CDT_CATALOG = [
   { code: 'D7210', name: 'Surgical Extraction / Impacted Molar Removal', cost: 75000, category: 'Oral Surgery' },
   { code: 'D6010', name: 'Surgical Placement of Implant Body', cost: 350000, category: 'Implantology' },
 ];
+
+export const DENTAL_CONSENT_TEMPLATES: Record<string, {
+  name: string;
+  title: string;
+  defaultProcedures: string;
+  defaultDescription: string;
+  defaultRisks: string;
+  defaultAlternatives: string;
+  defaultCost: number;
+}> = {
+  GENERAL_TREATMENT: {
+    name: 'General Dental Examination & Restorative',
+    title: 'General Dental Examination, Scaling & Restorative Informed Consent',
+    defaultProcedures: 'Comprehensive Oral Exam, Ultrasonic Scaling & Polishing, Composite Restorations',
+    defaultDescription: 'Routine clinical dental examination, plaque and calculus removal, topical fluoride application, and direct tooth-colored composite restorations.',
+    defaultRisks: 'Mild transient thermal sensitivity, gingival bleeding/soreness, restoration fracture under heavy masticatory forces, or need for subsequent pulp therapy if caries is deep.',
+    defaultAlternatives: 'Periodic observation (risk of disease progression), alternate restorative materials (e.g. GIC, amalgam), or staged treatment.',
+    defaultCost: 35000
+  },
+  SURGICAL_EXTRACTION: {
+    name: 'Surgical / Non-Surgical Tooth Extraction',
+    title: 'Surgical & Non-Surgical Tooth Extraction Informed Consent Agreement',
+    defaultProcedures: 'Simple / Surgical Extraction, Alveoloplasty, Socket Debridement & Suturing',
+    defaultDescription: 'Surgical or non-surgical removal of non-restorable, deeply impacted, or infected teeth under local anesthesia, socket debridement, and hemostatic suturing.',
+    defaultRisks: 'Postoperative pain, swelling, bleeding, bruising, dry socket (alveolar osteitis), infection, temporary or permanent paresthesia/numbness of lip, chin, or tongue, maxillary sinus perforation, or root apex fracture.',
+    defaultAlternatives: 'Endodontic therapy (root canal), periodontal splinting/therapy, or non-intervention (risk of systemic fascial space infection).',
+    defaultCost: 45000
+  },
+  ROOT_CANAL: {
+    name: 'Endodontic Therapy (Root Canal Treatment)',
+    title: 'Endodontic Therapy (Root Canal Treatment) Clinical Consent Agreement',
+    defaultProcedures: 'Pulpectomy, Chemo-mechanical Canal Shaping, Warm Gutta-Percha Obturation, Post-Endodontic Core',
+    defaultDescription: 'Removal of inflamed or necrotic pulp tissue from root canals, thorough antiseptic irrigation, mechanical instrumentation, hermetic filling, and core build-up.',
+    defaultRisks: 'Post-instrumentation flare-up, canal calcification, separated endodontic file, root perforation, procedural failure requiring apical surgery (apicoectomy) or eventual extraction.',
+    defaultAlternatives: 'Extraction of the affected tooth followed by prosthetic replacement (bridge, dental implant, or removable partial denture).',
+    defaultCost: 75000
+  },
+  PERIODONTAL_SURGERY: {
+    name: 'Periodontal Flap Surgery & Deep Scaling',
+    title: 'Periodontal Flap Surgery & Subgingival Root Planing Informed Consent',
+    defaultProcedures: 'Full Mouth Subgingival Debridement, Root Planing, Periodontal Flap Surgery & Guided Tissue Regeneration',
+    defaultDescription: 'Surgical reflection of gingival tissues for direct visualization and debridement of subgingival calculus, root surface detox, and bone recontouring/grafting.',
+    defaultRisks: 'Gingival recession, elongated tooth appearance, transient hot/cold sensitivity, tooth mobility during initial healing, postoperative bleeding.',
+    defaultAlternatives: 'Continued non-surgical maintenance (risk of progressive alveolar bone loss and spontaneous tooth loss).',
+    defaultCost: 50000
+  },
+  PROSTHODONTIC: {
+    name: 'Crown, Fixed Bridge & Prosthodontics',
+    title: 'Crown, Fixed Partial Denture (Bridge) & Prosthodontic Consent',
+    defaultProcedures: 'Tooth Preparation, High-Precision Impression, Shade Mapping, Temporary Crown & Final Luting',
+    defaultDescription: 'Circumferential reduction of tooth structure to receive a custom laboratory-fabricated ceramic or zirconia crown/bridge, cementation, and occlusal equilibration.',
+    defaultRisks: 'Pulpal irritation necessitating future root canal treatment, ceramic chipping, debonding of restoration, gingival margin inflammation, or shade discrepancy.',
+    defaultAlternatives: 'Direct composite restorative buildup, removable partial denture, or dental implant.',
+    defaultCost: 110000
+  },
+  IMPLANT: {
+    name: 'Dental Implant Surgical Placement',
+    title: 'Dental Implant Surgical Placement & Bone Grafting Consent Agreement',
+    defaultProcedures: 'Osteotomy Preparation, Endosteal Titanium Implant Placement, Socket Bone Graft & Healing Abutment',
+    defaultDescription: 'Surgical preparation of the alveolar bone site, fixture placement of a biocompatible titanium dental implant, membrane placement, and primary wound closure.',
+    defaultRisks: 'Implant osseointegration failure, peri-implantitis, nerve injury (altered sensation in lip/chin), sinus membrane perforation, postoperative hematoma, or bone graft resorption.',
+    defaultAlternatives: 'Conventional fixed bridge (requiring preparation of adjacent virgin teeth) or removable partial denture.',
+    defaultCost: 350000
+  },
+  LOCAL_ANESTHESIA: {
+    name: 'Local Anesthesia & Dental Sedation',
+    title: 'Dental Local Anesthesia & Sedation Authorization',
+    defaultProcedures: 'Inferior Alveolar Nerve Block, Infiltration Anesthesia (Lignocaine 2% with 1:100k Adrenaline)',
+    defaultDescription: 'Submucosal and nerve block injection of local anesthetic agent to ensure complete pain control throughout dental procedures.',
+    defaultRisks: 'Temporary facial numbness, inadvertent biting of lip/tongue/cheek, transient tachycardia, localized hematoma at injection site, prolonged paresthesia (very rare).',
+    defaultAlternatives: 'Procedure performed without anesthesia (not recommended) or referral for general anesthesia in hospital operating theatre.',
+    defaultCost: 10000
+  },
+  PEDIATRIC_SEDATION: {
+    name: 'Pediatric Dental Procedure & Sedation',
+    title: 'Pediatric Dental Procedure & Conscious Sedation Agreement',
+    defaultProcedures: 'Pediatric Oral Exam, Pulpotomy, Stainless Steel Crown (SSC), Space Maintainer',
+    defaultDescription: 'Restorative and preventive dental care tailored for primary dentition, including caries excavation, therapeutic pulpotomy, and protective preformed crowns.',
+    defaultRisks: 'Child anxiety, postoperative cheek/lip biting, premature exfoliation of primary tooth, or need for re-intervention under general anesthesia if cooperation fails.',
+    defaultAlternatives: 'Silver Diamine Fluoride (SDF) arrest therapy, extraction, or hospital-based theatre treatment under general anesthesia.',
+    defaultCost: 30000
+  },
+};
 
 export default function DentalClinic() {
   const { enqueueSnackbar } = useSnackbar();
@@ -359,6 +445,30 @@ export default function DentalClinic() {
   const consentCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawingConsent, setIsDrawingConsent] = useState(false);
   const [consentSigned, setConsentSigned] = useState(false);
+  const [consentTab, setConsentTab] = useState<'create' | 'vault'>('create');
+  const [patientConsents, setPatientConsents] = useState<any[]>([]);
+  const [loadingConsents, setLoadingConsents] = useState(false);
+  const [savingConsent, setSavingConsent] = useState(false);
+  const [selectedConsentForView, setSelectedConsentForView] = useState<any | null>(null);
+  const [viewConsentModalOpen, setViewConsentModalOpen] = useState(false);
+
+  // Consent Form Fields
+  const [consentType, setConsentType] = useState<string>('GENERAL_TREATMENT');
+  const [consentTitle, setConsentTitle] = useState<string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.title);
+  const [procedureNamesText, setProcedureNamesText] = useState<string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.defaultProcedures);
+  const [toothNumbersText, setToothNumbersText] = useState<string>('All Quadrants / Full Dentition');
+  const [treatmentDescription, setTreatmentDescription] = useState<string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.defaultDescription);
+  const [risksDisclosed, setRisksDisclosed] = useState<string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.defaultRisks);
+  const [alternativesDiscussed, setAlternativesDiscussed] = useState<string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.defaultAlternatives);
+  const [estimatedCostValue, setEstimatedCostValue] = useState<number | string>(DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT.defaultCost);
+  const [signerName, setSignerName] = useState<string>('');
+  const [signerRelationship, setSignerRelationship] = useState<string>('PATIENT');
+  const [signerPhone, setSignerPhone] = useState<string>('');
+  const [witnessName, setWitnessName] = useState<string>('');
+  const [dentistClinicianName, setDentistClinicianName] = useState<string>('Dr. Emmanuel Vegher (Dental Surgeon)');
+  const [termsAgreed, setTermsAgreed] = useState<boolean>(true);
+  const [anesthesiaConsent, setAnesthesiaConsent] = useState<boolean>(true);
+  const [radiographConsent, setRadiographConsent] = useState<boolean>(true);
 
   // Fetch initial patient list from PostgreSQL database (Recent 50)
   useEffect(() => {
@@ -934,8 +1044,25 @@ export default function DentalClinic() {
     }
   };
 
+  const fetchPatientConsents = async (patientId: string) => {
+    if (!patientId) return;
+    setLoadingConsents(true);
+    try {
+      const res = await api.get(`/dental/consents?patientId=${patientId}`);
+      setPatientConsents(res.data?.data || []);
+    } catch (err: any) {
+      console.warn('Failed to load patient dental consents from PostgreSQL:', err);
+    } finally {
+      setLoadingConsents(false);
+    }
+  };
+
   const handleSelectPatient = async (patient: any) => {
     setSelectedPatient(patient);
+    if (patient) {
+      setSignerName(`${patient.firstName || ''} ${patient.lastName || ''}`.trim());
+      setSignerPhone(patient.phone || patient.emergencyPhone || patient.nokPhone || '');
+    }
     setLoading(true);
     try {
       const res = await api.get(`/dental/encounters?patientId=${patient.id}`);
@@ -951,6 +1078,7 @@ export default function DentalClinic() {
         setLabOrders([]);
       }
       await fetchDentalRadiology(patient.id, encs[0]?.id);
+      await fetchPatientConsents(patient.id);
     } catch (err: any) {
       console.error('Error fetching dental encounters from PostgreSQL:', err);
     } finally {
@@ -1724,32 +1852,56 @@ export default function DentalClinic() {
     );
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = consentCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    if ('touches' in e && e.touches.length > 0) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY
+      };
+    }
+    if ('clientX' in e) {
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+    return { x: 0, y: 0 };
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = consentCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     setIsDrawingConsent(true);
-    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getCanvasCoords(e);
     ctx.beginPath();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.moveTo(x, y);
   };
 
-  const drawSignature = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const drawSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawingConsent) return;
     const canvas = consentCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = 2.5;
+    const { x, y } = getCanvasCoords(e);
+    ctx.lineWidth = 2.8;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1e3a8a';
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.lineTo(x, y);
     ctx.stroke();
   };
 
   const stopDrawing = () => {
+    if (!isDrawingConsent) return;
     setIsDrawingConsent(false);
     setConsentSigned(true);
   };
@@ -1761,6 +1913,442 @@ export default function DentalClinic() {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setConsentSigned(false);
+  };
+
+  const handleConsentTypeChange = (newType: string) => {
+    setConsentType(newType);
+    const template = DENTAL_CONSENT_TEMPLATES[newType] || DENTAL_CONSENT_TEMPLATES.GENERAL_TREATMENT;
+    setConsentTitle(template.title);
+    setProcedureNamesText(template.defaultProcedures);
+    setTreatmentDescription(template.defaultDescription);
+    setRisksDisclosed(template.defaultRisks);
+    setAlternativesDiscussed(template.defaultAlternatives);
+    setEstimatedCostValue(template.defaultCost);
+  };
+
+  const handleAutofillFromTreatmentPlan = () => {
+    if (!currentEncounter?.treatmentPlans || currentEncounter.treatmentPlans.length === 0) {
+      enqueueSnackbar('No active treatment plan items found for this encounter. Using template defaults.', { variant: 'info' });
+      return;
+    }
+    const plans = currentEncounter.treatmentPlans;
+    const names = plans.map((p: any) => p.procedureName).filter(Boolean).join(', ');
+    const teeth = Array.from(new Set(plans.map((p: any) => p.toothNumbers).filter(Boolean))).join(', ');
+    const total = plans.reduce((acc: number, p: any) => acc + (Number(p.cost) || 0), 0);
+    
+    if (names) setProcedureNamesText(names);
+    if (teeth) setToothNumbersText(teeth);
+    if (total > 0) setEstimatedCostValue(total);
+    enqueueSnackbar(`✅ Auto-populated ${plans.length} planned dental procedure(s) totaling ₦${total.toLocaleString()}`, { variant: 'success' });
+  };
+
+  const handleSaveDigitalConsent = async () => {
+    if (!selectedPatient) {
+      enqueueSnackbar('Please select a patient before signing consent', { variant: 'warning' });
+      return;
+    }
+    const canvas = consentCanvasRef.current;
+    if (!canvas || !consentSigned) {
+      enqueueSnackbar('Please capture the patient or guardian digital signature on the pad', { variant: 'warning' });
+      return;
+    }
+    if (!termsAgreed) {
+      enqueueSnackbar('Informed consent acknowledgement checkbox must be checked to proceed', { variant: 'warning' });
+      return;
+    }
+
+    const signatureData = canvas.toDataURL('image/png');
+    setSavingConsent(true);
+    try {
+      const payload = {
+        patientId: selectedPatient.id,
+        dentalEncounterId: currentEncounter?.id || null,
+        consentType,
+        title: consentTitle,
+        procedureNames: procedureNamesText,
+        toothNumbers: toothNumbersText,
+        treatmentDescription,
+        risksDisclosed,
+        alternativesDiscussed,
+        estimatedCost: Number(estimatedCostValue) || 0,
+        signerName: signerName?.trim() || `${selectedPatient.firstName} ${selectedPatient.lastName}`,
+        signerRelationship,
+        signerPhone,
+        signatureData,
+        witnessName,
+        clinicianName: dentistClinicianName,
+        termsAgreed,
+        anesthesiaConsent,
+        radiographConsent,
+      };
+
+      const res = await api.post('/dental/consents', payload);
+      if (res.data?.success) {
+        enqueueSnackbar('✅ Digital Informed Consent signed and archived to PostgreSQL!', { variant: 'success' });
+        setStatusMessage({ type: 'success', text: `Digital consent ${res.data?.data?.consentNumber} signed and archived into Patient EHR file.` });
+        await fetchPatientConsents(selectedPatient.id);
+        clearSignature();
+        setConsentTab('vault');
+      } else {
+        enqueueSnackbar(res.data?.message || 'Failed to archive consent', { variant: 'error' });
+      }
+    } catch (err: any) {
+      console.error('Error saving digital consent:', err);
+      enqueueSnackbar(err.response?.data?.message || err.message || 'Failed to save digital consent', { variant: 'error' });
+    } finally {
+      setSavingConsent(false);
+    }
+  };
+
+  const handleDeleteDigitalConsent = async (consentId: string) => {
+    if (!window.confirm('Are you sure you want to revoke / delete this signed consent form?')) return;
+    try {
+      await api.delete(`/dental/consents/${consentId}`);
+      enqueueSnackbar('Consent record deleted', { variant: 'info' });
+      if (selectedPatient) await fetchPatientConsents(selectedPatient.id);
+    } catch (err: any) {
+      enqueueSnackbar('Failed to delete consent', { variant: 'error' });
+    }
+  };
+
+  const handlePrintConsentCertificate = () => {
+    if (!selectedConsentForView) return;
+
+    const patientName = `${selectedConsentForView.patient?.firstName || ''} ${selectedConsentForView.patient?.lastName || ''}`.trim() || 'Patient';
+    const mrn = selectedConsentForView.patient?.patientNumber || selectedConsentForView.patientId?.slice(0, 8) || 'N/A';
+    const consentNo = selectedConsentForView.consentNumber || 'DNT-CONSENT';
+    const dateSigned = new Date(selectedConsentForView.signedAt || selectedConsentForView.createdAt).toLocaleString();
+    const fee = Number(selectedConsentForView.estimatedCost || 0).toLocaleString();
+    const leftLogoUrl = window.location.origin + assetUrl('/anglican-logo.png');
+    const rightLogoUrl = window.location.origin + assetUrl('/hospital-logo.png');
+
+    const printWindow = window.open('', '_blank', 'width=950,height=1050');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>Official Dental Informed Consent - ${consentNo}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body {
+              font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              color: #0f172a;
+              background-color: #ffffff;
+              padding: 20px;
+            }
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none !important; }
+            }
+            .cert-card {
+              max-width: 820px;
+              margin: 0 auto;
+              border: 2px solid #1e3a8a;
+              border-radius: 12px;
+              padding: 24px 28px;
+              background: #ffffff;
+            }
+            .header-flex {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              border-bottom: 2px solid #1e3a8a;
+              padding-bottom: 16px;
+              margin-bottom: 18px;
+              gap: 16px;
+            }
+            .crest-logo {
+              width: 60px !important;
+              height: 60px !important;
+              max-width: 60px !important;
+              max-height: 60px !important;
+              object-fit: contain;
+              flex-shrink: 0;
+            }
+            .seal-logo {
+              width: 60px !important;
+              height: 60px !important;
+              max-width: 60px !important;
+              max-height: 60px !important;
+              object-fit: contain;
+              border-radius: 50%;
+              border: 2px solid #1e3a8a;
+              padding: 2px;
+              flex-shrink: 0;
+            }
+            .header-text {
+              text-align: center;
+              flex: 1;
+            }
+            .hospital-title {
+              font-size: 19px;
+              font-weight: 900;
+              color: #0f172a;
+              letter-spacing: -0.02em;
+            }
+            .dept-title {
+              font-size: 12px;
+              font-weight: 800;
+              color: #1e3a8a;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              margin-top: 3px;
+            }
+            .facility-tag {
+              font-size: 10.5px;
+              color: #64748b;
+              margin-top: 2px;
+            }
+            .doc-ribbon {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              background-color: #1e3a8a;
+              color: #ffffff;
+              padding: 8px 14px;
+              border-radius: 6px;
+              margin-bottom: 16px;
+              font-size: 11px;
+              font-weight: 800;
+              letter-spacing: 0.03em;
+            }
+            .patient-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 12px;
+              background-color: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 12px 16px;
+              margin-bottom: 16px;
+            }
+            .lbl {
+              font-size: 10px;
+              font-weight: 700;
+              color: #64748b;
+              text-transform: uppercase;
+              margin-bottom: 2px;
+            }
+            .val {
+              font-size: 12.5px;
+              font-weight: 700;
+              color: #0f172a;
+            }
+            .val-accent {
+              font-size: 12.5px;
+              font-weight: 700;
+              color: #1e3a8a;
+            }
+            .val-green {
+              font-size: 12.5px;
+              font-weight: 800;
+              color: #16a34a;
+            }
+            .section-block {
+              margin-bottom: 14px;
+            }
+            .sec-header {
+              font-size: 11.5px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.03em;
+              border-bottom: 1px solid #cbd5e1;
+              padding-bottom: 4px;
+              margin-bottom: 6px;
+            }
+            .sec-primary { color: #1e3a8a; }
+            .sec-danger { color: #b91c1c; }
+            .sec-text {
+              font-size: 11.5px;
+              color: #334155;
+              line-height: 1.45;
+            }
+            .undertaking-box {
+              background-color: #f0fdf4;
+              border: 1px solid #bbf7d0;
+              border-radius: 8px;
+              padding: 10px 14px;
+              margin-bottom: 16px;
+            }
+            .undertaking-box .ut-title {
+              font-size: 11px;
+              font-weight: 800;
+              color: #166534;
+              margin-bottom: 4px;
+              text-transform: uppercase;
+            }
+            .undertaking-box p {
+              font-size: 10.5px;
+              color: #14532d;
+              margin-bottom: 3px;
+              line-height: 1.35;
+            }
+            .signatures-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              margin-top: 12px;
+            }
+            .sig-card {
+              border: 1px solid #cbd5e1;
+              border-radius: 8px;
+              padding: 12px 14px;
+              text-align: center;
+              background-color: #ffffff;
+            }
+            .sig-img {
+              max-height: 60px;
+              max-width: 100%;
+              object-fit: contain;
+              margin: 4px 0;
+            }
+            .divider-line {
+              border-bottom: 1px solid #e2e8f0;
+              margin: 6px 0;
+            }
+            .stamp-icon {
+              display: inline-block;
+              border: 1.5px dashed #1e3a8a;
+              border-radius: 6px;
+              padding: 4px 10px;
+              font-size: 10px;
+              font-weight: 800;
+              color: #1e3a8a;
+              margin: 6px 0;
+              text-transform: uppercase;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cert-card">
+            <!-- Header -->
+            <div class="header-flex">
+              <img src="${leftLogoUrl}" alt="Diocese Logo" class="crest-logo" onerror="this.src='${rightLogoUrl}';" />
+              <div class="header-text">
+                <div class="hospital-title">FAITH FOUNDATION MISSION HOSPITAL</div>
+                <div class="dept-title">DIRECTORATE OF DENTAL SURGERY & ORAL HEALTH</div>
+                <div class="facility-tag">Hospital Clinical Center • Digital Informed Consent & Clinical Undertaking</div>
+              </div>
+              <img src="${rightLogoUrl}" alt="Hospital Seal" class="seal-logo" />
+            </div>
+
+            <!-- Ribbon -->
+            <div class="doc-ribbon">
+              <span>CERTIFICATE REF: ${consentNo}</span>
+              <span>DIGITALLY VALIDATED RECORD</span>
+            </div>
+
+            <!-- Patient Grid -->
+            <div class="patient-grid">
+              <div>
+                <div class="lbl">Patient Name</div>
+                <div class="val">${patientName}</div>
+              </div>
+              <div>
+                <div class="lbl">Hospital MRN</div>
+                <div class="val-accent">${mrn}</div>
+              </div>
+              <div>
+                <div class="lbl">Consent Protocol</div>
+                <div class="val">${selectedConsentForView.title}</div>
+              </div>
+              <div>
+                <div class="lbl">Est. Procedure Fee</div>
+                <div class="val-green">₦${fee}</div>
+              </div>
+            </div>
+
+            <!-- Procedures -->
+            <div class="section-block">
+              <div class="sec-header sec-primary">1. Procedures & Clinical Scope</div>
+              <div class="sec-text">
+                <strong>Covered Procedures:</strong> ${selectedConsentForView.procedureNames || 'Standard Dental Procedures'}
+              </div>
+              ${selectedConsentForView.toothNumbers ? `
+                <div class="sec-text" style="margin-top: 3px;">
+                  <strong>Tooth Numbers / Anatomical Sites:</strong> ${selectedConsentForView.toothNumbers}
+                </div>
+              ` : ''}
+              ${selectedConsentForView.treatmentDescription ? `
+                <div class="sec-text" style="margin-top: 4px; color: #475569;">
+                  ${selectedConsentForView.treatmentDescription}
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Risks -->
+            <div class="section-block">
+              <div class="sec-header sec-danger">2. Material Risks & Potential Complications Disclosed</div>
+              <div class="sec-text">
+                ${selectedConsentForView.risksDisclosed || 'Bleeding, postoperative discomfort, infection, temporary or permanent nerve numbness, and need for secondary intervention.'}
+              </div>
+              ${selectedConsentForView.alternativesDiscussed ? `
+                <div class="sec-text" style="margin-top: 4px; font-style: italic; color: #64748b;">
+                  <strong>Alternatives Discussed:</strong> ${selectedConsentForView.alternativesDiscussed}
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Undertakings -->
+            <div class="undertaking-box">
+              <div class="ut-title">3. Legal Attestation & Patient Undertaking</div>
+              <p>✓ <strong>Informed Consent:</strong> The nature, purpose, benefits, and inherent risks of the proposed treatment have been explained in full to the patient/guardian's understanding.</p>
+              <p>✓ <strong>Anesthesia & Imaging:</strong> Authorization for necessary local anesthetics and diagnostic dental radiographs is expressly granted.</p>
+              <p>✓ <strong>Financial Clearance:</strong> Financial responsibility for the itemized estimated procedure fee of ₦${fee} is acknowledged.</p>
+            </div>
+
+            <!-- Signatures -->
+            <div class="signatures-grid">
+              <div class="sig-card">
+                <div class="lbl">Patient / Guardian Digital Signature</div>
+                ${selectedConsentForView.signatureData ? `
+                  <div><img src="${selectedConsentForView.signatureData}" alt="Signature" class="sig-img" /></div>
+                ` : `
+                  <div style="height: 50px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #64748b;">[Digital Touch Signature Verified]</div>
+                `}
+                <div class="divider-line"></div>
+                <div class="val">${selectedConsentForView.signerName}</div>
+                <div class="lbl" style="margin-top: 2px;">Relationship: ${selectedConsentForView.signerRelationship} ${selectedConsentForView.signerPhone ? `• Tel: ${selectedConsentForView.signerPhone}` : ''}</div>
+              </div>
+
+              <div class="sig-card">
+                <div class="lbl">Attending Dental Surgeon & Witness</div>
+                <div class="stamp-icon">✓ Clinically Verified in EHR</div>
+                <div class="divider-line"></div>
+                <div class="val">${selectedConsentForView.clinicianName || 'Dr. Emmanuel Vegher (Dental Surgeon)'}</div>
+                <div class="lbl" style="margin-top: 2px;">Witness: ${selectedConsentForView.witnessName || 'Clinical Nurse Witness on Record'}</div>
+                <div class="lbl" style="margin-top: 1px;">Signed: ${dateSigned}</div>
+              </div>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // Sub-categories list for navigation
@@ -4460,50 +5048,554 @@ export default function DentalClinic() {
 
       {/* ── 6. Digital Consent Form (/dental/consent) ─────────────────────────── */}
       {currentSubCategory === 'consent' && (
-        <Card sx={{ p: 3, borderRadius: 3, maxWidth: 800, mx: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', mb: 1 }}>
-            Chairside Digital Informed Consent & Treatment Agreement
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b', mb: 3 }}>
-            Patient sign-off for dental surgical, endodontic, and restorative procedures with full itemized cost estimate.
-          </Typography>
+        <Stack spacing={3}>
+          {/* Subcategory Action Header & Tabs */}
+          <Card sx={{ p: 2, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <HistoryEdu sx={{ color: '#1e3a8a', fontSize: 28 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Chairside Digital Informed Consent & Treatment Agreement
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  Electronic patient authorization, itemized procedural risk disclosure, and legal archival in PostgreSQL EHR.
+                </Typography>
+              </Box>
 
-          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
-            I hereby authorize the attending dental team to perform the planned clinical procedures, including administration of local anesthetics and necessary radiographs.
-          </Alert>
+              <Tabs
+                value={consentTab === 'create' ? 0 : 1}
+                onChange={(_, v) => setConsentTab(v === 0 ? 'create' : 'vault')}
+                sx={{
+                  bgcolor: '#f1f5f9',
+                  borderRadius: 2,
+                  p: 0.5,
+                  minHeight: 38,
+                  '& .MuiTab-root': {
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    minHeight: 32,
+                    borderRadius: 1.5,
+                    px: 2,
+                  },
+                  '& .Mui-selected': {
+                    bgcolor: '#ffffff',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    color: '#1e3a8a !important',
+                  }
+                }}
+              >
+                <Tab icon={<Draw sx={{ fontSize: '16px !important' }} />} iconPosition="start" label="1. Create & Sign Consent" />
+                <Tab icon={<VerifiedUser sx={{ fontSize: '16px !important' }} />} iconPosition="start" label={`2. Signed Consents Vault (${patientConsents.length})`} />
+              </Tabs>
+            </Box>
+          </Card>
 
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-            Patient / Guardian Digital Signature:
-          </Typography>
-          
-          <Box sx={{ border: '2px dashed #94a3b8', borderRadius: 2, bgcolor: '#f8fafc', p: 1, mb: 2, textAlign: 'center' }}>
-            <canvas
-              ref={consentCanvasRef}
-              width={650}
-              height={180}
-              onMouseDown={startDrawing}
-              onMouseMove={drawSignature}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              style={{ cursor: 'crosshair', background: '#ffffff', borderRadius: 8, width: '100%', touchAction: 'none' }}
-            />
-          </Box>
+          {/* ── TAB 1: CREATE & SIGN CHAIRSIDE CONSENT ─────────────────────── */}
+          {consentTab === 'create' && (
+            <Grid container spacing={3}>
+              {/* Left Column (8 cols): Clinical Agreement & Risk Disclosures */}
+              <Grid item xs={12} lg={8}>
+                <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  {/* Template Quick Selection */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#334155', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <FactCheck sx={{ color: '#2563eb', fontSize: 18 }} />
+                      Select Standard Dental Procedure Consent Protocol:
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {Object.entries(DENTAL_CONSENT_TEMPLATES).map(([key, tpl]) => (
+                        <Chip
+                          key={key}
+                          label={tpl.name}
+                          clickable
+                          color={consentType === key ? 'primary' : 'default'}
+                          variant={consentType === key ? 'filled' : 'outlined'}
+                          onClick={() => handleConsentTypeChange(key)}
+                          sx={{ fontWeight: 700, fontSize: '0.75rem' }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Button size="small" variant="outlined" color="error" onClick={clearSignature} sx={{ textTransform: 'none' }}>
-              Clear Signature Pad
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<CheckCircle />}
-              disabled={!consentSigned}
-              onClick={() => setStatusMessage({ type: 'success', text: 'Digital consent signed and archived into Patient EHR file.' })}
-              sx={{ bgcolor: '#10b981', fontWeight: 700, textTransform: 'none' }}
-            >
-              Sign & Seal Consent Form
-            </Button>
-          </Box>
-        </Card>
+                  {/* Auto-fill from active treatment plan button */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                        Synchronize with Active Encounter Treatment Plan
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                        Pull planned CDT codes, teeth #{currentEncounter?.treatmentPlans?.map((p: any) => p.toothNumbers).filter(Boolean).join(', ') || 'None'}, and itemized fees.
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<AutoAwesome />}
+                      onClick={handleAutofillFromTreatmentPlan}
+                      sx={{ bgcolor: '#7c3aed', color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: '0.75rem' }}
+                    >
+                      Auto-Fill Plan
+                    </Button>
+                  </Box>
+
+                  {/* Form Fields */}
+                  <Stack spacing={2.5}>
+                    <TextField
+                      fullWidth
+                      label="Consent Agreement Title *"
+                      size="small"
+                      value={consentTitle}
+                      onChange={(e) => setConsentTitle(e.target.value)}
+                    />
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={8}>
+                        <TextField
+                          fullWidth
+                          label="Planned Dental Procedures Covered *"
+                          size="small"
+                          value={procedureNamesText}
+                          onChange={(e) => setProcedureNamesText(e.target.value)}
+                          placeholder="e.g. Surgical Extraction of Tooth #18, Socket Bone Graft..."
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Tooth Numbers / Region"
+                          size="small"
+                          value={toothNumbersText}
+                          onChange={(e) => setToothNumbersText(e.target.value)}
+                          placeholder="e.g. #18, #36, Upper Right"
+                        />
+                      </Grid>
+                    </Grid>
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Estimated Treatment Fee (₦)"
+                          type="number"
+                          size="small"
+                          value={estimatedCostValue}
+                          onChange={(e) => setEstimatedCostValue(e.target.value)}
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1, fontWeight: 700, color: '#64748b' }}>₦</Typography>
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Attending Dental Surgeon"
+                          size="small"
+                          value={dentistClinicianName}
+                          onChange={(e) => setDentistClinicianName(e.target.value)}
+                        />
+                      </Grid>
+                    </Grid>
+
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={2}
+                      label="Clinical Procedure & Technique Description"
+                      size="small"
+                      value={treatmentDescription}
+                      onChange={(e) => setTreatmentDescription(e.target.value)}
+                    />
+
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={3}
+                      label="Inherent Clinical Risks & Potential Complications Disclosed *"
+                      size="small"
+                      value={risksDisclosed}
+                      onChange={(e) => setRisksDisclosed(e.target.value)}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff5f5' } }}
+                    />
+
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={2}
+                      label="Clinical Alternatives Discussed With Patient"
+                      size="small"
+                      value={alternativesDiscussed}
+                      onChange={(e) => setAlternativesDiscussed(e.target.value)}
+                    />
+                  </Stack>
+                </Card>
+              </Grid>
+
+              {/* Right Column (4 cols): Signer Details, Legal Checkboxes & Canvas Pad */}
+              <Grid item xs={12} lg={4}>
+                <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Gavel sx={{ color: '#16a34a', fontSize: 20 }} />
+                    Signer Identification & Undertaking
+                  </Typography>
+
+                  <Stack spacing={2} sx={{ mb: 2.5 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Signer Full Name *"
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      placeholder="Patient / Guardian Full Name"
+                    />
+
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Signer Relationship to Patient</InputLabel>
+                      <Select
+                        value={signerRelationship}
+                        label="Signer Relationship to Patient"
+                        onChange={(e) => setSignerRelationship(e.target.value)}
+                      >
+                        <MenuItem value="PATIENT">Patient (Self)</MenuItem>
+                        <MenuItem value="PARENT">Parent (Pediatric Patient)</MenuItem>
+                        <MenuItem value="GUARDIAN">Legal Guardian</MenuItem>
+                        <MenuItem value="SPOUSE">Spouse</MenuItem>
+                        <MenuItem value="NEXT_OF_KIN">Next of Kin / Authorized Representative</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Signer Contact Phone"
+                      value={signerPhone}
+                      onChange={(e) => setSignerPhone(e.target.value)}
+                      placeholder="e.g. 08031234567"
+                    />
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Witness / Dental Nurse Name"
+                      value={witnessName}
+                      onChange={(e) => setWitnessName(e.target.value)}
+                      placeholder="Optional Clinical Witness"
+                    />
+                  </Stack>
+
+                  {/* Mandatory Legal & Clinical Checkboxes */}
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', display: 'block', mb: 1 }}>
+                    MANDATORY LEGAL ACKNOWLEDGEMENTS:
+                  </Typography>
+
+                  <Box sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: 2, border: '1px solid #e2e8f0', mb: 2.5 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={termsAgreed}
+                          onChange={(e) => setTermsAgreed(e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e293b', display: 'block' }}>
+                          Informed Consent Acknowledged & Approved
+                        </Typography>
+                      }
+                    />
+                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block', pl: 4, mb: 1.5 }}>
+                      I certify that the proposed procedures, benefits, material risks, and treatment alternatives have been explained to my satisfaction.
+                    </Typography>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={anesthesiaConsent}
+                          onChange={(e) => setAnesthesiaConsent(e.target.checked)}
+                          color="success"
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e293b', display: 'block' }}>
+                          Local Anesthesia & Radiograph Authorization
+                        </Typography>
+                      }
+                    />
+                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block', pl: 4, mb: 1.5 }}>
+                      I authorize administration of local anesthesia and diagnostic dental imaging.
+                    </Typography>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={radiographConsent}
+                          onChange={(e) => setRadiographConsent(e.target.checked)}
+                          color="info"
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e293b', display: 'block' }}>
+                          Financial Responsibility Accepted
+                        </Typography>
+                      }
+                    />
+                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block', pl: 4 }}>
+                      I agree to the estimated treatment fee of ₦{Number(estimatedCostValue).toLocaleString()}.
+                    </Typography>
+                  </Box>
+
+                  {/* Digital Signature Pad */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                      ✍️ Chairside Digital Signature Pad:
+                    </Typography>
+                    {consentSigned && (
+                      <Chip label="Signature Captured" color="success" size="small" sx={{ fontWeight: 800, fontSize: '0.65rem' }} />
+                    )}
+                  </Box>
+
+                  <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 1 }}>
+                    Sign with finger, stylus, or mouse inside the boundary box below:
+                  </Typography>
+
+                  <Box sx={{ border: '2px dashed #94a3b8', borderRadius: 2, bgcolor: '#ffffff', p: 0.5, mb: 2, textAlign: 'center' }}>
+                    <canvas
+                      ref={consentCanvasRef}
+                      width={480}
+                      height={160}
+                      onMouseDown={startDrawing}
+                      onMouseMove={drawSignature}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={drawSignature}
+                      onTouchEnd={stopDrawing}
+                      onTouchCancel={stopDrawing}
+                      style={{ cursor: 'crosshair', background: '#f8fafc', borderRadius: 6, width: '100%', height: 160, touchAction: 'none' }}
+                    />
+                  </Box>
+
+                  <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={clearSignature}
+                      sx={{ textTransform: 'none', fontWeight: 700 }}
+                    >
+                      Clear Pad
+                    </Button>
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleConsentTypeChange(consentType)}
+                      sx={{ textTransform: 'none', fontWeight: 700 }}
+                    >
+                      Reset Form
+                    </Button>
+                  </Stack>
+
+                  {/* Sign & Save Button */}
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                    startIcon={savingConsent ? <CircularProgress size={20} color="inherit" /> : <Lock />}
+                    disabled={!consentSigned || savingConsent || !termsAgreed}
+                    onClick={handleSaveDigitalConsent}
+                    sx={{
+                      bgcolor: '#10b981',
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      textTransform: 'none',
+                      py: 1.2,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 14px rgba(16,185,129,0.4)',
+                      '&:hover': { bgcolor: '#059669' }
+                    }}
+                  >
+                    {savingConsent ? 'Archiving to PostgreSQL...' : 'Sign & Seal Consent to Database'}
+                  </Button>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+
+          {/* ── TAB 2: SIGNED CONSENTS VAULT & AUDIT TRAIL ─────────────────── */}
+          {consentTab === 'vault' && (
+            <Card sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    🛡️ Patient Digital Consent Vault & Legal Audit Trail
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b' }}>
+                    Immutable repository of chairside signed agreements for {selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'selected patient'} stored in PostgreSQL.
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Refresh />}
+                  onClick={() => selectedPatient && fetchPatientConsents(selectedPatient.id)}
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
+                >
+                  Refresh Vault
+                </Button>
+              </Box>
+
+              {loadingConsents ? (
+                <Box sx={{ py: 6, textAlign: 'center' }}>
+                  <CircularProgress size={32} sx={{ mb: 1.5 }} />
+                  <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 600 }}>
+                    Retrieving signed legal consent agreements from PostgreSQL...
+                  </Typography>
+                </Box>
+              ) : patientConsents.length === 0 ? (
+                <Alert severity="info" sx={{ borderRadius: 2, my: 3 }}>
+                  No signed dental consent agreements recorded yet for this patient. Switch to the <strong>"Create & Sign Consent"</strong> tab to capture a chairside digital signature.
+                </Alert>
+              ) : (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Consent Reference #</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Protocol / Title</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Covered Procedures & Teeth</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Est. Fee</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Signer & Relationship</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Signed At</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Attending Surgeon</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155' }}>Signature</TableCell>
+                        <TableCell sx={{ fontWeight: 800, color: '#334155', textAlign: 'center' }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {patientConsents.map((consent: any) => (
+                        <TableRow key={consent.id} hover>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e3a8a', fontFamily: 'monospace' }}>
+                              {consent.consentNumber}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={consent.status || 'SIGNED'}
+                              color={consent.status === 'SIGNED' ? 'success' : 'default'}
+                              sx={{ fontWeight: 800, fontSize: '0.62rem', height: 20, mt: 0.5 }}
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                              {consent.title}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#64748b' }}>
+                              Type: {consent.consentType?.replace('_', ' ')}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155', maxWidth: 220 }}>
+                              {consent.procedureNames || 'Clinical Procedures'}
+                            </Typography>
+                            {consent.toothNumbers && (
+                              <Chip
+                                size="small"
+                                label={`Teeth: ${consent.toothNumbers}`}
+                                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#f1f5f9', mt: 0.5 }}
+                              />
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 800, color: '#16a34a' }}>
+                              ₦{Number(consent.estimatedCost || 0).toLocaleString()}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                              {consent.signerName}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#64748b' }}>
+                              ({consent.signerRelationship})
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+                              {new Date(consent.signedAt || consent.createdAt).toLocaleDateString()}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                              {new Date(consent.signedAt || consent.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+                              {consent.clinicianName || 'Attending Surgeon'}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            {consent.signatureData ? (
+                              <Box sx={{ border: '1px solid #e2e8f0', borderRadius: 1, bgcolor: '#fff', p: 0.5, display: 'inline-block' }}>
+                                <img
+                                  src={consent.signatureData}
+                                  alt="Signature"
+                                  style={{ height: 28, width: 'auto', display: 'block' }}
+                                />
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">No Image</Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <Stack direction="row" spacing={0.5} justifyContent="center">
+                              <Tooltip title="View & Print Official Legal Consent Certificate">
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<Visibility sx={{ fontSize: '14px !important' }} />}
+                                  onClick={() => {
+                                    setSelectedConsentForView(consent);
+                                    setViewConsentModalOpen(true);
+                                  }}
+                                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.72rem', py: 0.3 }}
+                                >
+                                  View / Print
+                                </Button>
+                              </Tooltip>
+
+                              <Tooltip title="Delete / Revoke Consent Record">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteDigitalConsent(consent.id)}
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Card>
+          )}
+        </Stack>
       )}
 
       {/* ── Tooth Inspector Modal ───────────────────────────────────────────── */}
@@ -4907,6 +5999,284 @@ export default function DentalClinic() {
             sx={{ bgcolor: '#1e3a8a', fontWeight: 700, textTransform: 'none', px: 3, borderRadius: 2 }}
           >
             Save Procedure to PostgreSQL
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Official Dental Informed Consent Certificate Modal ───────────── */}
+      <Dialog
+        open={viewConsentModalOpen}
+        onClose={() => setViewConsentModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 0 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#0f172a', color: '#fff', p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <VerifiedUser sx={{ color: '#38bdf8' }} />
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Official Dental Informed Consent Certificate & Legal Undertaking
+            </Typography>
+          </Stack>
+          <IconButton size="small" onClick={() => setViewConsentModalOpen(false)} sx={{ color: '#fff' }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: { xs: 2, sm: 4 }, bgcolor: '#f8fafc' }}>
+          {selectedConsentForView && (
+            <Paper
+              elevation={0}
+              id="dental-consent-print-document"
+              sx={{
+                p: { xs: 2.5, sm: 4 },
+                bgcolor: '#ffffff',
+                borderRadius: 3,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                color: '#0f172a'
+              }}
+            >
+              {/* Certificate Hospital Header */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '2px solid #0f172a',
+                  pb: 2,
+                  mb: 3,
+                  gap: 2
+                }}
+              >
+                {/* Left Sponsor Crest */}
+                <Box
+                  component="img"
+                  src={assetUrl('/anglican-logo.png')}
+                  alt="Diocese Logo"
+                  style={{ width: 60, height: 60, maxWidth: 60, maxHeight: 60, objectFit: 'contain' }}
+                  onError={(e: any) => {
+                    e.currentTarget.src = assetUrl('/hospital-logo.png');
+                  }}
+                  sx={{ width: { xs: 45, sm: 60 }, height: { xs: 45, sm: 60 }, objectFit: 'contain', flexShrink: 0 }}
+                />
+
+                {/* Center Title & Details */}
+                <Box sx={{ textAlign: 'center', flexGrow: 1 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '0.5px', color: '#0f172a', fontSize: { xs: '1.15rem', sm: '1.45rem' } }}>
+                    FAITH FOUNDATION MISSION HOSPITAL
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.5px' }}>
+                    DIRECTORATE OF DENTAL SURGERY & MAXILLOFACIAL HEALTH
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+                    Electronic Health Records (EHR) • Medico-Legal Informed Consent Certificate • NDPA Compliant
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 1.5 }}>
+                    <Chip
+                      label={`CERTIFICATE #: ${selectedConsentForView.consentNumber}`}
+                      sx={{ bgcolor: '#0f172a', color: '#fff', fontWeight: 800, fontFamily: 'monospace', fontSize: '0.75rem' }}
+                    />
+                    <Chip
+                      label={`STATUS: ${selectedConsentForView.status || 'VERIFIED & ARCHIVED'}`}
+                      color="success"
+                      sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Right Hospital Crest */}
+                <Box
+                  component="img"
+                  src={assetUrl('/hospital-logo.png')}
+                  alt="Hospital Logo"
+                  style={{ width: 60, height: 60, maxWidth: 60, maxHeight: 60, objectFit: 'contain', borderRadius: '50%' }}
+                  onError={(e: any) => {
+                    e.currentTarget.src = assetUrl('/hospital-logo.webp');
+                  }}
+                  sx={{
+                    width: { xs: 45, sm: 60 },
+                    height: { xs: 45, sm: 60 },
+                    objectFit: 'contain',
+                    borderRadius: '50%',
+                    border: '2px solid #1e3a8a',
+                    p: 0.3,
+                    bgcolor: '#ffffff',
+                    flexShrink: 0
+                  }}
+                />
+              </Box>
+
+              {/* Patient & Encounter Details Grid */}
+              <Grid container spacing={2} sx={{ mb: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    PATIENT FULL NAME
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {selectedConsentForView.patient?.firstName} {selectedConsentForView.patient?.lastName}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    HOSPITAL MRN
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e3a8a', fontFamily: 'monospace' }}>
+                    {selectedConsentForView.patient?.patientNumber || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    GENDER / AGE
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {selectedConsentForView.patient?.gender || 'N/A'} {selectedConsentForView.patient?.birthDate ? `(${new Date().getFullYear() - new Date(selectedConsentForView.patient.birthDate).getFullYear()} yrs)` : ''}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    PROTOCOL / CONSENT TYPE
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {selectedConsentForView.title}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    ESTIMATED TREATMENT FEE
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#16a34a' }}>
+                    ₦{Number(selectedConsentForView.estimatedCost || 0).toLocaleString()}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                    DATE & TIME SIGNED
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {new Date(selectedConsentForView.signedAt || selectedConsentForView.createdAt).toLocaleString()}
+                  </Typography>
+                </Grid>
+              </Grid>
+
+              {/* Procedures & Clinical Scope */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e3a8a', borderBottom: '1px solid #cbd5e1', pb: 0.5, mb: 1 }}>
+                  1. PROCEDURES & CLINICAL SCOPE
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mb: 0.5 }}>
+                  Covered Clinical Procedures: <span style={{ fontWeight: 500, color: '#334155' }}>{selectedConsentForView.procedureNames || 'Standard Dental Procedures'}</span>
+                </Typography>
+                {selectedConsentForView.toothNumbers && (
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mb: 0.5 }}>
+                    Tooth Numbers / Anatomical Sites: <span style={{ fontWeight: 500, color: '#334155' }}>{selectedConsentForView.toothNumbers}</span>
+                  </Typography>
+                )}
+                {selectedConsentForView.treatmentDescription && (
+                  <Typography variant="body2" sx={{ color: '#475569', fontSize: '0.85rem', mt: 0.5 }}>
+                    {selectedConsentForView.treatmentDescription}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Disclosed Risks & Complications */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#b91c1c', borderBottom: '1px solid #cbd5e1', pb: 0.5, mb: 1 }}>
+                  2. MATERIAL RISKS & POTENTIAL COMPLICATIONS DISCLOSED
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#475569', fontSize: '0.85rem' }}>
+                  {selectedConsentForView.risksDisclosed || 'Bleeding, postoperative discomfort, infection, temporary or permanent nerve numbness, and need for secondary intervention.'}
+                </Typography>
+                {selectedConsentForView.alternativesDiscussed && (
+                  <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem', mt: 1, fontStyle: 'italic' }}>
+                    <strong>Alternatives Discussed:</strong> {selectedConsentForView.alternativesDiscussed}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Patient Undertakings */}
+              <Box sx={{ mb: 3, p: 2, bgcolor: '#f0fdf4', borderRadius: 2, border: '1px solid #bbf7d0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#166534', mb: 1 }}>
+                  3. LEGAL ATTESTATION & PATIENT UNDERTAKING
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#14532d', display: 'block', mb: 0.5 }}>
+                  ✓ <strong>Informed Consent:</strong> The nature, purpose, benefits, and inherent risks of the proposed treatment have been explained in full to the patient/guardian's understanding.
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#14532d', display: 'block', mb: 0.5 }}>
+                  ✓ <strong>Anesthesia & Imaging:</strong> Authorization for necessary local anesthetics and diagnostic dental radiographs is expressly granted.
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#14532d', display: 'block' }}>
+                  ✓ <strong>Financial Clearance:</strong> Financial responsibility for the itemized estimated procedure fee of ₦{Number(selectedConsentForView.estimatedCost || 0).toLocaleString()} is acknowledged.
+                </Typography>
+              </Box>
+
+              {/* Signatures Dual Block */}
+              <Grid container spacing={3} sx={{ mt: 2 }}>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ border: '1px solid #cbd5e1', borderRadius: 2, p: 2, textAlign: 'center', height: '100%' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#64748b', display: 'block', mb: 1 }}>
+                      PATIENT / GUARDIAN DIGITAL SIGNATURE
+                    </Typography>
+                    {selectedConsentForView.signatureData ? (
+                      <Box sx={{ my: 1, display: 'flex', justifyContent: 'center' }}>
+                        <img
+                          src={selectedConsentForView.signatureData}
+                          alt="Patient Signature"
+                          style={{ maxHeight: 75, maxWidth: '100%', objectFit: 'contain' }}
+                        />
+                      </Box>
+                    ) : (
+                      <Box sx={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography variant="caption" color="text.secondary">[Digital Touch Signature Verified]</Typography>
+                      </Box>
+                    )}
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                      {selectedConsentForView.signerName}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                      Relationship: <strong>{selectedConsentForView.signerRelationship}</strong> {selectedConsentForView.signerPhone ? `• Tel: ${selectedConsentForView.signerPhone}` : ''}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ border: '1px solid #cbd5e1', borderRadius: 2, p: 2, textAlign: 'center', height: '100%' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#64748b', display: 'block', mb: 1 }}>
+                      ATTENDING DENTAL SURGEON & WITNESS
+                    </Typography>
+                    <Box sx={{ height: 75, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckCircle sx={{ color: '#10b981', fontSize: 32, mb: 0.5 }} />
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a' }}>
+                        CLINICALLY VERIFIED IN EHR
+                      </Typography>
+                    </Box>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                      {selectedConsentForView.clinicianName || 'Dr. Emmanuel Vegher (Dental Surgeon)'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                      Witness: {selectedConsentForView.witnessName || 'Clinical Nurse Witness on Record'}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+          <Button onClick={() => setViewConsentModalOpen(false)} sx={{ textTransform: 'none', fontWeight: 700 }}>
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Print />}
+            onClick={handlePrintConsentCertificate}
+            sx={{ bgcolor: '#1e3a8a', color: '#fff', fontWeight: 800, textTransform: 'none', px: 3, borderRadius: 2 }}
+          >
+            Print Official Certificate
           </Button>
         </DialogActions>
       </Dialog>

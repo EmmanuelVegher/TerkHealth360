@@ -100,7 +100,8 @@ import {
   Bedtime,
   DirectionsWalk,
   RemoveRedEye,
-  AccountBalance
+  AccountBalance,
+  Healing
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -111,6 +112,8 @@ type FormTypeOption =
   | 'BIODATA_COVER'
   | 'SOAP_PROGRESS'
   | 'VITALS_TPR'
+  | 'OPERATING_THEATRE'
+  | 'SURGICAL_CONSENT'
   | 'DISCHARGE'
   | 'BILLING'
   | 'LABS'
@@ -373,6 +376,31 @@ export interface ExtractedInsuranceRecord {
   claimsStatus?: string;
 }
 
+export interface ExtractedJournalLine {
+  id?: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  costCentre?: string;
+  description?: string;
+}
+
+export interface ExtractedJournalVoucher {
+  id?: string;
+  voucherNumber?: string;
+  referenceNumber?: string;
+  date: string;
+  description: string;
+  category?: string;
+  status?: 'DRAFT' | 'POSTED' | 'APPROVED';
+  createdBy?: string;
+  approvedBy?: string;
+  totalDebit?: number;
+  totalCredit?: number;
+  lines: ExtractedJournalLine[];
+}
+
 export interface ExtractedFinanceRecord {
   id?: string;
   transactionDate: string;
@@ -396,6 +424,50 @@ export interface ExtractedAuditRecord {
   changesSummary: string;
   riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   complianceNotes?: string;
+}
+
+export interface ExtractedOperationNote {
+  id?: string;
+  operationDate: string;
+  startTime?: string;
+  endTime?: string;
+  operationName: string;
+  preOpDiagnosis?: string;
+  postOpDiagnosis?: string;
+  surgeonName: string;
+  assistantSurgeon?: string;
+  anaesthetistName?: string;
+  scrubNurse?: string;
+  circulatingNurse?: string;
+  anaesthesiaType?: string;
+  findings: string;
+  procedureDetails: string;
+  estimatedBloodLossMl?: number;
+  implantsOrPacks?: string;
+  drainInserted?: string;
+  specimenSentForHistology?: boolean;
+  specimenDescription?: string;
+  sutureMaterials?: string;
+  postOpOrders?: string;
+  complications?: string;
+}
+
+export interface ExtractedSurgicalConsent {
+  id?: string;
+  consentCode?: string;
+  operationName?: string;
+  patientName?: string;
+  signerName?: string;
+  relationship?: 'SELF' | 'SPOUSE' | 'PARENT' | 'CHILD' | 'GUARDIAN' | 'NEXT_OF_KIN' | 'OTHER';
+  benefitsExplained?: boolean;
+  risksExplained?: boolean;
+  anaesthesiaRisksExplained?: boolean;
+  bloodTransfusionConsent?: boolean;
+  surgeonName?: string;
+  witnessName?: string;
+  consentDate?: string;
+  signatureImage?: string;
+  notes?: string;
 }
 
 interface PageClassificationAudit {
@@ -439,6 +511,11 @@ interface ExtractedPatientBioData {
   emergencyName?: string;
   emergencyPhone?: string;
   hospitalName?: string;
+  isDeceased?: boolean;
+  deceasedDate?: string;
+  causeOfDeath?: string;
+  status?: 'ACTIVE' | 'DECEASED' | 'ARCHIVED';
+  notes?: string;
 }
 
 type HospitalPresetType =
@@ -452,6 +529,8 @@ const ALL_FOLDER_FORMS: Array<{ id: FormTypeOption; label: string; icon: any; co
   { id: 'BIODATA_COVER', label: 'Bio-Data Cover & Family No.', icon: Person, color: '#f59e0b', desc: 'Family No, Names, DOB, Sex, Phones, Address' },
   { id: 'SOAP_PROGRESS', label: 'Doctor SOAP Progress Notes', icon: NoteAlt, color: '#10b981', desc: 'Multi-page continuation sheets & consultations' },
   { id: 'VITALS_TPR', label: 'Triage / Vitals Charts (TPR)', icon: Timeline, color: '#ef4444', desc: 'Time-series BP, pulse, temp, RR, SpO2' },
+  { id: 'OPERATING_THEATRE', label: 'Operating Theatre / Operation Note', icon: Healing, color: '#0284c7', desc: 'Surgeon, assistants, findings, surgical procedure steps, sutures & post-op orders' },
+  { id: 'SURGICAL_CONSENT', label: 'Operation Consent Form', icon: AssignmentTurnedIn, color: '#0ea5e9', desc: 'Patient / Next-of-kin informed consent, risks/benefits & authorization for surgery' },
   { id: 'ANC', label: 'ANC / Antenatal Care', icon: PregnantWoman, color: '#db2777', desc: 'Gestational age, fundal height, FHR, urine test, tetanus' },
   { id: 'RADIOLOGY', label: 'Radiology & Imaging', icon: PermMedia, color: '#4f46e5', desc: 'X-Ray, Ultrasound, CT, MRI scans & radiologist impressions' },
   { id: 'MORTUARY', label: 'Mortuary & Deceased Records', icon: Bedtime, color: '#475569', desc: 'Date/time of death, cause of death, tag & body custody' },
@@ -547,7 +626,10 @@ export default function RecordMigration() {
   const [eyeList, setEyeList] = useState<ExtractedEyeClinicRecord[]>([]);
   const [insuranceList, setInsuranceList] = useState<ExtractedInsuranceRecord[]>([]);
   const [financeList, setFinanceList] = useState<ExtractedFinanceRecord[]>([]);
+  const [journalList, setJournalList] = useState<ExtractedJournalVoucher[]>([]);
   const [auditList, setAuditList] = useState<ExtractedAuditRecord[]>([]);
+  const [operationNotesList, setOperationNotesList] = useState<ExtractedOperationNote[]>([]);
+  const [surgicalConsentsList, setSurgicalConsentsList] = useState<ExtractedSurgicalConsent[]>([]);
   const [pageAuditList, setPageAuditList] = useState<PageClassificationAudit[]>([]);
   const [confidenceScore, setConfidenceScore] = useState<number>(95);
   const [aiNotes, setAiNotes] = useState<string>('');
@@ -728,24 +810,6 @@ export default function RecordMigration() {
       return { formType: forcedType, label: formConfig ? formConfig.label : `Folder Page ${index + 1}` };
     }
 
-    if (index === 0) {
-      return { formType: 'BIODATA_COVER', label: 'Folder Cover & Bio-Data' };
-    }
-    if (index === 1) {
-      return { formType: 'SOAP_PROGRESS', label: 'Doctor SOAP Note Page 1' };
-    }
-    if (index === 2) {
-      return { formType: 'SOAP_PROGRESS', label: 'Doctor SOAP Note Page 2' };
-    }
-    if (index === 3) {
-      return { formType: 'VITALS_TPR', label: 'Triage / Vitals Chart (TPR)' };
-    }
-    if (index === 4) {
-      return { formType: 'DISCHARGE', label: 'Discharge Summary' };
-    }
-    if (index === 5) {
-      return { formType: 'BILLING', label: 'Billing & Clearance Sheet' };
-    }
     return { formType: 'AUTO_DETECT', label: `Folder Page ${index + 1}` };
   };
 
@@ -792,7 +856,7 @@ export default function RecordMigration() {
       });
 
       const optimized = await optimizeImageForOCR(dataUrl);
-      const { formType, label } = getDefaultFormTypeAndLabel(pages.length + i);
+      const { formType, label } = getDefaultFormTypeAndLabel(pages.length + i, nextSnapFormType);
 
       newPages.push({
         id: `page-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
@@ -807,7 +871,7 @@ export default function RecordMigration() {
     if (pages.length === 0 && newPages.length > 0) {
       setSelectedPageIndex(0);
     }
-    enqueueSnackbar(`📂 Added ${newPages.length} physical page image(s). Check form mappings on each card.`, { variant: 'info' });
+    enqueueSnackbar(`📂 Added ${newPages.length} physical page image(s). Form types ready for auto-detection.`, { variant: 'info' });
     e.target.value = '';
   };
 
@@ -846,6 +910,10 @@ export default function RecordMigration() {
           newLabel = 'Folder Cover & Bio-Data';
         } else if (newFormType === 'VITALS_TPR') {
           newLabel = 'Triage / Vitals Chart (TPR)';
+        } else if (newFormType === 'OPERATING_THEATRE') {
+          newLabel = 'Operating Theatre / Operation Note';
+        } else if (newFormType === 'SURGICAL_CONSENT') {
+          newLabel = 'Operation Consent Form';
         } else if (newFormType === 'DISCHARGE') {
           newLabel = 'Discharge Summary';
         } else if (newFormType === 'BILLING') {
@@ -983,10 +1051,32 @@ export default function RecordMigration() {
       setEyeList(extracted.eyeClinicRecords || []);
       setInsuranceList(extracted.insuranceRecords || []);
       setFinanceList(extracted.financeRecords || []);
+      setJournalList(extracted.journalVouchers || []);
       setAuditList(extracted.auditRecords || []);
+      setOperationNotesList(extracted.operationNotes || []);
+      setSurgicalConsentsList(extracted.surgicalConsents || []);
       setPageAuditList(extracted.pageClassificationAudit || []);
       setConfidenceScore(extracted.overallConfidenceScore || 95);
       setAiNotes(extracted.aiNotes || '');
+
+      // Auto-update pages and filmstrip with AI-detected forms
+      if (Array.isArray(extracted.pageClassificationAudit) && extracted.pageClassificationAudit.length > 0) {
+        setPages(prevPages => {
+          return prevPages.map((p, idx) => {
+            const audit = extracted.pageClassificationAudit.find((a: any) => a.pageIndex === idx);
+            if (audit && audit.aiDetectedForm && audit.aiDetectedForm !== 'AUTO_DETECT') {
+              const detectedForm = audit.aiDetectedForm as FormTypeOption;
+              const formConfig = ALL_FOLDER_FORMS.find(f => f.id === detectedForm);
+              return {
+                ...p,
+                formType: detectedForm,
+                label: formConfig ? formConfig.label : p.label
+              };
+            }
+            return p;
+          });
+        });
+      }
 
       setExistingMatch(res.data.existingMatch || null);
       setExistingFamilyAccount(res.data.existingFamilyAccount || null);
@@ -995,12 +1085,224 @@ export default function RecordMigration() {
       }
 
       setActiveTab(0);
-      enqueueSnackbar(`✨ Successfully extracted mapped folder with ${extracted.overallConfidenceScore || 95}% confidence!`, { variant: 'success' });
+      enqueueSnackbar(`✨ Successfully extracted mapped records with ${extracted.overallConfidenceScore || 95}% confidence!`, { variant: 'success' });
     } catch (err: any) {
       console.error('Extraction error:', err);
       const errMsg = err.response?.data?.message || err.message || 'Vision OCR extraction encountered an error.';
       setExtractionError(errMsg);
-      enqueueSnackbar('AI Folder extraction failed. See detailed error report below.', { variant: 'error' });
+      enqueueSnackbar('AI extraction failed. See detailed error report below.', { variant: 'error' });
+    } finally {
+      setIsExtracting(false);
+      setExtractionStep('');
+    }
+  };
+
+  // ── Helper to map FormTypeOption to Tab Index ──────────────────────────────
+  const getTabIndexForForm = (formType?: FormTypeOption): number => {
+    switch (formType) {
+      case 'BIODATA_COVER':
+        return 0; // Bio-Data & Family
+      case 'SOAP_PROGRESS':
+        return 1; // SOAP Notes
+      case 'VITALS_TPR':
+        return 2; // Vitals
+      case 'DISCHARGE':
+        return 3; // Discharge
+      case 'BILLING':
+        return 4; // Billing
+      case 'PRESCRIPTIONS':
+        return 6; // Prescriptions
+      case 'LABS':
+        return 7; // Labs
+      case 'ALLERGIES':
+        return 8; // Allergies
+      case 'ANC':
+      case 'MATERNITY':
+        return 9; // ANC
+      case 'RADIOLOGY':
+        return 10; // Radiology
+      case 'MORTUARY':
+        return 11; // Mortuary
+      case 'PATHOLOGY':
+        return 12; // Pathology
+      case 'PHYSIOTHERAPY':
+        return 13; // Physiotherapy
+      case 'DENTAL':
+        return 14; // Dental
+      case 'EYE_CLINIC':
+        return 15; // Eye Clinic
+      case 'INSURANCE':
+        return 16; // Insurance
+      case 'FINANCE':
+        return 17; // Finance & Ledgers
+      case 'AUDIT':
+        return 18; // Audit
+      case 'OPERATING_THEATRE':
+      case 'SURGICAL_CONSENT':
+        return 19; // Operating Theatre
+      default:
+        return 0;
+    }
+  };
+
+  // ── Run Targeted Vision AI OCR on Selected / Single Page ────────────────────
+  const handleExtractTargetedPages = async (targetIndices: number[]) => {
+    if (!targetIndices || targetIndices.length === 0) return;
+
+    const validIndices = targetIndices.filter(i => i >= 0 && i < pages.length);
+    if (validIndices.length === 0) {
+      enqueueSnackbar('Please select a valid page to extract.', { variant: 'warning' });
+      return;
+    }
+
+    setIsExtracting(true);
+    setExtractionError(null);
+    const targetDesc = validIndices.length === 1
+      ? `Page ${validIndices[0] + 1} (${pages[validIndices[0]].formType})`
+      : `${validIndices.length} Selected Page(s)`;
+    setExtractionStep(`Extracting ${targetDesc} with Medical Vision AI...`);
+
+    try {
+      const targetPages = validIndices.map(i => pages[i]);
+      const compressedImages: string[] = [];
+      for (const p of targetPages) {
+        const opt = await optimizeImageForOCR(p.dataUrl, 1200, 0.76);
+        compressedImages.push(opt);
+      }
+
+      const pageLabelsPayload = targetPages.map(p => p.label);
+      const pageFormMappingsPayload = targetPages.map((p, idx) => ({
+        pageIndex: idx,
+        formType: p.formType,
+        label: p.label
+      }));
+
+      const res = await api.post(
+        '/records-migration/extract-folder',
+        {
+          images: compressedImages,
+          pageFormMappings: pageFormMappingsPayload,
+          hospitalPreset,
+          customHospitalName,
+          customMotto,
+          customInstructions,
+          expectedFields: fieldToggles,
+          pageLabels: pageLabelsPayload
+        },
+        {
+          timeout: 180000 // 3 minutes timeout for targeted extraction
+        }
+      );
+
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Failed to extract clinical records from target page.');
+      }
+
+      const extracted = res.data.data;
+
+      // Update patient demographics if newly found or if target is patient card
+      if (extracted.patient && (extracted.patient.firstName || extracted.patient.lastName)) {
+        setPatientData(prev => ({ ...prev, ...extracted.patient }));
+      }
+
+      // Targeted updates for each clinical domain
+      if (extracted.labInvestigations && extracted.labInvestigations.length > 0) {
+        setLabList(extracted.labInvestigations);
+      }
+      if (extracted.prescriptions && extracted.prescriptions.length > 0) {
+        setPrescriptionsList(extracted.prescriptions);
+      }
+      if (extracted.encounters && extracted.encounters.length > 0) {
+        setEncountersList(prev => [...extracted.encounters, ...prev.filter(e => !extracted.encounters.some((ne: any) => ne.visitDate === e.visitDate))]);
+      }
+      if (extracted.vitals && extracted.vitals.length > 0) {
+        setVitalsList(extracted.vitals);
+      }
+      if (extracted.diagnoses && extracted.diagnoses.length > 0) {
+        setDiagnosesList(extracted.diagnoses);
+      }
+      if (extracted.dischargeSummaries && extracted.dischargeSummaries.length > 0) {
+        setDischargeList(extracted.dischargeSummaries);
+      }
+      if (extracted.billingRecords && extracted.billingRecords.length > 0) {
+        setBillingList(extracted.billingRecords);
+      }
+      if (extracted.allergies && extracted.allergies.length > 0) {
+        setAllergiesList(extracted.allergies);
+      }
+      if (extracted.ancRecords && extracted.ancRecords.length > 0) {
+        setAncList(extracted.ancRecords);
+      }
+      if (extracted.radiologyReports && extracted.radiologyReports.length > 0) {
+        setRadiologyList(extracted.radiologyReports);
+      }
+      if (extracted.mortuaryRecords && extracted.mortuaryRecords.length > 0) {
+        setMortuaryList(extracted.mortuaryRecords);
+      }
+      if (extracted.pathologyReports && extracted.pathologyReports.length > 0) {
+        setPathologyList(extracted.pathologyReports);
+      }
+      if (extracted.physiotherapyRecords && extracted.physiotherapyRecords.length > 0) {
+        setPhysioList(extracted.physiotherapyRecords);
+      }
+      if (extracted.dentalRecords && extracted.dentalRecords.length > 0) {
+        setDentalList(extracted.dentalRecords);
+      }
+      if (extracted.eyeClinicRecords && extracted.eyeClinicRecords.length > 0) {
+        setEyeList(extracted.eyeClinicRecords);
+      }
+      if (extracted.insuranceRecords && extracted.insuranceRecords.length > 0) {
+        setInsuranceList(extracted.insuranceRecords);
+      }
+      if (extracted.financeRecords && extracted.financeRecords.length > 0) {
+        setFinanceList(extracted.financeRecords);
+      }
+      if (extracted.journalVouchers && extracted.journalVouchers.length > 0) {
+        setJournalList(extracted.journalVouchers);
+      }
+      if (extracted.auditRecords && extracted.auditRecords.length > 0) {
+        setAuditList(extracted.auditRecords);
+      }
+      if (extracted.operationNotes && extracted.operationNotes.length > 0) {
+        setOperationNotesList(extracted.operationNotes);
+      }
+      if (extracted.surgicalConsents && extracted.surgicalConsents.length > 0) {
+        setSurgicalConsentsList(extracted.surgicalConsents);
+      }
+
+      // Auto-update the targeted page's form type if AI detected a specific form
+      if (Array.isArray(extracted.pageClassificationAudit) && extracted.pageClassificationAudit.length > 0) {
+        setPages(prevPages => {
+          return prevPages.map((p, idx) => {
+            const batchIdx = validIndices.indexOf(idx);
+            if (batchIdx !== -1) {
+              const audit = extracted.pageClassificationAudit.find((a: any) => a.pageIndex === batchIdx);
+              if (audit && audit.aiDetectedForm && audit.aiDetectedForm !== 'AUTO_DETECT') {
+                const detectedForm = audit.aiDetectedForm as FormTypeOption;
+                const formConfig = ALL_FOLDER_FORMS.find(f => f.id === detectedForm);
+                return {
+                  ...p,
+                  formType: detectedForm,
+                  label: formConfig ? formConfig.label : p.label
+                };
+              }
+            }
+            return p;
+          });
+        });
+      }
+
+      // Automatically switch to the tab relevant to the extracted page
+      const primaryFormType = pages[validIndices[0]]?.formType;
+      const targetTab = getTabIndexForForm(primaryFormType);
+      setActiveTab(targetTab);
+
+      enqueueSnackbar(`⚡ Successfully extracted ${targetDesc} and updated records!`, { variant: 'success' });
+    } catch (err: any) {
+      console.error('Targeted extraction error:', err);
+      const errMsg = err.response?.data?.message || err.message || 'Single-page extraction failed.';
+      setExtractionError(errMsg);
+      enqueueSnackbar(`Failed to extract page: ${errMsg}`, { variant: 'error' });
     } finally {
       setIsExtracting(false);
       setExtractionStep('');
@@ -1009,8 +1311,28 @@ export default function RecordMigration() {
 
   // ── Commit Migration to Database ──────────────────────────────────────────
   const handleCommitMigration = async () => {
-    if (!patientData || !patientData.firstName || !patientData.lastName) {
-      enqueueSnackbar('Patient Surname and First Name are mandatory before committing.', { variant: 'warning' });
+    const hasValidPatient = Boolean(
+      patientData &&
+      patientData.firstName &&
+      patientData.lastName &&
+      patientData.firstName !== 'Unknown' &&
+      patientData.lastName !== 'Record' &&
+      patientData.firstName.trim().length > 0 &&
+      patientData.lastName.trim().length > 0
+    );
+
+    const hasNonPatientData = Boolean(
+      (journalList && journalList.length > 0) ||
+      (financeList && financeList.length > 0) ||
+      (auditList && auditList.length > 0) ||
+      (insuranceList && insuranceList.length > 0) ||
+      (mortuaryList && mortuaryList.length > 0) ||
+      (operationNotesList && operationNotesList.length > 0) ||
+      (surgicalConsentsList && surgicalConsentsList.length > 0)
+    );
+
+    if (!hasValidPatient && !hasNonPatientData) {
+      enqueueSnackbar('Either patient demographics or non-patient records (Finance Journals, Receipts, Audit Logs, Insurance Plans, Mortuary Registers, Operation Notes, or Surgical Consents) are required before committing.', { variant: 'warning' });
       return;
     }
 
@@ -1036,6 +1358,9 @@ export default function RecordMigration() {
         insuranceRecords: insuranceList,
         financeRecords: financeList,
         auditRecords: auditList,
+        journalVouchers: journalList,
+        operationNotes: operationNotesList,
+        surgicalConsents: surgicalConsentsList,
         scannedPages: pages.map((p, idx) => ({ pageIndex: idx, dataUrl: p.dataUrl, label: p.label })),
         mergeOption,
         existingPatientId: existingMatch?.patientId || null,
@@ -1051,7 +1376,7 @@ export default function RecordMigration() {
       setMigrationResultSummary(res.data.data);
       setMigrationSuccessDialog(true);
       fetchStatsAndHistory();
-      enqueueSnackbar('🎉 Physical case folder successfully digitized and saved to hospital database!', { variant: 'success' });
+      enqueueSnackbar(res.data.message || '🎉 Records successfully digitized and saved to hospital database & ledger!', { variant: 'success' });
     } catch (err: any) {
       console.error('Commit error:', err);
       enqueueSnackbar(err.message || 'Failed to commit migration to database.', { variant: 'error' });
@@ -1082,6 +1407,9 @@ export default function RecordMigration() {
     setInsuranceList([]);
     setFinanceList([]);
     setAuditList([]);
+    setJournalList([]);
+    setOperationNotesList([]);
+    setSurgicalConsentsList([]);
     setPageAuditList([]);
     setExistingMatch(null);
     setExistingFamilyAccount(null);
@@ -1171,6 +1499,26 @@ export default function RecordMigration() {
       </Box>
     );
   }
+
+  const hasValidPatient = Boolean(
+    patientData &&
+    patientData.firstName &&
+    patientData.lastName &&
+    patientData.firstName !== 'Unknown' &&
+    patientData.lastName !== 'Record' &&
+    patientData.firstName.trim().length > 0 &&
+    patientData.lastName.trim().length > 0
+  );
+
+  const hasNonPatientData = Boolean(
+    (journalList && journalList.length > 0) ||
+    (financeList && financeList.length > 0) ||
+    (auditList && auditList.length > 0) ||
+    (insuranceList && insuranceList.length > 0) ||
+    (mortuaryList && mortuaryList.length > 0)
+  );
+
+  const canCommit = hasValidPatient || hasNonPatientData;
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, minHeight: '100vh', bgcolor: '#f8fafc' }}>
@@ -1665,7 +2013,7 @@ export default function RecordMigration() {
                             </Stack>
 
                             {/* Label Editor & Page Controls */}
-                            <Stack direction="row" spacing={1} alignItems="center">
+                            <Stack direction="row" spacing={0.8} alignItems="center">
                               <TextField
                                 fullWidth
                                 size="small"
@@ -1675,10 +2023,25 @@ export default function RecordMigration() {
                                 placeholder="Custom label / notes..."
                                 inputProps={{ style: { fontSize: '0.78rem', color: '#475569' } }}
                               />
-                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleRotatePage(idx); }}>
+                              <Tooltip title={`⚡ Extract Page ${idx + 1} (${page.formType}) only`}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={isExtracting}
+                                    sx={{ color: '#0f766e', bgcolor: '#0f766e15', '&:hover': { bgcolor: '#0f766e30' } }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExtractTargetedPages([idx]);
+                                    }}
+                                  >
+                                    <AutoAwesome fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleRotatePage(idx); }} title="Rotate">
                                 <RotateRight fontSize="small" />
                               </IconButton>
-                              <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDeletePage(idx); }}>
+                              <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDeletePage(idx); }} title="Delete">
                                 <Delete fontSize="small" />
                               </IconButton>
                             </Stack>
@@ -2416,8 +2779,8 @@ export default function RecordMigration() {
                       icon={<AccountBalance />}
                       iconPosition="start"
                       label={
-                        <Badge badgeContent={financeList.length} color="success">
-                          Finance ({financeList.length})
+                        <Badge badgeContent={financeList.length + journalList.length} color="success">
+                          Finance & Ledgers ({financeList.length + journalList.length})
                         </Badge>
                       }
                     />
@@ -2427,6 +2790,15 @@ export default function RecordMigration() {
                       label={
                         <Badge badgeContent={auditList.length} color="warning">
                           Audit ({auditList.length})
+                        </Badge>
+                      }
+                    />
+                    <Tab
+                      icon={<Healing />}
+                      iconPosition="start"
+                      label={
+                        <Badge badgeContent={operationNotesList.length + surgicalConsentsList.length} color="info">
+                          Operating Theatre ({operationNotesList.length + surgicalConsentsList.length})
                         </Badge>
                       }
                     />
@@ -2748,6 +3120,88 @@ export default function RecordMigration() {
                         />
                       </Grid>
                     </Grid>
+
+                    <Divider sx={{ my: 2.5 }} />
+
+                    {/* ── PATIENT STATUS & DECEASED / R.I.P. SECTION ── */}
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: patientData.isDeceased || patientData.status === 'DECEASED' ? '#fef2f2' : '#f8fafc',
+                        borderColor: patientData.isDeceased || patientData.status === 'DECEASED' ? '#fecaca' : '#e2e8f0',
+                        transition: 'all 0.2s ease-in-out'
+                      }}
+                    >
+                      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1} sx={{ mb: 1.5 }}>
+                        <Box>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="subtitle2" fontWeight={800} sx={{ color: patientData.isDeceased || patientData.status === 'DECEASED' ? '#b91c1c' : 'text.primary' }}>
+                              Patient Vital Status & Demise Tracking
+                            </Typography>
+                            {patientData.isDeceased || patientData.status === 'DECEASED' ? (
+                              <Chip label="DECEASED / R.I.P." color="error" size="small" sx={{ fontWeight: 800 }} />
+                            ) : (
+                              <Chip label="LIVING / ACTIVE" color="success" size="small" sx={{ fontWeight: 700 }} />
+                            )}
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            Flagged automatically if R.I.P., Dead, Death, or Mortuary transfers are detected on scanned folder sheets.
+                          </Typography>
+                        </Box>
+
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={Boolean(patientData.isDeceased || patientData.status === 'DECEASED')}
+                              color="error"
+                              onChange={(e) => {
+                                const isDead = e.target.checked;
+                                setPatientData({
+                                  ...patientData,
+                                  isDeceased: isDead,
+                                  status: isDead ? 'DECEASED' : 'ACTIVE',
+                                  deceasedDate: isDead ? (patientData.deceasedDate || new Date().toISOString().split('T')[0]) : undefined
+                                });
+                              }}
+                            />
+                          }
+                          label={<Typography variant="body2" fontWeight={700} sx={{ color: patientData.isDeceased || patientData.status === 'DECEASED' ? '#b91c1c' : 'inherit' }}>Mark as Deceased (R.I.P.)</Typography>}
+                        />
+                      </Stack>
+
+                      {(patientData.isDeceased || patientData.status === 'DECEASED') && (
+                        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #fca5a5' }}>
+                          <Alert severity="error" sx={{ mb: 2, borderRadius: 1.5 }}>
+                            <strong>Deceased Record:</strong> This patient will be flagged with <strong>DECEASED</strong> status in the Master Patient Index (<strong>/patients</strong>) and archived accordingly.
+                          </Alert>
+                          <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                type="date"
+                                label="Date of Demise / Death"
+                                InputLabelProps={{ shrink: true }}
+                                value={patientData.deceasedDate || ''}
+                                onChange={(e) => setPatientData({ ...patientData, deceasedDate: e.target.value })}
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Primary Cause of Death"
+                                value={patientData.causeOfDeath || ''}
+                                onChange={(e) => setPatientData({ ...patientData, causeOfDeath: e.target.value })}
+                                placeholder="e.g. Cardiopulmonary arrest secondary to severe sepsis"
+                              />
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      )}
+                    </Paper>
                   </Box>
                 )}
 
@@ -5622,13 +6076,286 @@ export default function RecordMigration() {
                 {/* ── TAB 17: FINANCE & PAYMENTS ── */}
                 {activeTab === 17 && (
                   <Box>
+                    {/* ── Section 1: General Journal Vouchers & Double-Entry Ledgers ── */}
+                    <Paper variant="outlined" sx={{ p: 2.5, mb: 4, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                        <Box>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountBalance sx={{ color: '#0284c7' }} />
+                            <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                              Double-Entry General Journal Vouchers ({journalList.length})
+                            </Typography>
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            Institutional financial forms, monthly journal vouchers, adjustments, expenses & revenue accounts posted directly to the General Ledger.
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<Add />}
+                          sx={{ bgcolor: '#0284c7', '&:hover': { bgcolor: '#0369a1' }, borderRadius: 2 }}
+                          onClick={() => {
+                            setJournalList(prev => [
+                              {
+                                id: `jv-${Date.now()}`,
+                                voucherNumber: `JV-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, '0')}`,
+                                referenceNumber: `REF-${Date.now().toString().slice(-4)}`,
+                                date: new Date().toISOString().split('T')[0],
+                                description: 'General Journal Adjustment / Expense Posting',
+                                status: 'POSTED',
+                                createdBy: user?.username || 'FinanceClerk',
+                                totalDebit: 0,
+                                totalCredit: 0,
+                                lines: [
+                                  { accountCode: '5010', accountName: 'Medical Supplies Expense', debit: 50000, credit: 0, costCentre: 'Main Store' },
+                                  { accountCode: '1010', accountName: 'Cash and Bank Balances', debit: 0, credit: 50000, costCentre: 'Finance Office' }
+                                ]
+                              },
+                              ...prev
+                            ]);
+                          }}
+                        >
+                          Add Journal Voucher
+                        </Button>
+                      </Stack>
+
+                      {journalList.length === 0 ? (
+                        <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', bgcolor: '#ffffff', borderRadius: 2 }}>
+                          <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                            No General Journal Vouchers extracted.
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Click "Add Journal Voucher" above to manually add double-entry lines or upload scanned journal books.
+                          </Typography>
+                        </Paper>
+                      ) : (
+                        <Stack spacing={2.5}>
+                          {journalList.map((jv, jIdx) => {
+                            const totDebit = (jv.lines || []).reduce((s, l) => s + (Number(l.debit) || 0), 0);
+                            const totCredit = (jv.lines || []).reduce((s, l) => s + (Number(l.credit) || 0), 0);
+                            const isBalanced = Math.abs(totDebit - totCredit) < 0.01 && totDebit > 0;
+
+                            return (
+                              <Paper key={jv.id || jIdx} variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff', borderLeft: `4px solid ${isBalanced ? '#0284c7' : '#ef4444'}` }}>
+                                <Grid container spacing={2} alignItems="center" sx={{ mb: 1.5 }}>
+                                  <Grid item xs={12} sm={3}>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      label="Voucher #"
+                                      value={jv.voucherNumber || ''}
+                                      onChange={(e) => {
+                                        const updated = [...journalList];
+                                        updated[jIdx].voucherNumber = e.target.value;
+                                        setJournalList(updated);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={6} sm={2.5}>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      type="date"
+                                      label="Posting Date"
+                                      value={jv.date || ''}
+                                      onChange={(e) => {
+                                        const updated = [...journalList];
+                                        updated[jIdx].date = e.target.value;
+                                        setJournalList(updated);
+                                      }}
+                                      InputLabelProps={{ shrink: true }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={6} sm={2.5}>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      label="Ref / Document #"
+                                      value={jv.referenceNumber || ''}
+                                      onChange={(e) => {
+                                        const updated = [...journalList];
+                                        updated[jIdx].referenceNumber = e.target.value;
+                                        setJournalList(updated);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3.5}>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      label="Description / Purpose"
+                                      value={jv.description || ''}
+                                      onChange={(e) => {
+                                        const updated = [...journalList];
+                                        updated[jIdx].description = e.target.value;
+                                        setJournalList(updated);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={0.5} sx={{ textAlign: 'right' }}>
+                                    <IconButton color="error" size="small" onClick={() => setJournalList(journalList.filter((_, i) => i !== jIdx))}>
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Grid>
+                                </Grid>
+
+                                {/* Journal Lines Table */}
+                                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, mb: 1.5 }}>
+                                  <Table size="small">
+                                    <TableHead sx={{ bgcolor: '#f1f5f9' }}>
+                                      <TableRow>
+                                        <TableCell sx={{ fontWeight: 700, width: '15%' }}>Account Code</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, width: '30%' }}>Account Name / Ledger</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, width: '20%' }}>Cost Centre</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, width: '15%', textAlign: 'right' }}>Debit (₦)</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, width: '15%', textAlign: 'right' }}>Credit (₦)</TableCell>
+                                        <TableCell sx={{ width: '5%' }}></TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {(jv.lines || []).map((line, lIdx) => (
+                                        <TableRow key={line.id || lIdx}>
+                                          <TableCell>
+                                            <TextField
+                                              fullWidth
+                                              size="small"
+                                              variant="standard"
+                                              value={line.accountCode || ''}
+                                              placeholder="e.g. 1010"
+                                              onChange={(e) => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines[lIdx].accountCode = e.target.value;
+                                                setJournalList(updated);
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <TextField
+                                              fullWidth
+                                              size="small"
+                                              variant="standard"
+                                              value={line.accountName || ''}
+                                              placeholder="Ledger Account Name"
+                                              onChange={(e) => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines[lIdx].accountName = e.target.value;
+                                                setJournalList(updated);
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <TextField
+                                              fullWidth
+                                              size="small"
+                                              variant="standard"
+                                              value={line.costCentre || ''}
+                                              placeholder="Department"
+                                              onChange={(e) => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines[lIdx].costCentre = e.target.value;
+                                                setJournalList(updated);
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <TextField
+                                              fullWidth
+                                              size="small"
+                                              type="number"
+                                              variant="standard"
+                                              inputProps={{ style: { textAlign: 'right' } }}
+                                              value={line.debit || ''}
+                                              onChange={(e) => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines[lIdx].debit = Number(e.target.value) || 0;
+                                                setJournalList(updated);
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <TextField
+                                              fullWidth
+                                              size="small"
+                                              type="number"
+                                              variant="standard"
+                                              inputProps={{ style: { textAlign: 'right' } }}
+                                              value={line.credit || ''}
+                                              onChange={(e) => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines[lIdx].credit = Number(e.target.value) || 0;
+                                                setJournalList(updated);
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <IconButton
+                                              size="small"
+                                              color="error"
+                                              onClick={() => {
+                                                const updated = [...journalList];
+                                                updated[jIdx].lines = updated[jIdx].lines.filter((_, i) => i !== lIdx);
+                                                setJournalList(updated);
+                                              }}
+                                            >
+                                              <Delete fontSize="small" />
+                                            </IconButton>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </TableContainer>
+
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Button
+                                    size="small"
+                                    startIcon={<Add />}
+                                    onClick={() => {
+                                      const updated = [...journalList];
+                                      updated[jIdx].lines.push({
+                                        accountCode: '1010',
+                                        accountName: 'Cash and Bank Balances',
+                                        debit: 0,
+                                        credit: 0,
+                                        costCentre: 'Central Administration'
+                                      });
+                                      setJournalList(updated);
+                                    }}
+                                  >
+                                    Add Entry Line
+                                  </Button>
+
+                                  <Stack direction="row" spacing={3} alignItems="center">
+                                    <Typography variant="body2" fontWeight={700}>
+                                      Total Debits: ₦{totDebit.toLocaleString()}
+                                    </Typography>
+                                    <Typography variant="body2" fontWeight={700}>
+                                      Total Credits: ₦{totCredit.toLocaleString()}
+                                    </Typography>
+                                    <Chip
+                                      size="small"
+                                      label={isBalanced ? 'Balanced Double-Entry' : 'Unbalanced (Debits ≠ Credits)'}
+                                      color={isBalanced ? 'success' : 'error'}
+                                      sx={{ fontWeight: 700 }}
+                                    />
+                                  </Stack>
+                                </Stack>
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      )}
+                    </Paper>
+
+                    {/* ── Section 2: Cashier Invoices & Payment Receipts ── */}
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                       <Box>
                         <Typography variant="subtitle1" fontWeight={800}>
-                          Finance, Payments & Revenue Transactions
+                          Cashier Invoices & Receipts ({financeList.length})
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Hospital receipts, cashier transactions, deposits, revenue tracking, and account reconciliations.
+                          Point-of-sale receipts, cashier payments, consultation billing, pharmacy clearances and service invoices.
                         </Typography>
                       </Box>
                       <Button
@@ -5662,7 +6389,7 @@ export default function RecordMigration() {
                       <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa', borderRadius: 2 }}>
                         <AccountBalance sx={{ fontSize: 48, color: '#94a3b8', mb: 1 }} />
                         <Typography variant="body1" fontWeight={700} color="text.secondary">
-                          No Finance or Payment transactions found.
+                          No Cashier Invoices or Receipts found.
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           Click "Add Financial Record" above or map a folder page to "Finance & Payments".
@@ -5942,8 +6669,626 @@ export default function RecordMigration() {
                   </Box>
                 )}
 
-                {/* ── TAB 19: AI FORM VERIFICATION & AUDIT TRAIL ── */}
+                {/* ── TAB 19: OPERATING THEATRE & SURGICAL OPERATION NOTES ── */}
                 {activeTab === 19 && (
+                  <Box>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={800}>
+                          Operating Theatre / Surgical Operation Notes
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Surgeon, assistants, anaesthesia, pre/post-op diagnoses, operative findings, step-by-step procedures, sutures, drains & post-op recovery orders.
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<Add />}
+                        sx={{ bgcolor: '#0284c7', '&:hover': { bgcolor: '#0369a1' } }}
+                        onClick={() => {
+                          setOperationNotesList(prev => [
+                            {
+                              id: `op-${Date.now()}`,
+                              operationDate: new Date().toISOString().split('T')[0],
+                              operationName: 'Surgical Operation',
+                              preOpDiagnosis: '',
+                              postOpDiagnosis: '',
+                              surgeonName: 'Dr. Consultant Surgeon',
+                              assistantSurgeon: '',
+                              anaesthetistName: '',
+                              scrubNurse: '',
+                              circulatingNurse: '',
+                              anaesthesiaType: 'General Anaesthesia',
+                              findings: '',
+                              procedureDetails: '',
+                              estimatedBloodLossMl: 0,
+                              sutureMaterials: 'Vicryl 2/0, Nylon 2/0',
+                              drainInserted: '',
+                              specimenSentForHistology: false,
+                              specimenDescription: '',
+                              postOpOrders: '1. Monitor vitals 15-minutely for 2 hours\n2. IV Fluids as charted\n3. Analgesics and antibiotics as prescribed\n4. Nil by mouth until bowel sounds return'
+                            },
+                            ...prev
+                          ]);
+                        }}
+                      >
+                        Add Operation Note
+                      </Button>
+                    </Stack>
+
+                    {operationNotesList.length === 0 ? (
+                      <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa', borderRadius: 2 }}>
+                        <Healing sx={{ fontSize: 48, color: '#94a3b8', mb: 1 }} />
+                        <Typography variant="body1" fontWeight={700} color="text.secondary">
+                          No Operation Notes recorded for this patient.
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Map an Operating Theatre / Operation Note sheet or click "Add Operation Note" above.
+                        </Typography>
+                      </Paper>
+                    ) : (
+                      <Stack spacing={2.5}>
+                        {operationNotesList.map((op, idx) => (
+                          <Paper key={op.id || idx} variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, borderLeft: '4px solid #0284c7' }}>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="date"
+                                  label="Operation Date"
+                                  value={op.operationDate || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].operationDate = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  InputLabelProps={{ shrink: true }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={5}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Operation(s) Performed"
+                                  value={op.operationName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].operationName = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Exploratory Laparotomy + Appendectomy"
+                                />
+                              </Grid>
+                              <Grid item xs={10} sm={3.5}>
+                                <FormControl fullWidth size="small">
+                                  <InputLabel>Anaesthesia Type</InputLabel>
+                                  <Select
+                                    label="Anaesthesia Type"
+                                    value={op.anaesthesiaType || 'General Anaesthesia'}
+                                    onChange={(e) => {
+                                      const updated = [...operationNotesList];
+                                      updated[idx].anaesthesiaType = e.target.value;
+                                      setOperationNotesList(updated);
+                                    }}
+                                  >
+                                    <MenuItem value="General Anaesthesia">General Anaesthesia (GA)</MenuItem>
+                                    <MenuItem value="Spinal Anaesthesia">Spinal / Subarachnoid Block</MenuItem>
+                                    <MenuItem value="Epidural Anaesthesia">Epidural Anaesthesia</MenuItem>
+                                    <MenuItem value="Local Infiltration">Local Infiltration / Block</MenuItem>
+                                    <MenuItem value="Sedation / MAC">Monitored Sedation / MAC</MenuItem>
+                                    <MenuItem value="Regional Nerve Block">Regional Nerve Block</MenuItem>
+                                  </Select>
+                                </FormControl>
+                              </Grid>
+                              <Grid item xs={2} sm={0.5}>
+                                <IconButton color="error" onClick={() => setOperationNotesList(operationNotesList.filter((_, i) => i !== idx))}>
+                                  <Delete />
+                                </IconButton>
+                              </Grid>
+
+                              {/* Surgical Team Row */}
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Name of Surgeon"
+                                  value={op.surgeonName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].surgeonName = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Dr. A. B. Okoro"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Assistant Surgeon(s)"
+                                  value={op.assistantSurgeon || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].assistantSurgeon = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Dr. Eze / Dr. Nnamdi"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Anaesthetist"
+                                  value={op.anaesthetistName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].anaesthetistName = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Dr. Uche (Anaesthetist)"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Scrub / Circulating Nurse"
+                                  value={op.scrubNurse || op.circulatingNurse || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].scrubNurse = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Nurse Chidinma"
+                                />
+                              </Grid>
+
+                              {/* Diagnoses Row */}
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Pre-Operative Diagnosis"
+                                  value={op.preOpDiagnosis || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].preOpDiagnosis = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Acute Appendicitis / Obstructed Labour"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Post-Operative Diagnosis"
+                                  value={op.postOpDiagnosis || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].postOpDiagnosis = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Perforated Gangrenous Appendicitis"
+                                />
+                              </Grid>
+
+                              {/* Operative Findings */}
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  multiline
+                                  rows={3}
+                                  size="small"
+                                  label="Operative Findings"
+                                  value={op.findings || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].findings = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="Detailed macroscopic & intra-abdominal findings (e.g. inflamed appendix retrocaecal, 200ml reactive peritoneal exudate, normal ovaries bilaterally)"
+                                />
+                              </Grid>
+
+                              {/* Detailed Step-by-Step Procedure */}
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  multiline
+                                  rows={4}
+                                  size="small"
+                                  label="Step-by-Step Surgical Procedure Narrative"
+                                  value={op.procedureDetails || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].procedureDetails = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="1. Patient in supine position under general/spinal anaesthesia. Cleaned and draped.\n2. Gridiron/Pfannenstiel incision made. Muscles split.\n3. Peritoneum opened. Appendix identified, mesoappendix ligated.\n4. Base transfixed with Vicryl 2/0 and stump buried.\n5. Haemostasis secured. Peritoneal toilet done.\n6. Layered closure with Vicryl 2/0 and skin with Nylon 2/0."
+                                />
+                              </Grid>
+
+                              {/* Intra-Op Materials & Metrics */}
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Estimated Blood Loss (EBL mL)"
+                                  value={op.estimatedBloodLossMl ?? 0}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].estimatedBloodLossMl = Number(e.target.value) || 0;
+                                    setOperationNotesList(updated);
+                                  }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Suture Materials Used"
+                                  value={op.sutureMaterials || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].sutureMaterials = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Vicryl 2/0, Nylon 2/0, Catgut"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Drains / Packs Left in Situ"
+                                  value={op.drainInserted || op.implantsOrPacks || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].drainInserted = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Pelvic corrugated drain / None"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Histology Specimen"
+                                  value={op.specimenDescription || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].specimenDescription = e.target.value;
+                                    updated[idx].specimenSentForHistology = Boolean(e.target.value.trim());
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="e.g. Excised Appendix sent in 10% Formalin"
+                                />
+                              </Grid>
+
+                              {/* Post-Op Orders */}
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  multiline
+                                  rows={3}
+                                  size="small"
+                                  label="Post-Operative Orders & Recovery Instructions"
+                                  value={op.postOpOrders || ''}
+                                  onChange={(e) => {
+                                    const updated = [...operationNotesList];
+                                    updated[idx].postOpOrders = e.target.value;
+                                    setOperationNotesList(updated);
+                                  }}
+                                  placeholder="1. Monitor vitals 15 mins x 2h, then hourly\n2. IV Ceftriaxone 1g BD, IV Flagyl 500mg TDS, Inj Diclo 75mg PRN\n3. Maintain IV Fluids 5% D/S 1L 8 hourly\n4. Wound inspection on Day 3"
+                                />
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    )}
+
+                    <Divider sx={{ my: 4 }} />
+
+                    {/* ── OPERATION / SURGICAL CONSENT SECTION ── */}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <AssignmentTurnedIn sx={{ color: '#0ea5e9' }} /> Surgical Consent & Authorization Forms
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Informed patient / next-of-kin authorization, surgical risks, anaesthesia explanations, and blood transfusion consents.
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<Add />}
+                        sx={{ bgcolor: '#0ea5e9', '&:hover': { bgcolor: '#0284c7' } }}
+                        onClick={() => {
+                          setSurgicalConsentsList(prev => [
+                            {
+                              id: `consent-${Date.now()}`,
+                              consentCode: `CONSENT-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+                              operationName: operationNotesList[0]?.operationName || 'Surgical Procedure',
+                              patientName: patientData ? `${patientData.firstName} ${patientData.lastName}` : 'Patient',
+                              signerName: patientData ? `${patientData.firstName} ${patientData.lastName}` : 'Patient',
+                              relationship: 'SELF',
+                              benefitsExplained: true,
+                              risksExplained: true,
+                              anaesthesiaRisksExplained: true,
+                              bloodTransfusionConsent: true,
+                              surgeonName: operationNotesList[0]?.surgeonName || 'Dr. Consultant Surgeon',
+                              witnessName: 'Theatre Nurse / Staff',
+                              consentDate: new Date().toISOString().split('T')[0],
+                              notes: 'Informed consent explained in patient\'s native language and obtained without duress.'
+                            },
+                            ...prev
+                          ]);
+                        }}
+                      >
+                        Add Operation Consent Form
+                      </Button>
+                    </Stack>
+
+                    {surgicalConsentsList.length === 0 ? (
+                      <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 2 }}>
+                        <AssignmentTurnedIn sx={{ fontSize: 44, color: '#94a3b8', mb: 1 }} />
+                        <Typography variant="body1" fontWeight={700} color="text.secondary">
+                          No Operation Consent Forms recorded.
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Map an "Operation Consent Form" sheet in the filmstrip or click "Add Operation Consent Form" above.
+                        </Typography>
+                      </Paper>
+                    ) : (
+                      <Stack spacing={2.5}>
+                        {surgicalConsentsList.map((cs, cIdx) => (
+                          <Paper key={cs.id || cIdx} variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, borderLeft: '4px solid #0ea5e9' }}>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="date"
+                                  label="Consent Date"
+                                  value={cs.consentDate || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].consentDate = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  InputLabelProps={{ shrink: true }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={5}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Proposed Operation / Procedure"
+                                  value={cs.operationName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].operationName = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="e.g. Exploratory Laparotomy + Appendectomy"
+                                />
+                              </Grid>
+                              <Grid item xs={10} sm={3.5}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Consent Form Reference Code"
+                                  value={cs.consentCode || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].consentCode = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="e.g. CONSENT-2026-948271"
+                                />
+                              </Grid>
+                              <Grid item xs={2} sm={0.5}>
+                                <IconButton color="error" onClick={() => setSurgicalConsentsList(surgicalConsentsList.filter((_, i) => i !== cIdx))}>
+                                  <Delete />
+                                </IconButton>
+                              </Grid>
+
+                              {/* Patient & Signer Row */}
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Patient Name"
+                                  value={cs.patientName || (patientData ? `${patientData.firstName} ${patientData.lastName}` : '')}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].patientName = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="Patient Full Name"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Signer / Consenting Person Name"
+                                  value={cs.signerName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].signerName = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="Signer Full Name"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <FormControl fullWidth size="small">
+                                  <InputLabel>Signer Relationship</InputLabel>
+                                  <Select
+                                    label="Signer Relationship"
+                                    value={cs.relationship || 'SELF'}
+                                    onChange={(e) => {
+                                      const updated = [...surgicalConsentsList];
+                                      updated[cIdx].relationship = e.target.value as any;
+                                      setSurgicalConsentsList(updated);
+                                    }}
+                                  >
+                                    <MenuItem value="SELF">Self (Patient)</MenuItem>
+                                    <MenuItem value="SPOUSE">Spouse / Husband / Wife</MenuItem>
+                                    <MenuItem value="PARENT">Parent / Father / Mother</MenuItem>
+                                    <MenuItem value="CHILD">Child / Son / Daughter</MenuItem>
+                                    <MenuItem value="GUARDIAN">Legal Guardian</MenuItem>
+                                    <MenuItem value="NEXT_OF_KIN">Next of Kin / Relative</MenuItem>
+                                    <MenuItem value="OTHER">Other Representative</MenuItem>
+                                  </Select>
+                                </FormControl>
+                              </Grid>
+
+                              {/* Informed Consent Checks */}
+                              <Grid item xs={12}>
+                                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: '#f0fdf4', borderRadius: 2 }}>
+                                  <Typography variant="caption" fontWeight={700} color="success.dark" sx={{ display: 'block', mb: 1 }}>
+                                    Informed Consent Legal & Clinical Checkpoints:
+                                  </Typography>
+                                  <Grid container spacing={1}>
+                                    <Grid item xs={12} sm={6} md={3}>
+                                      <FormControlLabel
+                                        control={
+                                          <Switch
+                                            color="success"
+                                            size="small"
+                                            checked={cs.benefitsExplained !== false}
+                                            onChange={(e) => {
+                                              const updated = [...surgicalConsentsList];
+                                              updated[cIdx].benefitsExplained = e.target.checked;
+                                              setSurgicalConsentsList(updated);
+                                            }}
+                                          />
+                                        }
+                                        label={<Typography variant="body2" fontWeight={600}>Benefits Explained</Typography>}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} md={3}>
+                                      <FormControlLabel
+                                        control={
+                                          <Switch
+                                            color="success"
+                                            size="small"
+                                            checked={cs.risksExplained !== false}
+                                            onChange={(e) => {
+                                              const updated = [...surgicalConsentsList];
+                                              updated[cIdx].risksExplained = e.target.checked;
+                                              setSurgicalConsentsList(updated);
+                                            }}
+                                          />
+                                        }
+                                        label={<Typography variant="body2" fontWeight={600}>Surgical Risks Explained</Typography>}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} md={3}>
+                                      <FormControlLabel
+                                        control={
+                                          <Switch
+                                            color="success"
+                                            size="small"
+                                            checked={cs.anaesthesiaRisksExplained !== false}
+                                            onChange={(e) => {
+                                              const updated = [...surgicalConsentsList];
+                                              updated[cIdx].anaesthesiaRisksExplained = e.target.checked;
+                                              setSurgicalConsentsList(updated);
+                                            }}
+                                          />
+                                        }
+                                        label={<Typography variant="body2" fontWeight={600}>Anaesthesia Risks Explained</Typography>}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} md={3}>
+                                      <FormControlLabel
+                                        control={
+                                          <Switch
+                                            color="success"
+                                            size="small"
+                                            checked={cs.bloodTransfusionConsent !== false}
+                                            onChange={(e) => {
+                                              const updated = [...surgicalConsentsList];
+                                              updated[cIdx].bloodTransfusionConsent = e.target.checked;
+                                              setSurgicalConsentsList(updated);
+                                            }}
+                                          />
+                                        }
+                                        label={<Typography variant="body2" fontWeight={600}>Blood Transfusion Consent</Typography>}
+                                      />
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              </Grid>
+
+                              {/* Surgeon & Witness Names */}
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Authorized Surgeon Name"
+                                  value={cs.surgeonName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].surgeonName = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="e.g. Dr. A. B. Okoro"
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Witness / Staff Name"
+                                  value={cs.witnessName || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].witnessName = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="e.g. Staff Nurse / Theatre Attendant"
+                                />
+                              </Grid>
+
+                              {/* Consent Notes */}
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  multiline
+                                  rows={2}
+                                  size="small"
+                                  label="Consent Notes & Special Stipulations"
+                                  value={cs.notes || ''}
+                                  onChange={(e) => {
+                                    const updated = [...surgicalConsentsList];
+                                    updated[cIdx].notes = e.target.value;
+                                    setSurgicalConsentsList(updated);
+                                  }}
+                                  placeholder="e.g. Patient consented to conversion to laparotomy if necessary. Procedure explained in Igbo."
+                                />
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
+                )}
+
+                {/* ── TAB 20: AI FORM VERIFICATION & AUDIT TRAIL ── */}
+                {activeTab === 20 && (
                   <Box>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                       <Box>
@@ -6137,7 +7482,7 @@ export default function RecordMigration() {
                   <Button
                     variant="contained"
                     size="large"
-                    disabled={isCommitting || !patientData.lastName || !patientData.firstName}
+                    disabled={isCommitting || !canCommit}
                     onClick={handleCommitMigration}
                     startIcon={isCommitting ? <CircularProgress size={20} color="inherit" /> : <AssignmentTurnedIn />}
                     sx={{
@@ -6150,7 +7495,11 @@ export default function RecordMigration() {
                       boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)'
                     }}
                   >
-                    {isCommitting ? 'Saving Records to Database...' : 'Commit Digitized Records to Database'}
+                    {isCommitting
+                      ? 'Saving Records to Database...'
+                      : hasValidPatient
+                        ? `Commit Patient "${patientData.firstName} ${patientData.lastName}" Records`
+                        : 'Commit Institutional & Financial Records'}
                   </Button>
                 </Stack>
               </CardContent>
@@ -6286,7 +7635,18 @@ export default function RecordMigration() {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Scanned Page Inspection: {pages[selectedPageIndex]?.label}</span>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <span>Scanned Page Inspection: {pages[selectedPageIndex]?.label}</span>
+            {pages[selectedPageIndex] && (
+              <Chip
+                size="small"
+                label={pages[selectedPageIndex].formType}
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 700, fontSize: '0.75rem' }}
+              />
+            )}
+          </Stack>
           <IconButton onClick={() => setPreviewModalOpen(false)}>
             <Close />
           </IconButton>
@@ -6298,26 +7658,67 @@ export default function RecordMigration() {
               alt={pages[selectedPageIndex].label}
               style={{
                 maxWidth: '100%',
-                maxHeight: '70vh',
+                maxHeight: '65vh',
                 objectFit: 'contain',
                 transform: `rotate(${pages[selectedPageIndex].rotation}deg)`
               }}
             />
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Stack direction="row" spacing={1} sx={{ width: '100%', justifyContent: 'space-between' }}>
+        <DialogActions sx={{ p: 2, bgcolor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
             <Button
+              size="small"
               disabled={selectedPageIndex === 0}
               onClick={() => setSelectedPageIndex(prev => Math.max(0, prev - 1))}
             >
               Previous Page
             </Button>
             <Button
+              size="small"
               disabled={selectedPageIndex >= pages.length - 1}
               onClick={() => setSelectedPageIndex(prev => Math.min(pages.length - 1, prev + 1))}
             >
               Next Page
+            </Button>
+            <IconButton size="small" onClick={() => handleRotatePage(selectedPageIndex)} title="Rotate Page 90°">
+              <RotateRight />
+            </IconButton>
+          </Stack>
+
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            {pages[selectedPageIndex] && (
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <Select
+                  value={pages[selectedPageIndex].formType}
+                  onChange={(e) => handleUpdatePageFormType(selectedPageIndex, e.target.value as FormTypeOption)}
+                  sx={{ fontSize: '0.8rem', bgcolor: '#fff', '& .MuiSelect-select': { py: 0.5 } }}
+                >
+                  {ALL_FOLDER_FORMS.map((f) => (
+                    <MenuItem key={f.id} value={f.id}>
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{f.label}</Typography>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <Button
+              variant="contained"
+              disabled={isExtracting}
+              startIcon={isExtracting ? <CircularProgress size={18} color="inherit" /> : <AutoAwesome />}
+              onClick={() => {
+                setPreviewModalOpen(false);
+                handleExtractTargetedPages([selectedPageIndex]);
+              }}
+              sx={{
+                bgcolor: '#0f766e',
+                '&:hover': { bgcolor: '#0d9488' },
+                fontWeight: 700,
+                px: 2.5
+              }}
+            >
+              {isExtracting ? 'Extracting...' : `⚡ Extract This Page (${pages[selectedPageIndex]?.formType || 'AUTO'})`}
             </Button>
           </Stack>
         </DialogActions>
@@ -6333,58 +7734,119 @@ export default function RecordMigration() {
         <DialogTitle sx={{ textAlign: 'center', pt: 3 }}>
           <CheckCircle sx={{ fontSize: 56, color: '#10b981', mb: 1 }} />
           <Typography variant="h5" fontWeight={800}>
-            Full Folder Migration Complete!
+            {migrationResultSummary?.isInstitutionalRecord
+              ? 'Institutional & Financial Migration Complete!'
+              : 'Full Patient Folder Migration Complete!'}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
           {migrationResultSummary && (
             <Box>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                Physical case folder for <strong>{migrationResultSummary.patient?.firstName} {migrationResultSummary.patient?.lastName}</strong> has been saved to the hospital database.
-              </Typography>
+              {migrationResultSummary.isInstitutionalRecord ? (
+                <>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    Non-patient institutional documents, financial journal vouchers, and master catalogs have been saved to the database & accounting ledger.
+                  </Typography>
 
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, textAlign: 'left', mb: 2 }}>
-                <Grid container spacing={1}>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Individual Patient Number:</Typography>
-                    <Typography variant="body2" fontWeight={700}>{migrationResultSummary.patient?.patientNumber}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Family Account (FAN):</Typography>
-                    <Typography variant="body2" fontWeight={700}>
-                      {migrationResultSummary.familyAccount ? `${migrationResultSummary.familyAccount.familyNumber} (${migrationResultSummary.familyAccount.relationship})` : 'Individual'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">SOAP Visits Created:</Typography>
-                    <Typography variant="body2" fontWeight={700}>{migrationResultSummary.encountersCreated}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Vitals Observations:</Typography>
-                    <Typography variant="body2" fontWeight={700}>{migrationResultSummary.vitalsCreated}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Prescriptions & eMAR Logs:</Typography>
-                    <Typography variant="body2" fontWeight={700}>
-                      {migrationResultSummary.prescriptionsCreated || 0} Rx / {migrationResultSummary.emarRecordsCreated || 0} eMAR
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Labs (LOINC Linked):</Typography>
-                    <Typography variant="body2" fontWeight={700} sx={{ color: 'primary.main' }}>
-                      {migrationResultSummary.labsCreated || 0} tests mapped
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Invoices / Fee Sheets:</Typography>
-                    <Typography variant="body2" fontWeight={700}>{migrationResultSummary.invoicesCreated || 0}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Original Pages Archived:</Typography>
-                    <Typography variant="body2" fontWeight={700}>{migrationResultSummary.scannedPagesArchived}</Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, textAlign: 'left', mb: 2 }}>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Double-Entry Journal Vouchers:</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#0284c7' }}>
+                          {migrationResultSummary.journalVouchersCreated || 0} vouchers posted
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Financial Transactions / Receipts:</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#059669' }}>
+                          {(migrationResultSummary.financeCreated || 0) + (migrationResultSummary.invoicesCreated || 0)} records
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">System Audit Trail Entries:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.auditCreated || 0} logs</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">HMO Tariff / Insurance Plans:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.insuranceCreated || 0} plans</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Mortuary Registry Admissions:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.mortuaryCreated || 0} admissions</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Scanned Documents Archived:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.scannedPagesArchived || 0} pages</Typography>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    Physical case folder for <strong>{migrationResultSummary.patient?.firstName} {migrationResultSummary.patient?.lastName}</strong> has been saved to the hospital database.
+                  </Typography>
+
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, textAlign: 'left', mb: 2 }}>
+                    <Grid container spacing={1}>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Individual Patient Number:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.patient?.patientNumber}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Family Account (FAN):</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {migrationResultSummary.familyAccount ? `${migrationResultSummary.familyAccount.familyNumber} (${migrationResultSummary.familyAccount.relationship})` : 'Individual'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">SOAP Visits Created:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.encountersCreated}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Vitals Observations:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.vitalsCreated}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Prescriptions & eMAR Logs:</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {migrationResultSummary.prescriptionsCreated || 0} Rx / {migrationResultSummary.emarRecordsCreated || 0} eMAR
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Labs (LOINC Linked):</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: 'primary.main' }}>
+                          {migrationResultSummary.labsCreated || 0} tests mapped
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Invoices / Fee Sheets:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.invoicesCreated || 0}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">ANC / Maternity Records:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.ancCreated || 0}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Surgical Operation & Consents:</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#0284c7' }}>
+                          {(migrationResultSummary.operationNotesCreated || 0)} ops / {(migrationResultSummary.surgicalConsentsCreated || 0)} consents
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Specialty Clinical Reports:</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {(migrationResultSummary.radiologyCreated || 0) + (migrationResultSummary.pathologyCreated || 0) + (migrationResultSummary.physioCreated || 0) + (migrationResultSummary.dentalCreated || 0) + (migrationResultSummary.eyeClinicCreated || 0)} reports
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Original Pages Archived:</Typography>
+                        <Typography variant="body2" fontWeight={700}>{migrationResultSummary.scannedPagesArchived}</Typography>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                </>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -6395,7 +7857,7 @@ export default function RecordMigration() {
             onClick={handleResetStation}
             sx={{ borderRadius: 2, px: 4, fontWeight: 700 }}
           >
-            Scan Next Patient Folder
+            {migrationResultSummary?.isInstitutionalRecord ? 'Scan / Upload Next Batch' : 'Scan Next Patient Folder'}
           </Button>
         </DialogActions>
       </Dialog>

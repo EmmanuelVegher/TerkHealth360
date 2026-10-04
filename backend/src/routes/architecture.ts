@@ -27,7 +27,7 @@ let integrationLogs: any[] = [
     payloadType: 'FHIR_JSON',
     status: 'SUCCESS',
     latencyMs: 28,
-    details: 'FHIR resources successfully parsed and indexed in PostgreSQL'
+    details: 'FHIR resources successfully parsed and indexed in database'
   },
   {
     id: 'TX-98014',
@@ -81,7 +81,7 @@ let backupHistory: any[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §29.1 - SYSTEM CONFIGURATION & COMPONENT HEALTH STATUS
+// 29.1 - SYSTEM CONFIGURATION & COMPONENT HEALTH STATUS
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/health-monitor', (req: Request, res: Response) => {
@@ -98,7 +98,7 @@ router.get('/health-monitor', (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §29.2 - HL7/FHIR INTEROPERABILITY EXCHANGE LOGS & VALIDATION SIMULATOR
+// 29.2 - HL7/FHIR INTEROPERABILITY EXCHANGE LOGS & VALIDATION SIMULATOR
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/integration/logs', (req: Request, res: Response) => {
@@ -166,7 +166,7 @@ router.post('/integration/validate', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §29.3 - ZERO TRUST SECURITY AUDITING & SIEM RULES
+// 29.3 - ZERO TRUST SECURITY AUDITING & SIEM RULES
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/security/alerts', (req: Request, res: Response) => {
@@ -199,7 +199,7 @@ router.post('/security/resolve-alert', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §29.4 - DEPLOYMENT ARCHITECTURE & DISASTER RECOVERY TIMELINES
+// 29.4 - DEPLOYMENT ARCHITECTURE & DISASTER RECOVERY TIMELINES
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/dr/backups', (req: Request, res: Response) => {

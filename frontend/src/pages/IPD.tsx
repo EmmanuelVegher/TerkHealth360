@@ -17,7 +17,7 @@ import {
   DocumentScanner, Healing, Person, CalendarMonth, InfoOutlined,
   Speed, PrecisionManufacturing, Timer, Shield, LocalHospital, Description,
   VolumeUp, VolumeOff, Tune, FormatListNumbered, FormatListBulleted, CheckBox, FormatBold, ShortText, ExpandMore, People, ContentCut,
-  PersonalVideo, CameraAlt, Sensors, AccessibilityNew,
+  PersonalVideo, CameraAlt, Sensors, AccessibilityNew, HistoryEdu,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
@@ -28,6 +28,7 @@ import { TerminologyAutocomplete } from '../components/TerminologyAutocomplete';
 import { lookupLabTestMetadata, analyzeLabResultWithOpenMed } from '../utils/labDictionary';
 import { PncGynaeServicesView } from '../components/PncGynaeServicesView';
 import { PhysioReferralModal } from '../components/PhysioReferralModal';
+import { EMRHistoryDialog } from '../components/EMRHistoryDialog';
 import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 // Ward Sub-Category Configuration
@@ -510,6 +511,17 @@ const IPD = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [emrSummary, setEmrSummary] = useState<any>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+
+  // ── Longitudinal EMR History Dialog Modal State ─────────────────────────────
+  const [emrHistoryDialogOpen, setEmrHistoryDialogOpen] = useState(false);
+  const [emrHistoryPatientId, setEmrHistoryPatientId] = useState<string | undefined>(undefined);
+  const [emrHistoryPatientData, setEmrHistoryPatientData] = useState<any | undefined>(undefined);
+
+  const handleOpenEmrHistory = (patId: string, patData?: any) => {
+    setEmrHistoryPatientId(patId);
+    setEmrHistoryPatientData(patData);
+    setEmrHistoryDialogOpen(true);
+  };
 
   // ── Condition Update State ─────────────────────────────────────────────────
   const [updatingCondition, setUpdatingCondition] = useState(false);
@@ -3475,6 +3487,31 @@ const IPD = () => {
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                            <Tooltip title="Open Complete Patient EMR & Longitudinal Clinical History">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const patId = adm.patientId || adm.patient?.id;
+                                  if (patId) handleOpenEmrHistory(patId, adm.patient);
+                                }}
+                                startIcon={<HistoryEdu sx={{ fontSize: '14px !important' }} />}
+                                sx={{
+                                  textTransform: 'none',
+                                  borderRadius: 1.5,
+                                  fontWeight: 700,
+                                  fontSize: '0.72rem',
+                                  py: 0.4,
+                                  px: 1,
+                                  borderColor: alpha('#7950f2', 0.4),
+                                  color: '#7950f2',
+                                  '&:hover': { bgcolor: alpha('#7950f2', 0.08), borderColor: '#7950f2' }
+                                }}
+                              >
+                                EMR History
+                              </Button>
+                            </Tooltip>
                             {adm.clinicalCondition === 'DECEASED' ? (
                               <Chip label="DECEASED" color="error" size="small" sx={{ fontWeight: 800, fontSize: '0.7rem' }} />
                             ) : (
@@ -3681,6 +3718,29 @@ const IPD = () => {
             </Box>
 
             <Stack direction="row" spacing={1} alignItems="center">
+              {/* Full EMR History Button */}
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<HistoryEdu fontSize="small" />}
+                onClick={() => {
+                  const patId = selectedAdm?.patientId || selectedAdm?.patient?.id;
+                  if (patId) handleOpenEmrHistory(patId, selectedAdm?.patient);
+                }}
+                sx={{
+                  bgcolor: '#7950f2',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  boxShadow: '0 2px 10px rgba(121,80,242,0.3)',
+                  '&:hover': { bgcolor: '#6741d9' }
+                }}
+              >
+                Full EMR History
+              </Button>
+
               {/* Voice Mic Action Button */}
               <Tooltip title={isListening ? "Stop Voice Transcription" : "Start Voice Consultation Dictation"}>
                 <IconButton
@@ -7202,6 +7262,14 @@ const IPD = () => {
         open={physioReferralOpen}
         onClose={() => setPhysioReferralOpen(false)}
         patient={physioReferralPatient}
+      />
+
+      {/* ── Longitudinal Patient EMR History Workspace Dialog ── */}
+      <EMRHistoryDialog
+        open={emrHistoryDialogOpen}
+        onClose={() => setEmrHistoryDialogOpen(false)}
+        patientId={emrHistoryPatientId}
+        patientData={emrHistoryPatientData}
       />
     </Box>
   );

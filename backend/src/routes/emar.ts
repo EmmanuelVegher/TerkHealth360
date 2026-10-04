@@ -378,4 +378,93 @@ router.post('/infusions', authMiddleware, async (req: any, res, next) => {
   }
 });
 
+// 4. Update an existing eMAR record (edit dose, time, status, notes)
+router.put('/:id', authMiddleware, async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      medicationName,
+      dosage,
+      route,
+      site,
+      status,
+      omittedReason,
+      notes,
+      scheduledTime,
+      administeredTime,
+      administeredById
+    } = z.object({
+      medicationName: z.string().optional(),
+      dosage: z.string().optional(),
+      route: z.string().optional(),
+      site: z.string().optional().nullable(),
+      status: z.enum(['SCHEDULED', 'ADMINISTERED', 'OMITTED', 'DELAYED', 'CANCELLED']).optional(),
+      omittedReason: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+      scheduledTime: z.string().transform(val => new Date(val)).optional(),
+      administeredTime: z.string().transform(val => val ? new Date(val) : null).optional().nullable(),
+      administeredById: z.string().optional().nullable(),
+    }).parse(req.body);
+
+    const existing = await prisma.eMARRecord.findUnique({ where: { id }, include: { patient: true } });
+    if (!existing) {
+      return res.status(404).json({ message: 'eMAR record not found' });
+    }
+
+    const updated = await prisma.eMARRecord.update({
+      where: { id },
+      data: {
+        ...(medicationName !== undefined && { medicationName }),
+        ...(dosage !== undefined && { dosage }),
+        ...(route !== undefined && { route }),
+        ...(site !== undefined && { site }),
+        ...(status !== undefined && { status }),
+        ...(omittedReason !== undefined && { omittedReason }),
+        ...(notes !== undefined && { notes }),
+        ...(scheduledTime !== undefined && { scheduledTime }),
+        ...(administeredTime !== undefined && { administeredTime }),
+        ...(administeredById !== undefined && { administeredById }),
+      },
+      include: { patient: true, administerer: true }
+    });
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'emar.update',
+      resourceType: 'eMARRecord',
+      resourceId: id,
+      changes: { details: `Updated eMAR record ${id} (${updated.medicationName}) for patient ${existing.patient?.firstName} ${existing.patient?.lastName}` }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 5. Delete an erroneous / duplicate eMAR record
+router.delete('/:id', authMiddleware, async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.eMARRecord.findUnique({ where: { id }, include: { patient: true } });
+    if (!existing) {
+      return res.status(404).json({ message: 'eMAR record not found' });
+    }
+
+    await prisma.eMARRecord.delete({ where: { id } });
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'emar.delete',
+      resourceType: 'eMARRecord',
+      resourceId: id,
+      changes: { details: `Deleted eMAR record ${id} (${existing.medicationName}) for patient ${existing.patient?.firstName} ${existing.patient?.lastName}` }
+    });
+
+    res.json({ message: 'eMAR record deleted successfully', id });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

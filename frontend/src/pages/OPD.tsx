@@ -17,7 +17,7 @@ import {
   FormatListBulleted, CheckBox, FormatBold, ShortText, ExpandMore, FilterList,
   People, CheckCircleOutline, HourglassEmpty, ReportProblem, LocalHospitalOutlined, LocalHospital,
   MonitorHeart, Notes, Refresh, Repeat, AccessTime, TrendingUp, Lock, SwapHoriz, Person, PersonSearch,
-  PersonalVideo, CameraAlt, Sensors, AccessibilityNew,
+  PersonalVideo, CameraAlt, Sensors, AccessibilityNew, HistoryEdu,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { api } from '../services/api';
@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import { QuickAppointmentModal } from '../components/QuickAppointmentModal';
 import { TerminologyAutocomplete } from '../components/TerminologyAutocomplete';
 import { PhysioReferralModal } from '../components/PhysioReferralModal';
+import { EMRHistoryDialog } from '../components/EMRHistoryDialog';
 import { startOfflineVoiceSession, OfflineVoiceSession } from '../utils/offlineVoiceDictation';
 
 const AI_PRIMARY = '#1e3a8a';
@@ -277,6 +278,17 @@ const OPD = () => {
   // Physiotherapy Electronic Referral Modal state
   const [physioReferralOpen, setPhysioReferralOpen] = useState(false);
   const [physioReferralPatient, setPhysioReferralPatient] = useState<any | null>(null);
+
+  // Longitudinal EMR History Dialog Modal state
+  const [emrHistoryDialogOpen, setEmrHistoryDialogOpen] = useState(false);
+  const [emrHistoryPatientId, setEmrHistoryPatientId] = useState<string | undefined>(undefined);
+  const [emrHistoryPatientData, setEmrHistoryPatientData] = useState<any | undefined>(undefined);
+
+  const handleOpenEmrHistory = (patId: string, patData?: any) => {
+    setEmrHistoryPatientId(patId);
+    setEmrHistoryPatientData(patData);
+    setEmrHistoryDialogOpen(true);
+  };
 
   // Clinical Death & Mortuary Transfer state
   const [deceasedModalOpen, setDeceasedModalOpen] = useState(false);
@@ -2463,6 +2475,31 @@ const OPD = () => {
                       </Tooltip>
                     ) : (
                       <Stack direction="row" spacing={1} alignItems="center">
+                        <Tooltip title="Open Complete Patient EMR & Longitudinal Clinical History">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const patId = enc.subject?.reference ? enc.subject.reference.replace('Patient/', '') : ((enc as any)?.patient?.id || enc.id);
+                              if (patId) handleOpenEmrHistory(patId, (enc as any)?.patient);
+                            }}
+                            startIcon={<HistoryEdu sx={{ fontSize: '14px !important' }} />}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 800,
+                              borderRadius: 2,
+                              py: 0.35,
+                              px: 1,
+                              fontSize: '0.72rem',
+                              borderColor: alpha('#7950f2', 0.4),
+                              color: '#7950f2',
+                              '&:hover': { bgcolor: alpha('#7950f2', 0.08), borderColor: '#7950f2' }
+                            }}
+                          >
+                            EMR History
+                          </Button>
+                        </Tooltip>
                         {(enc.status?.toLowerCase() === 'deceased' || !!localDeceasedIds[enc.id]) ? (
                           <Chip label="DECEASED" color="error" size="small" sx={{ fontWeight: 800, fontSize: '0.68rem' }} />
                         ) : (
@@ -2561,6 +2598,29 @@ const OPD = () => {
             </Box>
 
             <Stack direction="row" spacing={1} alignItems="center">
+              {/* Full EMR History Button */}
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<HistoryEdu fontSize="small" />}
+                onClick={() => {
+                  const patId = selectedEncounter?.subject?.reference ? selectedEncounter.subject.reference.replace('Patient/', '') : ((selectedEncounter as any)?.patient?.id || selectedEncounter?.id);
+                  if (patId) handleOpenEmrHistory(patId, (selectedEncounter as any)?.patient);
+                }}
+                sx={{
+                  bgcolor: '#7950f2',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  boxShadow: '0 2px 10px rgba(121,80,242,0.3)',
+                  '&:hover': { bgcolor: '#6741d9' }
+                }}
+              >
+                Full EMR History
+              </Button>
+
               {/* Complete Consultation Button */}
               <Button
                 size="small"
@@ -4561,6 +4621,14 @@ const OPD = () => {
         open={physioReferralOpen}
         onClose={() => setPhysioReferralOpen(false)}
         patient={physioReferralPatient}
+      />
+
+      {/* ── Longitudinal Patient EMR History Workspace Dialog ── */}
+      <EMRHistoryDialog
+        open={emrHistoryDialogOpen}
+        onClose={() => setEmrHistoryDialogOpen(false)}
+        patientId={emrHistoryPatientId}
+        patientData={emrHistoryPatientData}
       />
     </Box>
   );
