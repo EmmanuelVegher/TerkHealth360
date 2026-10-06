@@ -51,6 +51,64 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   const rendering = questionOptions?.rendering || 'text';
   const answers = questionOptions?.answers || [];
 
+  // Dynamic datasource resolution for ARV drugs and strengths if answers are empty
+  let effectiveAnswers = [...answers];
+  if (effectiveAnswers.length === 0) {
+    if (questionOptions?.datasource?.name === 'arvDrugs' || id.toLowerCase().includes('drug')) {
+      effectiveAnswers = [
+        { label: 'Tenofovir / Lamivudine / Dolutegravir (TDF/3TC/DTG)', concept: '165681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Tenofovir / Lamivudine / Efavirenz (TDF/3TC/EFV)', concept: '165682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Abacavir / Lamivudine / Dolutegravir (ABC/3TC/DTG)', concept: '165692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Zidovudine / Lamivudine / Nevirapine (AZT/3TC/NVP)', concept: '165686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Abacavir / Lamivudine (ABC/3TC)', concept: '165691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Tenofovir / Lamivudine (TDF/3TC)', concept: '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Zidovudine / Lamivudine (AZT/3TC)', concept: '161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Dolutegravir (DTG 50mg)', concept: '165631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Atazanavir / Ritonavir (ATV/r 300/100mg)', concept: '161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Lopinavir / Ritonavir (LPV/r 200/50mg)', concept: '794AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Darunavir / Ritonavir (DRV/r 600/100mg)', concept: '165633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Raltegravir (RAL 400mg)', concept: '154378AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Cotrimoxazole (CTX 960mg)', concept: '105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Isoniazid (INH 300mg)', concept: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: '3HP (Rifapentine + INH)', concept: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    } else if (questionOptions?.datasource?.name === 'arvStrengths' || id.toLowerCase().includes('strength')) {
+      effectiveAnswers = [
+        { label: '300mg / 300mg / 50mg', concept: '300_300_50mg' },
+        { label: '300mg / 300mg / 600mg', concept: '300_300_600mg' },
+        { label: '300mg / 150mg / 200mg', concept: '300_150_200mg' },
+        { label: '600mg / 300mg / 50mg', concept: '600_300_50mg' },
+        { label: '300mg / 300mg', concept: '300_300mg' },
+        { label: '300mg / 150mg', concept: '300_150mg' },
+        { label: '300mg', concept: '300mg' },
+        { label: '50mg', concept: '50mg' },
+        { label: '10mg', concept: '10mg' },
+        { label: '600mg', concept: '600mg' },
+        { label: '400mg', concept: '400mg' },
+        { label: '200mg', concept: '200mg' },
+        { label: '300mg / 100mg', concept: '300_100mg' },
+        { label: '200mg / 50mg', concept: '200_50mg' },
+        { label: '960mg', concept: '960mg' },
+        { label: '480mg', concept: '480mg' },
+      ];
+    }
+  }
+
+  // Find matching answer for select/radio
+  const matchingAns = effectiveAnswers.find(
+    (a) =>
+      (a.concept && String(a.concept).toLowerCase() === String(value).toLowerCase()) ||
+      (a.value && String(a.value).toLowerCase() === String(value).toLowerCase()) ||
+      (a.label && String(a.label).toLowerCase() === String(value).toLowerCase())
+  );
+  const selectedValue = matchingAns
+    ? String(matchingAns.concept || matchingAns.value || matchingAns.label)
+    : (value !== undefined && value !== null && value !== '' ? String(value) : '');
+
+  if (selectedValue && !effectiveAnswers.some((a) => String(a.concept || a.value || a.label) === selectedValue)) {
+    effectiveAnswers.push({ label: selectedValue, concept: selectedValue });
+  }
+
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     onChange(id, e.target.value);
   };
@@ -106,8 +164,8 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
     return (
       <Box sx={{ my: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
         {renderLabelWithInfo}
-        <RadioGroup row value={value !== undefined && value !== null ? String(value) : ''} onChange={handleRadioChange}>
-          {answers.map((ans) => {
+        <RadioGroup row value={selectedValue} onChange={handleRadioChange}>
+          {effectiveAnswers.map((ans) => {
             const ansVal = ans.concept || ans.value || ans.label;
             return (
               <FormControlLabel
@@ -133,7 +191,7 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
       <Box sx={{ my: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
         {renderLabelWithInfo}
         <FormGroup row>
-          {answers.map((ans) => {
+          {effectiveAnswers.map((ans) => {
             const ansVal = ans.concept || ans.value || ans.label;
             const checked = selectedValues.includes(String(ansVal));
             return (
@@ -175,7 +233,7 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
           <Select
             labelId={`${id}-label`}
             id={id}
-            value={value !== undefined && value !== null ? String(value) : ''}
+            value={selectedValue}
             label={`${label || id} ${isRequired ? '*' : ''}`}
             onChange={handleSelectChange}
             sx={{ bgcolor: '#fff' }}
@@ -183,7 +241,7 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
             <MenuItem value="">
               <em>-- Select an option --</em>
             </MenuItem>
-            {answers.map((ans) => {
+            {effectiveAnswers.map((ans) => {
               const ansVal = ans.concept || ans.value || ans.label;
               return (
                 <MenuItem key={ansVal} value={String(ansVal)} disabled={ans.isDisabled}>
@@ -200,6 +258,20 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
 
   // 4. Date / DateTime
   if (rendering === 'date' || rendering === 'datetime') {
+    const safeDateValue = (() => {
+      if (!value || typeof value === 'boolean' || value === 'true' || value === 'false') return '';
+      try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return '';
+        if (rendering === 'datetime') {
+          return d.toISOString().slice(0, 16);
+        }
+        return d.toISOString().slice(0, 10);
+      } catch {
+        return '';
+      }
+    })();
+
     return (
       <Box sx={{ my: 1 }}>
         <TextField
@@ -207,7 +279,7 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
           size="small"
           type={rendering === 'datetime' ? 'datetime-local' : 'date'}
           label={label || id}
-          value={value || ''}
+          value={safeDateValue}
           onChange={handleTextChange}
           disabled={disabled}
           error={Boolean(error)}
@@ -318,7 +390,7 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
         fullWidth
         size="small"
         label={label || id}
-        value={value || ''}
+        value={value !== undefined && value !== null ? (typeof value === 'object' ? JSON.stringify(value) : String(value)) : ''}
         onChange={handleTextChange}
         disabled={disabled}
         error={Boolean(error)}

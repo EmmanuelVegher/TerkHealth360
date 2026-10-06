@@ -37,6 +37,34 @@ export class CommonExpressionHelpers {
     return collection.includes(value);
   };
 
+  arrayContains = (collection: any, value: any): boolean => {
+    if (!collection) return false;
+    if (Array.isArray(collection)) return collection.includes(value);
+    if (typeof collection === 'string') return collection.includes(value);
+    return false;
+  };
+
+  contains = (collection: any, value: any): boolean => {
+    return this.arrayContains(collection, value);
+  };
+
+  lookupArvStrength = (drug: any): string => {
+    const strengths: Record<string, string> = {
+      'TDF-3TC-DTG': '300/300/50mg',
+      'TDF-3TC-EFV': '300/300/600mg',
+      'AZT-3TC-NVP': '300/150/200mg',
+      'ABC-3TC-DTG': '600/300/50mg',
+      'ABC-3TC-EFV': '600/300/600mg',
+      'TDF': '300mg',
+      '3TC': '300mg',
+      'DTG': '50mg',
+      'EFV': '600mg',
+      'AZT': '300mg',
+      'NVP': '200mg',
+    };
+    return strengths[drug] || 'Standard Adult Dose';
+  };
+
   includesAny = (collection: any[], values: any[]): boolean => {
     if (!collection || !Array.isArray(collection) || !values) return false;
     return values.some(v => collection.includes(v));

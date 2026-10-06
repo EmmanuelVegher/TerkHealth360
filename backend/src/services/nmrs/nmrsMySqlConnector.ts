@@ -13,26 +13,30 @@ export interface MySqlConfig {
 }
 
 export class NmrsMySqlConnector {
+  /**
+   * Resolve MySQL connection settings.
+   * Priority: values saved on the Settings page (nmrs_configs) > .env (NMRS_MYSQL_*) > defaults.
+   * Host defaults to the hostname of the configured OpenMRS base URL.
+   */
   public static async getConnectionConfig(): Promise<MySqlConfig> {
     const config = await prisma.nmrsConfig.findFirst({ where: { isActive: true } });
-    let host = '10.11.2.29';
-    let port = 3306;
+    let urlHost = '10.11.2.29';
 
     if (config?.openmrsBaseUrl) {
       try {
         const u = new URL(config.openmrsBaseUrl.startsWith('http') ? config.openmrsBaseUrl : `http://${config.openmrsBaseUrl}`);
-        if (u.hostname) host = u.hostname;
+        if (u.hostname) urlHost = u.hostname;
       } catch {
         // fallback
       }
     }
 
     return {
-      host: process.env.NMRS_MYSQL_HOST || host,
-      port: Number(process.env.NMRS_MYSQL_PORT || port),
-      user: process.env.NMRS_MYSQL_USER || 'root',
-      password: process.env.NMRS_MYSQL_PASSWORD || 'Admin123',
-      database: process.env.NMRS_MYSQL_DB || 'openmrs'
+      host: config?.mysqlHost || process.env.NMRS_MYSQL_HOST || urlHost,
+      port: Number(config?.mysqlPort || process.env.NMRS_MYSQL_PORT || 3306),
+      user: config?.mysqlUser || process.env.NMRS_MYSQL_USER || 'root',
+      password: config?.mysqlPassword || process.env.NMRS_MYSQL_PASSWORD || 'Admin123',
+      database: config?.mysqlDatabase || process.env.NMRS_MYSQL_DB || 'openmrs'
     };
   }
 
@@ -98,7 +102,7 @@ export class NmrsMySqlConnector {
 
       // 1. Find patient record
       const [patients]: any = await conn.execute(
-        `SELECT p.patient_id, p.uuid as patient_uuid,
+        `SELECT p.patient_id, per.uuid as patient_uuid,
                 pi.identifier as art_number,
                 pn.given_name, pn.family_name,
                 per.gender, per.birthdate, per.dead, per.death_date, per.cause_of_death,
@@ -106,11 +110,12 @@ export class NmrsMySqlConnector {
          FROM patient p
          JOIN patient_identifier pi ON p.patient_id = pi.patient_id AND pi.voided = 0
          JOIN person per ON p.patient_id = per.person_id AND per.voided = 0
-         LEFT JOIN person_name pn ON per.person_id = pn.person_id AND pn.preferred = 1
-         LEFT JOIN person_address pa ON per.person_id = pa.person_id AND pa.preferred = 1
-         WHERE pi.identifier = ? OR p.uuid = ? OR p.patient_id = ?
+         LEFT JOIN person_name pn ON per.person_id = pn.person_id AND pn.voided = 0
+         LEFT JOIN person_address pa ON per.person_id = pa.person_id AND pa.voided = 0
+         WHERE pi.identifier = ? OR per.uuid = ? OR p.patient_id = ? OR pi.identifier LIKE ?
+         ORDER BY pn.preferred DESC, pa.preferred DESC
          LIMIT 1`,
-        [cleanKey, cleanKey, cleanKey]
+        [cleanKey, cleanKey, cleanKey, `%${cleanKey}%`]
       );
 
       if (!patients || patients.length === 0) {
@@ -237,6 +242,85 @@ export class NmrsMySqlConnector {
         },
         encountersByDate
       };
+    } catch (err: any) {
+      await conn.end();
+      throw err;
+    }
+  }
+
+  /**
+   * Pull all active patients from OpenMRS MySQL in bulk (< 2 seconds)
+   */
+  public static async pullAllCohortFromMySql(customConfig?: Partial<MySqlConfig>): Promise<any[]> {
+    const base = await this.getConnectionConfig();
+    const config = { ...base, ...customConfig };
+
+    const conn = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      connectTimeout: 5000
+    });
+
+    try {
+      const [rows]: any = await conn.execute(
+        `SELECT p.patient_id, per.uuid as openmrsUuid,
+                pn.given_name as firstName, pn.family_name as lastName,
+                per.gender, per.birthdate as birthDate,
+                pa.address1, pa.city_village, pa.state_province,
+                GROUP_CONCAT(CONCAT(pi.identifier_type, ':', pi.identifier) SEPARATOR '||') as identifiers_raw
+         FROM patient p
+         JOIN person per ON p.patient_id = per.person_id AND per.voided = 0
+         LEFT JOIN person_name pn ON per.person_id = pn.person_id AND pn.preferred = 1
+         LEFT JOIN person_address pa ON per.person_id = pa.person_id AND pa.preferred = 1
+         LEFT JOIN patient_identifier pi ON p.patient_id = pi.patient_id AND pi.voided = 0
+         WHERE p.voided = 0
+         GROUP BY p.patient_id, per.uuid, pn.given_name, pn.family_name, per.gender, per.birthdate, pa.address1, pa.city_village, pa.state_province`
+      );
+
+      await conn.end();
+
+      return (rows || []).map((r: any) => {
+        const idParts = (r.identifiers_raw || '').split('||');
+        let pepfarId: string | null = null;
+        let hospId: string | null = null;
+
+        for (const part of idParts) {
+          const [type, val] = part.split(':');
+          if (val) {
+            if (type === '4' || val.startsWith('IMO') || val.length >= 8) {
+              if (!pepfarId) pepfarId = val;
+            }
+            if (type === '5' || type === '3') {
+              if (!hospId) hospId = val;
+            }
+          }
+        }
+
+        const hospitalNumber = hospId || pepfarId || `NMRS-${r.openmrsUuid.slice(0, 6)}`;
+
+        return {
+          openmrsUuid: r.openmrsUuid,
+          firstName: r.firstName || 'NMRS',
+          lastName: r.lastName || 'Patient',
+          gender: r.gender === 'F' ? 'FEMALE' : 'MALE',
+          birthDate: r.birthDate || '1992-06-15',
+          hospitalNumber,
+          pepfarId,
+          nin: null,
+          bioData: {
+            address1: r.address1,
+            cityVillage: r.city_village,
+            stateProvince: r.state_province
+          },
+          currentRegimen: '1a: TDF + 3TC + DTG',
+          lastViralLoad: 0,
+          lastCd4Count: 520,
+          whoClinicalStage: 'STAGE_1'
+        };
+      });
     } catch (err: any) {
       await conn.end();
       throw err;

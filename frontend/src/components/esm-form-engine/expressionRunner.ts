@@ -24,10 +24,9 @@ export function evaluateExpression(
   const isMale = sex === 'M' || sex === 'MALE';
   const age = patientContext.age ?? 0;
 
-  // Build sandboxed evaluation scope
+  // Build sandboxed evaluation scope with helpers and patient context
   const scope: Record<string, any> = {
     ...formValues,
-    ...helpers,
     myValue,
     patient: patientContext,
     sex,
@@ -41,6 +40,8 @@ export function evaluateExpression(
     hasValue: helpers.hasValue,
     includes: helpers.includes,
     includesAny: helpers.includesAny,
+    arrayContains: helpers.arrayContains,
+    contains: helpers.contains,
     isDateBefore: helpers.isDateBefore,
     isDateAfter: helpers.isDateAfter,
     calcBMI: helpers.calcBMI,
@@ -48,20 +49,44 @@ export function evaluateExpression(
     calcMonthsOnART: helpers.calcMonthsOnART,
     calcAge: helpers.calcAge,
     formatDate: helpers.formatDate,
+    lookupArvStrength: helpers.lookupArvStrength,
     _: { isEmpty: helpers.isEmpty },
   };
 
-  try {
-    // Sanitize expression tokens if needed
-    let sanitizedExpr = expression.trim();
+  // Add field IDs as known variables so they default to undefined if unentered
+  if (Array.isArray(formFields)) {
+    for (const f of formFields) {
+      if (f && f.id && !(f.id in scope)) {
+        scope[f.id] = undefined;
+      }
+    }
+  }
 
-    // Map common OpenMRS expression patterns
-    const argKeys = Object.keys(scope);
-    const argVals = Object.values(scope);
-    const fn = new Function(...argKeys, `"use strict"; return (${sanitizedExpr});`);
-    return fn(...argVals);
+  try {
+    const sanitizedExpr = expression.trim();
+
+    // Use Proxy sandbox so uninitialized variables resolve to undefined without throwing ReferenceError
+    const proxy = new Proxy(scope, {
+      has(_target, _key) {
+        return true;
+      },
+      get(target, key) {
+        if (typeof key === 'symbol') return (target as any)[key];
+        if (key in target) return (target as any)[key];
+        // Fallback: search case-insensitive or stripped
+        for (const [k, v] of Object.entries(target)) {
+          if (k.toLowerCase() === key.toLowerCase() || k.replace(/[^a-zA-Z0-9_]/g, '') === key) {
+            return v;
+          }
+        }
+        return undefined;
+      }
+    });
+
+    const fn = new Function('sandbox', `with(sandbox) { return (${sanitizedExpr}); }`);
+    return fn(proxy);
   } catch (error) {
-    // Fallback: evaluate basic common conditions
+    // Graceful fallback for basic common patterns
     try {
       if (expression.includes('isEmpty(')) {
         const match = expression.match(/isEmpty\(([^)]+)\)/);
@@ -85,3 +110,4 @@ export function evaluateExpression(
     return null;
   }
 }
+

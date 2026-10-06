@@ -133,7 +133,12 @@ const Settings = () => {
     stateName: 'Benue',
     lgaName: 'Makurdi',
     autoSyncEnabled: true,
-    ndrVersion: '1.6'
+    ndrVersion: '1.6',
+    mysqlHost: '',
+    mysqlPort: 3306,
+    mysqlUser: 'root',
+    mysqlPassword: '',
+    mysqlDatabase: 'openmrs'
   });
   const [nmrsStatus, setNmrsStatus] = useState<{
     tested: boolean;
@@ -143,8 +148,32 @@ const Settings = () => {
     checking?: boolean;
   }>({ tested: false, connected: false });
   const [pullingNmrs, setPullingNmrs] = useState(false);
+  const [nmrsPullProgress, setNmrsPullProgress] = useState<any>(null);
   const [pullingNmrsForms, setPullingNmrsForms] = useState(false);
   const [savingNmrs, setSavingNmrs] = useState(false);
+  const [showOpenmrsPassword, setShowOpenmrsPassword] = useState(false);
+  const [showMysqlPassword, setShowMysqlPassword] = useState(false);
+  const [mysqlStatus, setMysqlStatus] = useState<{ testing?: boolean; connected?: boolean; message?: string; patients?: number } | null>(null);
+
+  const handleTestMySql = async () => {
+    setMysqlStatus({ testing: true });
+    try {
+      const res = await api.post('/nmrs/mysql/test', {
+        mysqlHost: nmrsConfig.mysqlHost,
+        mysqlPort: nmrsConfig.mysqlPort,
+        mysqlUser: nmrsConfig.mysqlUser,
+        mysqlPassword: nmrsConfig.mysqlPassword,
+        mysqlDatabase: nmrsConfig.mysqlDatabase
+      }, { timeout: 20000 });
+      const d = res.data?.data || {};
+      setMysqlStatus({ connected: !!d.connected, message: d.message, patients: d.totalActivePatients });
+      enqueueSnackbar(d.message || (d.connected ? 'MySQL connected' : 'MySQL connection failed'), { variant: d.connected ? 'success' : 'warning', autoHideDuration: 8000 });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message;
+      setMysqlStatus({ connected: false, message: msg });
+      enqueueSnackbar(msg, { variant: 'error' });
+    }
+  };
 
   const fetchNmrsConfig = async () => {
     try {
@@ -216,9 +245,33 @@ const Settings = () => {
 
   const handlePullAllNmrsPatients = async () => {
     setPullingNmrs(true);
+    setNmrsPullProgress(null);
     try {
-      const res = await api.post('/nmrs/pull-all-patients', {}, { timeout: 180000 });
-      enqueueSnackbar(res.data?.message || 'All NMRS patients & forms pulled and synced into TerkHealth360!', { variant: 'success', autoHideDuration: 6000 });
+      await api.post('/nmrs/pull-all-patients', {}, { timeout: 30000 });
+      enqueueSnackbar('Cohort sync started in the background. Progress is shown below the button.', { variant: 'info', autoHideDuration: 4000 });
+
+      // Poll job status every 3 seconds until finished
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3000));
+        let job: any = null;
+        try {
+          const statusRes = await api.get('/nmrs/pull-all-patients/status', { timeout: 15000 });
+          job = statusRes.data?.data;
+        } catch {
+          continue; // transient poll error — keep polling
+        }
+        if (!job) break;
+        setNmrsPullProgress(job);
+        if (job.status === 'COMPLETED') {
+          enqueueSnackbar(job.message || 'All NMRS patients & forms pulled and synced into TerkHealth360!', { variant: 'success', autoHideDuration: 8000 });
+          break;
+        }
+        if (job.status === 'FAILED') {
+          enqueueSnackbar(job.message || 'Cohort sync failed', { variant: 'error', autoHideDuration: 8000 });
+          break;
+        }
+      }
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to pull patients from OpenMRS host';
       enqueueSnackbar(msg, { variant: 'error', autoHideDuration: 8000 });
@@ -229,8 +282,9 @@ const Settings = () => {
 
   const handlePullAllNmrsForms = async () => {
     setPullingNmrsForms(true);
+    enqueueSnackbar('Pulling official national form schemas from OpenMRS host...', { variant: 'info', autoHideDuration: 4000 });
     try {
-      const res = await api.post('/nmrs/forms/pull-all', {}, { timeout: 120000 });
+      const res = await api.post('/nmrs/forms/pull-all', {}, { timeout: 600000 });
       enqueueSnackbar(res.data?.message || 'All official form schemas pulled from OpenMRS into TerkHealth360!', { variant: 'success', autoHideDuration: 6000 });
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to pull form schemas from OpenMRS host';
@@ -956,10 +1010,23 @@ const Settings = () => {
                         <TextField
                           fullWidth
                           size="small"
-                          type="password"
+                          type={showOpenmrsPassword ? 'text' : 'password'}
                           label="OpenMRS Password"
                           value={nmrsConfig.openmrsPassword}
                           onChange={e => setNmrsConfig({ ...nmrsConfig, openmrsPassword: e.target.value })}
+                          InputProps={{
+                            endAdornment: (
+                              <IconButton
+                                size="small"
+                                edge="end"
+                                onClick={() => setShowOpenmrsPassword(s => !s)}
+                                sx={{ color: 'text.secondary' }}
+                                aria-label={showOpenmrsPassword ? 'Hide OpenMRS password' : 'Show OpenMRS password'}
+                              >
+                                {showOpenmrsPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            )
+                          }}
                         />
                       </Grid>
                     </Grid>
@@ -1015,6 +1082,75 @@ const Settings = () => {
                   </Stack>
                 </Grid>
 
+                {/* Direct MySQL Database (NMRS) */}
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={0.5}>
+                    Direct MySQL Database (NMRS)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    Used to pull patients, visits &amp; encounters straight from the NMRS MySQL server. Change these to point at a different database, then click Save Gateway Configuration.
+                  </Typography>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={4} md={3}>
+                      <TextField fullWidth size="small" id="nmrs-mysql-host" label="MySQL Host / IP" placeholder="10.11.2.29"
+                        value={nmrsConfig.mysqlHost || ''}
+                        onChange={e => setNmrsConfig({ ...nmrsConfig, mysqlHost: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={6} sm={2} md={1.5}>
+                      <TextField fullWidth size="small" id="nmrs-mysql-port" label="Port" type="number"
+                        value={nmrsConfig.mysqlPort ?? ''}
+                        onChange={e => setNmrsConfig({ ...nmrsConfig, mysqlPort: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={6} sm={3} md={2}>
+                      <TextField fullWidth size="small" id="nmrs-mysql-db" label="Database"
+                        value={nmrsConfig.mysqlDatabase || ''}
+                        onChange={e => setNmrsConfig({ ...nmrsConfig, mysqlDatabase: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={6} sm={3} md={2}>
+                      <TextField fullWidth size="small" id="nmrs-mysql-user" label="MySQL User"
+                        value={nmrsConfig.mysqlUser || ''}
+                        onChange={e => setNmrsConfig({ ...nmrsConfig, mysqlUser: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        id="nmrs-mysql-password"
+                        label="MySQL Password"
+                        type={showMysqlPassword ? 'text' : 'password'}
+                        value={nmrsConfig.mysqlPassword || ''}
+                        onChange={e => setNmrsConfig({ ...nmrsConfig, mysqlPassword: e.target.value })}
+                        InputProps={{
+                          endAdornment: (
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              onClick={() => setShowMysqlPassword(s => !s)}
+                              sx={{ color: 'text.secondary' }}
+                              aria-label={showMysqlPassword ? 'Hide MySQL password' : 'Show MySQL password'}
+                            >
+                              {showMysqlPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                            </IconButton>
+                          )
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4} md={1.5}>
+                      <Button fullWidth variant="outlined" id="nmrs-mysql-test" onClick={handleTestMySql} disabled={mysqlStatus?.testing}
+                        startIcon={mysqlStatus?.testing ? <CircularProgress size={14} /> : undefined}
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                        Test MySQL
+                      </Button>
+                    </Grid>
+                  </Grid>
+                  {mysqlStatus && !mysqlStatus.testing && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 600, color: mysqlStatus.connected ? '#059669' : '#dc2626' }}>
+                      {mysqlStatus.connected
+                        ? `✓ Connected — ${Number(mysqlStatus.patients || 0).toLocaleString()} active patients found`
+                        : `✗ ${mysqlStatus.message}`}
+                    </Typography>
+                  )}
+                </Grid>
                 {/* Actions & Bulk Pull Patients */}
                 <Grid item xs={12}>
                   <Divider sx={{ my: 1 }} />
@@ -1081,6 +1217,26 @@ const Settings = () => {
                       </Button>
                     </Box>
                   </Box>
+                  {nmrsPullProgress && (
+                    <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: 'rgba(2, 132, 199, 0.05)', border: '1px solid rgba(2, 132, 199, 0.2)' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#0369a1' }}>
+                          {nmrsPullProgress.phase} ({nmrsPullProgress.status})
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {nmrsPullProgress.processed?.toLocaleString() || 0} / {nmrsPullProgress.total?.toLocaleString() || '…'}
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant={nmrsPullProgress.total > 0 ? 'determinate' : 'indeterminate'}
+                        value={nmrsPullProgress.total > 0 ? Math.min(100, (nmrsPullProgress.processed / nmrsPullProgress.total) * 100) : 0}
+                        sx={{ height: 8, borderRadius: 4 }}
+                      />
+                      <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                        New: {nmrsPullProgress.imported || 0} · Updated: {nmrsPullProgress.updated || 0} · Failed: {nmrsPullProgress.failed || 0}
+                      </Typography>
+                    </Box>
+                  )}
                 </Grid>
               </Grid>
             </CardContent>
