@@ -168,12 +168,14 @@ const SystemHealthPanel = () => {
               }}
             />
             <Tooltip title="Refresh">
-              <IconButton size="small" onClick={fetchAll} disabled={loading}>
-                {loading
-                  ? <CircularProgress size={14} />
-                  : <Refresh sx={{ fontSize: 16 }} />
-                }
-              </IconButton>
+              <span>
+                <IconButton size="small" onClick={fetchAll} disabled={loading}>
+                  {loading
+                    ? <CircularProgress size={14} />
+                    : <Refresh sx={{ fontSize: 16 }} />
+                  }
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         </Box>

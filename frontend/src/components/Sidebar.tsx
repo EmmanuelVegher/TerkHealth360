@@ -16,7 +16,7 @@ import {
   Warehouse, LocalShipping, RequestQuote, Payment, CreditCard, Analytics,
   SettingsInputComponent, LocalGasStation, BarChart, AccessTime, LocalAtm, PlusOne, AutoGraph, NotificationsActive, TrendingUp, BabyChangingStation, CalendarMonth, DateRange, Description, PersonalVideo, Speed,
   Healing, AutoAwesome, MonitorHeart, Person, CallMade, Close, RateReview, Hotel, Sensors, AccountTree,
-  Gavel, WorkHistory, RemoveRedEye, Palette,
+  Gavel, WorkHistory, RemoveRedEye, Palette, CloudSync, SyncAlt, CloudDownload,
 } from '@mui/icons-material';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';

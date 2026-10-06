@@ -7,16 +7,17 @@ import {
   Container, Typography, Paper, Grid, Button, Dialog, DialogTitle,
   DialogContent, DialogActions, Box, Avatar, Stack, Chip, Divider,
   Table, TableBody, TableCell, TableHead, TableRow, Tab, Tabs, List, ListItem, ListItemText,
-  Select, MenuItem, FormControl, InputLabel, Checkbox, FormControlLabel, TextField, Alert, CircularProgress,
-  Accordion, AccordionSummary, AccordionDetails, IconButton, Tooltip
+  Select, MenuItem, FormControl, InputLabel, FormHelperText, Checkbox, FormControlLabel, TextField, Alert, CircularProgress,
+  Accordion, AccordionSummary, AccordionDetails, IconButton, Tooltip, Radio, RadioGroup, FormLabel
 } from '@mui/material';
-import { Delete, Print, QrCode2, ArrowBack, FamilyRestroom, History, Shield, Info, Portrait, Link as LinkIcon, SwapHoriz, ExpandMore, CalendarToday } from '@mui/icons-material';
+import { Delete, Print, QrCode2, ArrowBack, FamilyRestroom, History, Shield, Info, Portrait, Link as LinkIcon, SwapHoriz, ExpandMore, CalendarToday, Sync, Description, Edit, Save, Close } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { EncounterPrintTemplate } from '../components/EncounterPrintTemplate';
 import { LabReportPrintTemplate } from '../components/LabReportPrintTemplate';
 import { PrescriptionPrintTemplate } from '../components/PrescriptionPrintTemplate';
 import { RegistrationPrintTemplate } from '../components/RegistrationPrintTemplate';
 import { useAuth } from '../contexts/AuthContext';
+import { EsmFormEngine } from '../components/esm-form-engine';
 
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,7 @@ const PatientDetail = () => {
   
   const [patient, setPatient] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncingNmrs, setSyncingNmrs] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [openLinkFamily, setOpenLinkFamily] = useState(false);
@@ -38,6 +40,489 @@ const PatientDetail = () => {
   const [openStatusChange, setOpenStatusChange] = useState(false);
   const [newStatus, setNewStatus] = useState('ACTIVE');
   const [deleteBlockedMsg, setDeleteBlockedMsg] = useState('');
+
+  // NMRS Form JSON Schema editing states & validations
+  const [editingEncounter, setEditingEncounter] = useState<any | null>(null);
+  const [editingFormData, setEditingFormData] = useState<Record<string, any>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [savingEncounter, setSavingEncounter] = useState<boolean>(false);
+  const [formActiveTab, setFormActiveTab] = useState<number>(0);
+  const [nmrsSchemas, setNmrsSchemas] = useState<any[]>([]);
+
+  const normalizeKey = (str: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const ALIAS_MAP: Record<string, string[]> = {
+    visitdate: ['visitdate', 'encounterdatetime', 'date', 'ordereddate', 'dateorderd', 'encounterdate'],
+    dateorderd: ['dateorderd', 'ordereddate', 'dateordered', 'visitdate'],
+    ordereddate: ['ordereddate', 'dateorderd', 'dateordered', 'visitdate'],
+    treatmenttype: ['treatmenttype', 'purposeofprescription', 'treatment_type'],
+    purposeofprescription: ['purposeofprescription', 'treatmenttype', 'treatment_type'],
+    visittype: ['visittype', 'visittypepharm', 'visit_type_pharm'],
+    visittypepharm: ['visittype', 'visittypepharm', 'visit_type_pharm'],
+    pregnant: ['pregnant', 'pregnancystatus', 'pregnancybreastfeedingstatus', 'pregnancy_status'],
+    pregnancystatus: ['pregnant', 'pregnancystatus', 'pregnancybreastfeedingstatus', 'pregnancy_status'],
+    pregnancybreastfeedingstatus: ['pregnant', 'pregnancystatus', 'pregnancybreastfeedingstatus', 'pregnancy_status'],
+    refill: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
+    pickupreason: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
+    pickupreasonpharm: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
+    dsdmodel: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
+    dsdstatus: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
+    dispensingmodality: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
+    calculatednextappointmentdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
+    returnvisitdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
+    nextappointmentdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
+    treatmentagegroup: ['treatmentagegroup', 'treatment_age_group'],
+    regimenline: ['regimenline', 'currentregimenline', 'regimen_line'],
+    currentregimenline: ['regimenline', 'currentregimenline', 'regimen_line'],
+    adult1stline: ['adult1stlinearvregimen', 'adult1stlineregimens', 'adult_1st_line_regimens', 'arvregimen', 'adult1stlineregimenschooseifadultagegroup'],
+    adult1stlineregimens: ['adult1stlinearvregimen', 'adult1stlineregimens', 'adult_1st_line_regimens', 'arvregimen', 'adult1stlineregimenschooseifadultagegroup'],
+    adult1stlinearvregimen: ['adult1stlinearvregimen', 'adult1stlineregimens', 'adult_1st_line_regimens', 'arvregimen', 'adult1stlineregimenschooseifadultagegroup'],
+    adult1stlineregimenschooseifadultagegroup: ['adult1stlinearvregimen', 'adult1stlineregimens', 'adult_1st_line_regimens', 'arvregimen', 'adult1stlineregimenschooseifadultagegroup'],
+    multimonthdispensingmmd: ['multimonthdispensingmmd', 'mmd'],
+    mmd: ['multimonthdispensingmmd', 'mmd'],
+    adherencecounselingoffering: ['adherencecounselingoffering', 'adherencecounseling', 'adherence'],
+    weight: ['weight', 'latestweight', 'patientweightatinitiationkg'],
+    latestweight: ['weight', 'latestweight', 'patientweightatinitiationkg'],
+    height: ['height', 'latestheight', 'patientheightatinitiationcm'],
+    latestheight: ['height', 'latestheight', 'patientheightatinitiationcm'],
+    whostage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage'],
+    whohivclinicalstage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage'],
+    tbscreeningstatus: ['tbscreeningstatus', 'tuberculosisdiseasestatus'],
+    tuberculosisdiseasestatus: ['tbscreeningstatus', 'tuberculosisdiseasestatus']
+  };
+
+  const STANDARD_NMRS_DROPDOWNS: Record<string, string[]> = {
+    treatmenttype: ['Antiretroviral Therapy', 'Non-ART', 'Occupational PEP', 'Non-Occupational PEP', 'HIV-Exposed Infant', 'PrEP'],
+    purposeofprescription: ['Antiretroviral Therapy', 'Non-ART', 'Occupational PEP', 'Non-Occupational PEP', 'HIV-Exposed Infant', 'PrEP'],
+    treatment_type: ['Antiretroviral Therapy', 'Non-ART', 'Occupational PEP', 'Non-Occupational PEP', 'HIV-Exposed Infant', 'PrEP'],
+    visittype: ['Initial Visit', 'Return Visit Type'],
+    visittypepharm: ['Initial Visit', 'Return Visit Type'],
+    visit_type_pharm: ['Initial Visit', 'Return Visit Type'],
+    pregnant: ['Pregnant', 'Not Pregnant', 'Breastfeeding', 'Post-partum'],
+    pregnancystatus: ['Pregnant', 'Not Pregnant', 'Breastfeeding', 'Post-partum'],
+    pregnancy_status: ['Pregnant', 'Not Pregnant', 'Breastfeeding', 'Post-partum'],
+    refill: ['Refill', 'New Prescription', 'Drug Substitution', 'Drug Switch'],
+    pickupreason: ['Refill', 'New Prescription', 'Drug Substitution', 'Drug Switch'],
+    pick_up_reason_pharm: ['Refill', 'New Prescription', 'Drug Substitution', 'Drug Switch'],
+    dsdmodel: ['Non-devolved', 'Facility-based', 'Community ART Group (CAG)', 'Home Delivery', 'Fast Track', 'CPAP'],
+    dsdstatus: ['Non-devolved', 'Facility-based', 'Community ART Group (CAG)', 'Home Delivery', 'Fast Track', 'CPAP'],
+    dispensingmodality: ['Non-devolved', 'Facility-based', 'Community ART Group (CAG)', 'Home Delivery', 'Fast Track', 'CPAP'],
+    dispensing_modality: ['Non-devolved', 'Facility-based', 'Community ART Group (CAG)', 'Home Delivery', 'Fast Track', 'CPAP'],
+    treatmentagegroup: ['Adult', 'Child'],
+    treatment_age_group: ['Adult', 'Child'],
+    regimenline: ['Adult 1st Line ARV Regimen', 'Adult 2nd Line ARV Regimen', 'Child 1st Line ARV Regimen', 'Child 2nd Line ARV Regimen', 'Third Line (Salvage)'],
+    regimen_line: ['Adult 1st Line ARV Regimen', 'Adult 2nd Line ARV Regimen', 'Child 1st Line ARV Regimen', 'Child 2nd Line ARV Regimen', 'Third Line (Salvage)'],
+    adult1stlineregimens: [
+      '1a: TDF + 3TC + DTG (Tenofovir + Lamivudine + Dolutegravir)',
+      '1b: TDF + 3TC + EFV400 (Tenofovir + Lamivudine + Efavirenz 400mg)',
+      '1c: AZT + 3TC + DTG (Zidovudine + Lamivudine + Dolutegravir)',
+      '1d: ABC + 3TC + DTG (Abacavir + Lamivudine + Dolutegravir)',
+      '1e: TDF + 3TC + EFV600',
+      '1f: TDF + FTC + DTG',
+      '1g: ABC + 3TC + EFV'
+    ],
+    adult_1st_line_regimens: [
+      '1a: TDF + 3TC + DTG (Tenofovir + Lamivudine + Dolutegravir)',
+      '1b: TDF + 3TC + EFV400 (Tenofovir + Lamivudine + Efavirenz 400mg)',
+      '1c: AZT + 3TC + DTG (Zidovudine + Lamivudine + Dolutegravir)',
+      '1d: ABC + 3TC + DTG (Abacavir + Lamivudine + Dolutegravir)',
+      '1e: TDF + 3TC + EFV600',
+      '1f: TDF + FTC + DTG',
+      '1g: ABC + 3TC + EFV'
+    ],
+    adult2ndlineregimens: [
+      '2a: AZT + 3TC + ATV/r (Zidovudine + Lamivudine + Atazanavir/r)',
+      '2b: AZT + 3TC + LPV/r (Zidovudine + Lamivudine + Lopinavir/r)',
+      '2c: TDF + 3TC + ATV/r (Tenofovir + Lamivudine + Atazanavir/r)',
+      '2d: TDF + 3TC + LPV/r (Tenofovir + Lamivudine + Lopinavir/r)',
+      '2e: TDF + 3TC + DRV/r (Tenofovir + Lamivudine + Darunavir/r)',
+      '2f: ABC + 3TC + LPV/r (Abacavir + Lamivudine + Lopinavir/r)',
+      '2g: ABC + 3TC + ATV/r (Abacavir + Lamivudine + Atazanavir/r)'
+    ],
+    child1stlineregimens: [
+      '4a: ABC + 3TC + DTG (10mg/50mg/5mg)',
+      '4b: ABC + 3TC + LPV/r',
+      '4c: AZT + 3TC + LPV/r',
+      '4d: AZT + 3TC + DTG',
+      '4e: TDF + 3TC + DTG'
+    ],
+    child2ndlineregimens: [
+      '5a: AZT + 3TC + ATV/r',
+      '5b: ABC + 3TC + ATV/r',
+      '5c: TDF + 3TC + LPV/r'
+    ],
+    whostage: ['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4'],
+    whohivclinicalstage: ['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4'],
+    tbscreeningstatus: ['No Signs', 'TB Suspect', 'On TB Treatment', 'Confirmed TB Not On Treatment'],
+    functionalstatus: ['Working', 'Ambulatory', 'Bedridden'],
+    adherence: ['Good (>95%)', 'Fair (85-94%)', 'Poor (<85%)'],
+    maritalstatus: ['Single', 'Married', 'Divorced', 'Widowed', 'Separated'],
+    educationallevel: ['None', 'Primary', 'Secondary', 'Tertiary'],
+    employmentstatus: ['Employed', 'Unemployed', 'Student', 'Retired', 'Self-Employed']
+  };
+
+  const checkQuestionVisibility = (q: any, formData: Record<string, any>, patientRecord: any): boolean => {
+    // 1. Explicit dependsOn
+    if (q.dependsOn) {
+      const deps = Array.isArray(q.dependsOn) ? q.dependsOn : [q.dependsOn];
+      for (const dep of deps) {
+        const fieldKey = dep.fieldId || dep.field || dep.id;
+        const parentVal = formData[fieldKey] ?? formData[normalizeKey(fieldKey)] ?? '';
+        
+        if (dep.equals !== undefined) {
+          if (String(parentVal).trim().toLowerCase() !== String(dep.equals).trim().toLowerCase()) return false;
+        }
+        if (dep.value !== undefined) {
+          if (String(parentVal).trim().toLowerCase() !== String(dep.value).trim().toLowerCase()) return false;
+        }
+        if (dep.notEquals !== undefined) {
+          if (String(parentVal).trim().toLowerCase() === String(dep.notEquals).trim().toLowerCase()) return false;
+        }
+        if (dep.in && Array.isArray(dep.in)) {
+          const inMatch = dep.in.some((item: any) => String(item).trim().toLowerCase() === String(parentVal).trim().toLowerCase());
+          if (!inMatch) return false;
+        }
+      }
+    }
+
+    // 2. Explicit hide / hideWhenExpression
+    if (q.hide) {
+      if (q.hide.field) {
+        const parentVal = formData[q.hide.field] ?? formData[normalizeKey(q.hide.field)] ?? '';
+        if (String(parentVal).trim().toLowerCase() === String(q.hide.value).trim().toLowerCase()) return false;
+      }
+      if (q.hide.hideWhenExpression && typeof q.hide.hideWhenExpression === 'string') {
+        const expr = q.hide.hideWhenExpression.toLowerCase();
+        if (expr.includes('sex') && expr.includes('female')) {
+          const sexVal = String(formData['Sex'] || formData['sex'] || patientRecord?.gender || '').toLowerCase();
+          if (sexVal.startsWith('m')) return false; // hide for male
+        }
+      }
+    }
+
+    // 3. Explicit display / showWhenExpression
+    if (q.display && q.display.showWhenExpression && typeof q.display.showWhenExpression === 'string') {
+      const expr = q.display.showWhenExpression.toLowerCase();
+      if (expr.includes('tb') && expr.includes('treatment')) {
+        const tbVal = String(formData['TB Screening Result'] || formData['tbStatus'] || formData['TB Screening Status'] || '').toLowerCase();
+        if (!tbVal.includes('treatment') && !tbVal.includes('confirmed') && !tbVal.includes('on tb')) return false;
+      }
+    }
+
+    // 4. National Clinical Contextual Rules
+    const qNormId = normalizeKey(q.id);
+    const qNormLabel = normalizeKey(q.label);
+
+    // Female-only fields
+    const isFemaleOnlyField = ['pregnant', 'pregnancystatus', 'pregnancy_status', 'ancnumber', 'anc_number', 'edd', 'lmp', 'breastfeeding', 'breastfeedingstatus', 'gravida', 'parity'].some(k => qNormId === k || qNormLabel === k);
+    if (isFemaleOnlyField) {
+      const clientGender = String(formData['Sex'] || formData['sex'] || formData['gender'] || patientRecord?.gender || '').toUpperCase();
+      if (clientGender === 'M' || clientGender === 'MALE' || clientGender === '1530') {
+        return false;
+      }
+    }
+
+    // TB treatment details (only if on TB treatment or presumptive)
+    const isTbTreatmentField = ['tbtreatmentstartdate', 'tbregimen', 'tbtreatmentregimen', 'tbfacility', 'tbdotscentre', 'tbtreatmentfacility'].some(k => qNormId === k || qNormLabel === k);
+    if (isTbTreatmentField) {
+      const tbStatusVal = String(formData['TB Screening Result'] || formData['tbStatus'] || formData['TB Screening Status'] || formData['tbscreeningresult'] || '').toLowerCase();
+      if (!tbStatusVal.includes('treatment') && !tbStatusVal.includes('confirmed') && !tbStatusVal.includes('presumptive') && !tbStatusVal.includes('suspect')) {
+        return false;
+      }
+    }
+
+    // Regimen change reason (only if drug switch / substitution)
+    const isRegimenChangeField = ['reasonforregimenchange', 'reasonforchangeorsubstitution', 'regimenchangesubstitutionreason'].some(k => qNormId === k || qNormLabel === k);
+    if (isRegimenChangeField) {
+      const pickupReason = String(formData['Pickup / Refill Reason'] || formData['pickupReason'] || formData['refillReason'] || formData['Reason for Drug Refill'] || '').toLowerCase();
+      if (!pickupReason.includes('switch') && !pickupReason.includes('substitut') && !pickupReason.includes('change')) {
+        return false;
+      }
+    }
+
+    // Transfer-out details
+    const isTransferOutField = ['transferoutfacility', 'transferredtofacility', 'transferoutdate', 'dateoftransferout'].some(k => qNormId === k || qNormLabel === k);
+    if (isTransferOutField) {
+      const statusVal = String(formData['Patient Status'] || formData['careOutcome'] || formData['exitReason'] || patientRecord?.status || '').toLowerCase();
+      if (!statusVal.includes('transfer')) return false;
+    }
+
+    // Deceased details
+    const isDeceasedField = ['dateofdeath', 'causeofdeath', 'deathdate'].some(k => qNormId === k || qNormLabel === k);
+    if (isDeceasedField) {
+      const statusVal = String(formData['Patient Status'] || formData['careOutcome'] || formData['exitReason'] || patientRecord?.status || '').toLowerCase();
+      if (!statusVal.includes('dead') && !statusVal.includes('deceas')) return false;
+    }
+
+    return true;
+  };
+
+  const getDynamicAnswers = (q: any, formData: Record<string, any>): Array<{ label: string; value: string | number; concept?: string | number }> => {
+    const qNormId = normalizeKey(q.id);
+    const qNormLabel = normalizeKey(q.label);
+
+    // 1. Regimen cascading by Regimen Line
+    const isRegimenField = [
+      'prescribedregimen', 'dispensedregimen', 'firstlineregimen', 'arvregimen', 
+      'adult1stlineregimens', 'adult2ndlineregimens', 'child1stlineregimens', 'child2ndlineregimens',
+      'regimendrugsprescribed', 'prescribedarvregimen', 'dispensedarvregimen'
+    ].some(k => qNormId.includes(k) || qNormLabel.includes(k));
+
+    if (isRegimenField) {
+      const selectedLine = String(
+        formData['Regimen Line'] || formData['regimenLine'] || formData['regimen_line'] || 
+        formData['Treatment Age Group'] || formData['treatmentAgeGroup'] || formData['arvRegimenLine'] || ''
+      ).toLowerCase();
+
+      if (selectedLine.includes('2nd') || selectedLine.includes('second')) {
+        if (selectedLine.includes('child') || selectedLine.includes('pediatric')) {
+          return [
+            { label: '5a: AZT + 3TC + ATV/r', value: 'AZT-3TC-ATV/r' },
+            { label: '5b: ABC + 3TC + ATV/r', value: 'ABC-3TC-ATV/r' },
+            { label: '5c: TDF + 3TC + LPV/r', value: 'TDF-3TC-LPV/r' },
+            { label: '5d: ABC + 3TC + LPV/r', value: 'ABC-3TC-LPV/r' }
+          ];
+        }
+        return [
+          { label: '2a: AZT + 3TC + ATV/r (Zidovudine + Lamivudine + Atazanavir/r)', value: 'AZT-3TC-ATV/r' },
+          { label: '2b: AZT + 3TC + LPV/r (Zidovudine + Lamivudine + Lopinavir/r)', value: 'AZT-3TC-LPV/r' },
+          { label: '2c: TDF + 3TC + ATV/r (Tenofovir + Lamivudine + Atazanavir/r)', value: 'TDF-3TC-ATV/r' },
+          { label: '2d: TDF + 3TC + LPV/r (Tenofovir + Lamivudine + Lopinavir/r)', value: 'TDF-3TC-LPV/r' },
+          { label: '2e: TDF + 3TC + DRV/r (Tenofovir + Lamivudine + Darunavir/r)', value: 'TDF-3TC-DRV/r' },
+          { label: '2f: ABC + 3TC + LPV/r (Abacavir + Lamivudine + Lopinavir/r)', value: 'ABC-3TC-LPV/r' },
+          { label: '2g: ABC + 3TC + ATV/r (Abacavir + Lamivudine + Atazanavir/r)', value: 'ABC-3TC-ATV/r' }
+        ];
+      }
+
+      if (selectedLine.includes('3rd') || selectedLine.includes('third') || selectedLine.includes('salvage')) {
+        return [
+          { label: '3a: DRV/r + DTG + 2 NRTIs (Darunavir/r + Dolutegravir + NRTIs)', value: 'DRV/r-DTG-2NRTIs' },
+          { label: '3b: RAL + DRV/r + 2 NRTIs (Raltegravir + Darunavir/r + NRTIs)', value: 'RAL-DRV/r-2NRTIs' },
+          { label: '3c: ETV + DRV/r + DTG (Etravirine + Darunavir/r + Dolutegravir)', value: 'ETV-DRV/r-DTG' }
+        ];
+      }
+
+      if (selectedLine.includes('pep')) {
+        return [
+          { label: 'PEP 1: TDF + 3TC + DTG (Single Fixed Dose x 28 days)', value: 'TDF-3TC-DTG-PEP' },
+          { label: 'PEP 2: TDF + FTC + DTG', value: 'TDF-FTC-DTG-PEP' },
+          { label: 'PEP 3: AZT + 3TC + DTG', value: 'AZT-3TC-DTG-PEP' }
+        ];
+      }
+
+      if (selectedLine.includes('prep')) {
+        return [
+          { label: 'PrEP 1: Oral TDF/FTC (Truvada) 1 tab daily', value: 'TDF-FTC-PrEP' },
+          { label: 'PrEP 2: Oral TDF/3TC 1 tab daily', value: 'TDF-3TC-PrEP' },
+          { label: 'PrEP 3: Long-Acting Cabotegravir (CAB-LA)', value: 'CAB-LA' }
+        ];
+      }
+
+      if (selectedLine.includes('child') || selectedLine.includes('pediatric')) {
+        return [
+          { label: '4a: ABC + 3TC + DTG (10mg/50mg/5mg)', value: 'ABC-3TC-DTG' },
+          { label: '4b: ABC + 3TC + LPV/r', value: 'ABC-3TC-LPV/r' },
+          { label: '4c: AZT + 3TC + LPV/r', value: 'AZT-3TC-LPV/r' },
+          { label: '4d: AZT + 3TC + DTG', value: 'AZT-3TC-DTG' },
+          { label: '4e: TDF + 3TC + DTG', value: 'TDF-3TC-DTG' }
+        ];
+      }
+
+      // Default: Adult 1st Line
+      return [
+        { label: '1a: TDF + 3TC + DTG (Tenofovir + Lamivudine + Dolutegravir)', value: 'TDF-3TC-DTG' },
+        { label: '1b: TDF + 3TC + EFV400 (Tenofovir + Lamivudine + Efavirenz 400mg)', value: 'TDF-3TC-EFV400' },
+        { label: '1c: AZT + 3TC + DTG (Zidovudine + Lamivudine + Dolutegravir)', value: 'AZT-3TC-DTG' },
+        { label: '1d: ABC + 3TC + DTG (Abacavir + Lamivudine + Dolutegravir)', value: 'ABC-3TC-DTG' },
+        { label: '1e: TDF + 3TC + EFV600 (Tenofovir + Lamivudine + Efavirenz 600mg)', value: 'TDF-3TC-EFV600' },
+        { label: '1f: TDF + FTC + DTG (Tenofovir + Emtricitabine + Dolutegravir)', value: 'TDF-FTC-DTG' },
+        { label: '1g: ABC + 3TC + EFV (Abacavir + Lamivudine + Efavirenz)', value: 'ABC-3TC-EFV' }
+      ];
+    }
+
+    // 2. Schema Answers or Dropdown Dictionary
+    const schemaAnswers = q.questionOptions?.answers || q.options;
+    if (schemaAnswers && schemaAnswers.length > 0) {
+      return schemaAnswers.map((a: any) => ({
+        label: a.label || a.value || String(a),
+        value: a.value || a.label || String(a),
+        concept: a.concept || a.conceptId
+      }));
+    }
+
+    const standardAnswers = STANDARD_NMRS_DROPDOWNS[qNormId] || STANDARD_NMRS_DROPDOWNS[qNormLabel];
+    if (standardAnswers && standardAnswers.length > 0) {
+      return standardAnswers.map((s: string) => ({ label: s, value: s }));
+    }
+
+    return [];
+  };
+
+  const getStatusColor = (status: string): "success" | "warning" | "error" | "default" | "info" | "secondary" => {
+    switch (status) {
+      case 'ACTIVE': return 'success';
+      case 'INACTIVE': return 'warning';
+      case 'DECEASED':
+      case 'DEAD': return 'error';
+      case 'TRANSFERRED_OUT': return 'secondary';
+      case 'LTFU': return 'warning';
+      case 'STOPPED_TREATMENT': return 'error';
+      case 'ARCHIVED': return 'default';
+      default: return 'info';
+    }
+  };
+
+  const resolveInitialValue = (q: any, rawData: Record<string, any>, encounter: any): any => {
+    if (rawData[q.label] !== undefined && rawData[q.label] !== '') return rawData[q.label];
+    if (rawData[q.id] !== undefined && rawData[q.id] !== '') return rawData[q.id];
+
+    const qNormId = normalizeKey(q.id);
+    const qNormLabel = normalizeKey(q.label);
+
+    for (const [k, v] of Object.entries(rawData)) {
+      const kNorm = normalizeKey(k);
+      if ((kNorm === qNormId || kNorm === qNormLabel) && v !== undefined && v !== '') {
+        return v;
+      }
+    }
+
+    const aliases = [...(ALIAS_MAP[qNormId] || []), ...(ALIAS_MAP[qNormLabel] || [])];
+    for (const alias of aliases) {
+      for (const [k, v] of Object.entries(rawData)) {
+        if (normalizeKey(k) === alias && v !== undefined && v !== '') {
+          return v;
+        }
+      }
+    }
+
+    if (qNormId.includes('visitdate') || qNormLabel.includes('visitdate')) {
+      return encounter?.encounterDate ? new Date(encounter.encounterDate).toISOString().slice(0, 10) : '';
+    }
+    if (qNormId.includes('dispensedby') || qNormId.includes('orderby') || qNormLabel.includes('dispensedby') || qNormLabel.includes('orderby')) {
+      return encounter?.clinicianName || 'Chioma (Clinical Provider)';
+    }
+
+    if (q.defaultValue !== undefined) return q.defaultValue;
+    return '';
+  };
+
+  const validateField = (q: any, value: any): string | null => {
+    const isRequired = q.required === true;
+    const strVal = value !== undefined && value !== null ? String(value).trim() : '';
+
+    if (isRequired && !strVal) {
+      return `${q.label || 'This field'} is required`;
+    }
+
+    if (!strVal) return null;
+
+    const isDate = q.type === 'date' || q.type === 'encounterDatetime' || q.questionOptions?.rendering === 'date';
+    if (isDate) {
+      const valDate = new Date(strVal);
+      if (isNaN(valDate.getTime())) {
+        return 'Please enter a valid date';
+      }
+      const allowFuture = q.validators?.find((v: any) => v.allowFutureDates !== undefined)?.allowFutureDates;
+      if (allowFuture === 'false' || allowFuture === false) {
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        if (valDate > today) {
+          return 'Future dates are not permitted for this field';
+        }
+      }
+    }
+
+    const isNumber = q.type === 'number' || q.questionOptions?.rendering === 'number';
+    if (isNumber) {
+      const num = Number(strVal);
+      if (isNaN(num)) {
+        return 'Must be a valid number';
+      }
+      const validator = q.validators?.find((v: any) => v.min !== undefined || v.max !== undefined);
+      const minVal = validator?.min ?? q.min;
+      const maxVal = validator?.max ?? q.max;
+      if (minVal !== undefined && num < minVal) {
+        return `Minimum allowed value is ${minVal}`;
+      }
+      if (maxVal !== undefined && num > maxVal) {
+        return `Maximum allowed value is ${maxVal}`;
+      }
+    }
+
+    return null;
+  };
+
+  const handleOpenFormDialog = (encounterRecord: any) => {
+    setEditingEncounter(encounterRecord);
+    setFormErrors({});
+    setFormActiveTab(0);
+
+    const rawData = encounterRecord.formData ? { ...encounterRecord.formData } : {};
+    const schema = encounterRecord.formSchema?.schemaJson;
+    const pages = schema?.pages && schema.pages.length > 0
+      ? schema.pages
+      : (schema?.sections && schema.sections.length > 0 ? [{ label: schema.formName || 'Form', sections: schema.sections }] : []);
+    const sections = pages.flatMap((p: any) => p.sections || []);
+    const questions = sections.flatMap((s: any) => s.questions || []);
+
+    const initialMappedData: Record<string, any> = { ...rawData };
+
+    for (const q of questions) {
+      const resolved = resolveInitialValue(q, rawData, encounterRecord);
+      if (resolved !== undefined && resolved !== '') {
+        initialMappedData[q.id] = resolved;
+        initialMappedData[q.label] = resolved;
+      }
+    }
+
+    setEditingFormData(initialMappedData);
+  };
+
+  const handleSaveEncounterForm = async () => {
+    if (!editingEncounter) return;
+
+    const schema = editingEncounter.formSchema?.schemaJson;
+    const pages = schema?.pages && schema.pages.length > 0
+      ? schema.pages
+      : (schema?.sections && schema.sections.length > 0 ? [{ label: schema.formName || 'Form', sections: schema.sections }] : []);
+    const sections = pages.flatMap((p: any) => p.sections || []);
+    const questions = sections.flatMap((s: any) => s.questions || []);
+
+    const newErrors: Record<string, string> = {};
+
+    for (const q of questions) {
+      if (!checkQuestionVisibility(q, editingFormData, patient)) {
+        continue;
+      }
+
+      const currentVal = editingFormData[q.label] ?? editingFormData[q.id];
+      const err = validateField(q, currentVal);
+      if (err) {
+        newErrors[q.id] = err;
+        newErrors[q.label] = err;
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      alertMsg('Please complete all required fields and correct the highlighted errors before saving.', { variant: 'error' });
+      return;
+    }
+
+    setSavingEncounter(true);
+    try {
+      const res = await api.put(`/nmrs/encounters/${editingEncounter.id}`, {
+        formData: editingFormData
+      });
+      alertMsg(res.data?.message || 'Encounter form updated successfully', { variant: 'success' });
+      setEditingEncounter(null);
+      fetchPatientDetails();
+    } catch (err: any) {
+      alertMsg(err.response?.data?.message || 'Failed to update encounter form', { variant: 'error' });
+    } finally {
+      setSavingEncounter(false);
+    }
+  };
 
   // Coverage check states
   const [selectedPolicyCatalog, setSelectedPolicyCatalog] = useState<any[]>([]);
@@ -139,8 +624,33 @@ const PatientDetail = () => {
     }
   };
 
+  const handleSyncNmrsRecord = async () => {
+    setSyncingNmrs(true);
+    try {
+      const res = await api.post(`/nmrs/patients/${id}/sync-full`);
+      alertMsg(res.data?.message || 'OpenMRS record, bio data & encounters synchronized', { variant: 'success' });
+      fetchPatientDetails();
+    } catch (err: any) {
+      alertMsg(err.response?.data?.message || 'Failed to sync OpenMRS record', { variant: 'error' });
+    } finally {
+      setSyncingNmrs(false);
+    }
+  };
+
+  const fetchNmrsSchemas = async () => {
+    try {
+      const res = await api.get('/nmrs/schemas');
+      if (res.data?.schemas || res.data?.data) {
+        setNmrsSchemas(res.data.schemas || res.data.data);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     fetchPatientDetails();
+    fetchNmrsSchemas();
   }, [id]);
 
   const handleDeleteConfirm = async () => {
@@ -179,7 +689,7 @@ const PatientDetail = () => {
   const fullName = `${patient.firstName} ${patient.middleName || ''} ${patient.lastName}`;
   const phone = patient.telecoms?.find((t: any) => t.system === 'phone')?.value || 'N/A';
   const email = patient.telecoms?.find((t: any) => t.system === 'email')?.value || 'N/A';
-  const addressStr = patient.addresses?.[0]?.line || 'N/A';
+  const addressStr = patient.addresses?.[0] ? [patient.addresses[0].line, patient.addresses[0].city, patient.addresses[0].state].filter(Boolean).join(', ') : 'N/A';
 
   const labOrders = patient.labOrders || [];
   const prescriptions = patient.pharmacyPrescriptions || [];
@@ -233,6 +743,15 @@ const PatientDetail = () => {
           Back to Master Patient Index
         </Button>
         <Stack direction="row" spacing={2}>
+          <Button
+            startIcon={syncingNmrs ? <CircularProgress size={16} color="inherit" /> : <Sync />}
+            variant="outlined"
+            color="secondary"
+            disabled={syncingNmrs}
+            onClick={handleSyncNmrsRecord}
+          >
+            {syncingNmrs ? 'Syncing...' : 'Sync OpenMRS Record'}
+          </Button>
           <Button startIcon={<CalendarToday />} variant="contained" color="primary" onClick={() => navigate('/appointments', { state: { preselectedPatient: patient } })}>
             Book Next Appointment
           </Button>
@@ -252,15 +771,61 @@ const PatientDetail = () => {
               </Avatar>
               <Box>
                 <Typography variant="h5" fontWeight={800}>{fullName}</Typography>
-                <Stack direction="row" spacing={1} mt={0.5} alignItems="center">
-                  <Chip label={`MRN: ${patient.patientNumber}`} size="small" variant="outlined" />
-                  <Chip label={patient.status} size="small" color={patient.status === 'ACTIVE' ? 'success' : 'default'} />
+                <Stack direction="row" spacing={1} mt={0.5} alignItems="center" flexWrap="wrap">
+                  {(patient.nmrsMapping?.pepfarId || (patient.patientNumber?.startsWith('IMO') ? patient.patientNumber : null)) ? (
+                    <Chip
+                      label={`ART: ${patient.nmrsMapping?.pepfarId || patient.patientNumber}`}
+                      size="small"
+                      color="secondary"
+                      sx={{ fontWeight: 800 }}
+                    />
+                  ) : (
+                    <Chip label={`MRN: ${patient.patientNumber}`} size="small" variant="outlined" />
+                  )}
+                  {(patient.identification || patient.nmrsMapping?.hospitalNumber) && (
+                    <Chip
+                      label={`Hospital ID: ${patient.identification || patient.nmrsMapping?.hospitalNumber}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontWeight: 700, borderColor: '#1976d2', color: '#1976d2' }}
+                    />
+                  )}
+                  <Chip
+                    label={patient.status?.replace('_', ' ')}
+                    size="small"
+                    color={getStatusColor(patient.status)}
+                    sx={{ fontWeight: 800 }}
+                  />
                   {patient.bloodGroup && (
                     <Chip label={`Blood: ${patient.bloodGroup.replace('_POSITIVE', '+').replace('_NEGATIVE', '-')}`} size="small" color="primary" />
                   )}
                 </Stack>
               </Box>
             </Box>
+
+            {(patient.status === 'DECEASED' || patient.status === 'DEAD') && (
+              <Alert severity="error" sx={{ mb: 3, fontWeight: 700, borderRadius: 2 }}>
+                💀 PATIENT DECEASED / DEAD — Clinical history and encounters are preserved as locked legal medical records. Active consultations, patient portal logins, and new orders are disabled.
+              </Alert>
+            )}
+
+            {patient.status === 'TRANSFERRED_OUT' && (
+              <Alert severity="warning" sx={{ mb: 3, fontWeight: 700, borderRadius: 2, bgcolor: '#fdf4ff', color: '#86198f', borderColor: '#f0abfc' }}>
+                📤 PATIENT TRANSFERRED OUT — Patient has been officially transferred to another clinical facility.
+              </Alert>
+            )}
+
+            {patient.status === 'LTFU' && (
+              <Alert severity="warning" sx={{ mb: 3, fontWeight: 700, borderRadius: 2 }}>
+                ⚠️ PATIENT LOST TO FOLLOW-UP (LTFU) — Tracking & retention protocol is active for appointment/refill default.
+              </Alert>
+            )}
+
+            {patient.status === 'STOPPED_TREATMENT' && (
+              <Alert severity="info" sx={{ mb: 3, fontWeight: 700, borderRadius: 2 }}>
+                🛑 PATIENT STOPPED TREATMENT — Antiretroviral therapy has been stopped/discontinued.
+              </Alert>
+            )}
 
             <Tabs value={tabIndex} onChange={(e, val) => setTabIndex(val)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
               <Tab icon={<Info fontSize="small" />} iconPosition="start" label="General Info" />
@@ -468,10 +1033,45 @@ const PatientDetail = () => {
                                         )}
                                       </Grid>
                                       <Grid item xs={12} md={6}>
-                                        <Typography variant="caption" color="text.secondary" display="block">Clinical Notes / Diagnosis</Typography>
-                                        <Typography variant="body2" fontWeight={500} sx={{ whiteSpace: 'pre-wrap', maxHeight: 150, overflowY: 'auto' }}>
-                                          {enc.diagnosis ? JSON.stringify(enc.diagnosis, null, 2) : enc.reasonText || 'No clinical notes recorded.'}
-                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block">Clinical Observations & Concept Mappings</Typography>
+                                        {enc.diagnosis && typeof enc.diagnosis === 'object' && Object.keys(enc.diagnosis).length > 0 ? (
+                                          <Paper variant="outlined" sx={{ mt: 1, maxHeight: 220, overflowY: 'auto', borderRadius: 1.5 }}>
+                                            <Table size="small">
+                                              <TableHead>
+                                                <TableRow sx={{ bgcolor: '#f4f6f8' }}>
+                                                  <TableCell sx={{ fontWeight: 700, py: 0.6, fontSize: '0.75rem' }}>Concept / Parameter</TableCell>
+                                                  <TableCell sx={{ fontWeight: 700, py: 0.6, fontSize: '0.75rem' }}>Observation Value</TableCell>
+                                                </TableRow>
+                                              </TableHead>
+                                              <TableBody>
+                                                {Object.entries(enc.diagnosis).map(([conceptName, val]: [string, any]) => (
+                                                  <TableRow key={conceptName} hover>
+                                                    <TableCell sx={{ py: 0.5, fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
+                                                      {conceptName}
+                                                    </TableCell>
+                                                    <TableCell sx={{ py: 0.5, fontSize: '0.8rem', fontWeight: 700 }}>
+                                                      <Chip
+                                                        label={typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={
+                                                          conceptName.includes('Viral Load') && (String(val).includes('Target Not Detected') || String(val) === '0') ? 'success' :
+                                                          conceptName.includes('Regimen') ? 'primary' :
+                                                          conceptName.includes('CD4') ? 'info' : 'default'
+                                                        }
+                                                        sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600 }}
+                                                      />
+                                                    </TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </Paper>
+                                        ) : (
+                                          <Typography variant="body2" fontWeight={500} sx={{ whiteSpace: 'pre-wrap', maxHeight: 150, overflowY: 'auto' }}>
+                                            {enc.diagnosis ? JSON.stringify(enc.diagnosis, null, 2) : enc.reasonText || 'No clinical notes recorded.'}
+                                          </Typography>
+                                        )}
                                       </Grid>
                                       <Grid item xs={12} display="flex" justifyContent="flex-end" mt={1}>
                                         <Button 
@@ -541,6 +1141,53 @@ const PatientDetail = () => {
                           )}
                         </AccordionDetails>
                       </Accordion>
+                    ))}
+                  </Box>
+                )}
+
+                {patient.nmrsEncounters?.length > 0 && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={700} color="primary" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Description fontSize="small" /> Official National Form Records (OpenMRS / NMRS)
+                    </Typography>
+                    {patient.nmrsEncounters.map((ne: any) => (
+                      <Paper key={ne.id} variant="outlined" sx={{ p: 2, mb: 1.5, borderRadius: 2, bgcolor: '#fbfcfd' }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              {ne.formSchema?.formName || ne.encounterType}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Encounter No: {ne.encounterNumber} | Date: {new Date(ne.encounterDate).toLocaleDateString()} | Clinician: {ne.clinicianName || 'Unassigned'}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Chip label={ne.syncStatus} size="small" color={ne.syncStatus === 'SYNCED' ? 'success' : 'info'} />
+                            <Tooltip title={`Open & Edit ${ne.formSchema?.formName || ne.encounterType}`}>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleOpenFormDialog(ne)}
+                                sx={{ bgcolor: '#e0f2fe', '&:hover': { bgcolor: '#bae6fd' } }}
+                              >
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </Box>
+                        {ne.formData && typeof ne.formData === 'object' && (
+                          <Box sx={{ mt: 1 }}>
+                            <Grid container spacing={1}>
+                              {Object.entries(ne.formData).slice(0, 6).map(([k, v]: [string, any]) => (
+                                <Grid item xs={12} sm={6} md={4} key={k}>
+                                  <Typography variant="caption" color="text.secondary" display="block">{k}</Typography>
+                                  <Typography variant="body2" fontWeight={600} noWrap>{String(v)}</Typography>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Box>
+                        )}
+                      </Paper>
                     ))}
                   </Box>
                 )}
@@ -850,16 +1497,33 @@ const PatientDetail = () => {
                 onChange={(e) => setNewStatus(e.target.value)}
                 label="New Status *"
               >
-                <MenuItem value="ACTIVE">✅ ACTIVE</MenuItem>
+                <MenuItem value="ACTIVE">✅ ACTIVE IN CARE</MenuItem>
+                <MenuItem value="DECEASED">💀 DECEASED / DEAD</MenuItem>
+                <MenuItem value="TRANSFERRED_OUT">📤 TRANSFERRED OUT</MenuItem>
+                <MenuItem value="LTFU">⚠️ LOST TO FOLLOW-UP (LTFU)</MenuItem>
+                <MenuItem value="STOPPED_TREATMENT">🛑 STOPPED TREATMENT</MenuItem>
                 <MenuItem value="INACTIVE">🔴 INACTIVE</MenuItem>
-                <MenuItem value="DECEASED">💀 DECEASED</MenuItem>
                 <MenuItem value="ARCHIVED">📁 ARCHIVED</MenuItem>
               </Select>
             </FormControl>
             {newStatus === 'DECEASED' && (
               <Box sx={{ p: 1.5, bgcolor: 'error.light', borderRadius: 1.5 }}>
                 <Typography variant="caption" color="error.dark" fontWeight={700}>
-                  ⚠ Setting status to DECEASED will deactivate the patient's portal access.
+                  ⚠ Setting status to DECEASED will mark the patient as dead and deactivate active clinical orders and portal access.
+                </Typography>
+              </Box>
+            )}
+            {newStatus === 'TRANSFERRED_OUT' && (
+              <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1.5 }}>
+                <Typography variant="caption" color="warning.dark" fontWeight={700}>
+                  ℹ Setting status to TRANSFERRED OUT indicates the patient has moved to another facility.
+                </Typography>
+              </Box>
+            )}
+            {newStatus === 'LTFU' && (
+              <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1.5 }}>
+                <Typography variant="caption" color="warning.dark" fontWeight={700}>
+                  ℹ Patient will be flagged for community tracking and retention follow-up.
                 </Typography>
               </Box>
             )}
@@ -982,6 +1646,102 @@ const PatientDetail = () => {
         </DialogActions>
       </Dialog>
       </Box>
+
+      {/* ── Official OpenMRS ESM JSON Schema Form Engine Modal Dialog ── */}
+      <Dialog
+        open={Boolean(editingEncounter)}
+        onClose={() => setEditingEncounter(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden', p: 0 } }}
+      >
+        {editingEncounter && (
+          <EsmFormEngine
+            schema={(() => {
+              let rawSchema = editingEncounter.formSchema?.schemaJson;
+              
+              // If rawSchema is incomplete (missing pages or only has 1 basic metadata section), look up rich schema in nmrsSchemas
+              const isBasicStub = !rawSchema || !rawSchema.pages || rawSchema.pages.length === 0 || 
+                (rawSchema.pages.length === 1 && rawSchema.pages[0].sections?.length <= 2 && rawSchema.pages[0].sections?.every((s: any) => (s.questions?.length || 0) <= 7 && s.id === 'encounter_header'));
+              
+              if (isBasicStub && nmrsSchemas.length > 0) {
+                const targetName = (editingEncounter.formSchema?.formName || editingEncounter.encounterType || '').toLowerCase().trim();
+                const matched = nmrsSchemas.find((s: any) => {
+                  const sName = (s.formName || '').toLowerCase().trim();
+                  return sName === targetName || sName.includes(targetName) || targetName.includes(sName) ||
+                    (targetName.includes('intake') && (s.formCode === 'CLIENT_INTAKE_FORM' || s.formCode === 'HTS_REGISTER')) ||
+                    (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM')) ||
+                    (targetName.includes('pharmacy') && s.formCode === 'PHARMACY_ORDER') ||
+                    (targetName.includes('lab') && s.formCode === 'INTEGRATED_LAB_ORDER') ||
+                    (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
+                    (targetName.includes('adult') && s.formCode === 'CARE_CARD_4B');
+                });
+                if (matched?.schemaJson) {
+                  rawSchema = matched.schemaJson;
+                }
+              }
+
+              if (rawSchema?.pages && rawSchema.pages.length > 0) {
+                return rawSchema;
+              }
+              if (rawSchema?.sections && rawSchema.sections.length > 0) {
+                return {
+                  name: rawSchema.name || rawSchema.formName || editingEncounter.encounterType || 'Encounter Form',
+                  encounterType: rawSchema.encounterType || editingEncounter.encounterType,
+                  pages: [
+                    {
+                      label: rawSchema.name || rawSchema.formName || 'Clinical Encounter Details',
+                      sections: rawSchema.sections,
+                    }
+                  ],
+                  processor: rawSchema.processor || 'EncounterFormProcessor',
+                  uuid: rawSchema.uuid || editingEncounter.formSchemaId,
+                };
+              }
+              return {
+                name: editingEncounter.formSchema?.formName || editingEncounter.encounterType || 'Encounter Form',
+                encounterType: editingEncounter.encounterType,
+                pages: [],
+              };
+            })()}
+            patientContext={{
+              id: patient?.id,
+              uuid: patient?.id,
+              patientNumber: patient?.patientNumber,
+              name: `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim(),
+              firstName: patient?.firstName,
+              lastName: patient?.lastName,
+              gender: patient?.gender,
+              sex: patient?.gender,
+              age: patient?.age,
+              birthDate: patient?.birthDate,
+              phone: patient?.phone,
+              address: patient?.address,
+              artNumber: patient?.artNumber,
+              hospitalNumber: patient?.hospitalNumber,
+            }}
+            initialValues={editingFormData}
+            mode="edit"
+            isSubmitting={savingEncounter}
+            onCancel={() => setEditingEncounter(null)}
+            onSubmit={async (formData) => {
+              setSavingEncounter(true);
+              try {
+                const res = await api.put(`/nmrs/encounters/${editingEncounter.id}`, {
+                  formData
+                });
+                alertMsg(res.data?.message || 'Encounter form updated successfully', { variant: 'success' });
+                setEditingEncounter(null);
+                fetchPatientDetails();
+              } catch (err: any) {
+                alertMsg(err.response?.data?.message || 'Failed to update encounter form', { variant: 'error' });
+              } finally {
+                setSavingEncounter(false);
+              }
+            }}
+          />
+        )}
+      </Dialog>
 
       {/* Hidden Print Templates */}
       <Box sx={{ display: 'none', '@media print': { display: 'block !important' } }}>

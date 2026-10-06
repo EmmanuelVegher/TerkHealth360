@@ -6,12 +6,13 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Stack, Avatar,
   FormControl, InputLabel, Select, MenuItem, Divider, Tabs, Tab, Alert, LinearProgress, Pagination,
 } from '@mui/material';
-import { Search, Badge, Phone, HowToReg, CheckCircle, Sync, Portrait, QrCodeScanner, Edit, Payment, CameraAlt, KeyboardAlt, Close, PersonSearch } from '@mui/icons-material';
+import { Search, Badge, Phone, HowToReg, CheckCircle, Sync, Portrait, QrCodeScanner, Edit, Payment, CameraAlt, KeyboardAlt, Close, PersonSearch, HealthAndSafety } from '@mui/icons-material';
 import { api } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { EmergencyPendingBanner } from '../components/EmergencyPendingBanner';
+import { EsmFormEngine, FormSchema } from '../components/esm-form-engine';
 
 interface PatientItem {
   id: string;
@@ -26,6 +27,9 @@ interface PatientItem {
   email: string;
   photoUrl: string | null;
   nin: string | null;
+  artNumber?: string | null;
+  nmrsHospitalNumber?: string | null;
+  currentRegimen?: string | null;
   insurance: string;
   lastVisitDate: string | null;
   createdAt?: string;
@@ -66,6 +70,36 @@ const MPI = () => {
   const hardwareBuffer = useRef('');
   const hardwareTimer = useRef<any>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // ESM Form Engine Dialog State
+  const [openEsmModal, setOpenEsmModal] = useState(false);
+  const [esmPatient, setEsmPatient] = useState<PatientItem | null>(null);
+  const [availableSchemas, setAvailableSchemas] = useState<any[]>([]);
+  const [selectedEsmSchemaId, setSelectedEsmSchemaId] = useState<string>('');
+  const [loadingEsmSchemas, setLoadingEsmSchemas] = useState(false);
+  const [savingEsmEncounter, setSavingEsmEncounter] = useState(false);
+
+  const fetchEsmSchemas = async () => {
+    if (availableSchemas.length > 0) return;
+    setLoadingEsmSchemas(true);
+    try {
+      const res = await api.get('/nmrs/schemas');
+      if (res.data?.schemas?.length > 0) {
+        setAvailableSchemas(res.data.schemas);
+        setSelectedEsmSchemaId(res.data.schemas[0]?.id || '');
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingEsmSchemas(false);
+    }
+  };
+
+  const handleOpenEsmForm = (p: PatientItem) => {
+    setEsmPatient(p);
+    setOpenEsmModal(true);
+    fetchEsmSchemas();
+  };
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -258,11 +292,15 @@ const MPI = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): "success" | "warning" | "error" | "default" | "info" | "secondary" => {
     switch (status) {
       case 'ACTIVE': return 'success';
       case 'INACTIVE': return 'warning';
-      case 'DECEASED': return 'error';
+      case 'DECEASED':
+      case 'DEAD': return 'error';
+      case 'TRANSFERRED_OUT': return 'secondary';
+      case 'LTFU': return 'warning';
+      case 'STOPPED_TREATMENT': return 'error';
       case 'ARCHIVED': return 'default';
       default: return 'info';
     }
@@ -311,7 +349,7 @@ const MPI = () => {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Search by MRN, phonetic name, phone number, NIN..."
+                placeholder="Search by MRN, ART Number (PEPFAR ID), Name, NIN, Phone..."
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 InputProps={{
@@ -341,7 +379,10 @@ const MPI = () => {
                   <MenuItem value="">All Statuses</MenuItem>
                   <MenuItem value="ACTIVE">ACTIVE</MenuItem>
                   <MenuItem value="INACTIVE">INACTIVE</MenuItem>
-                  <MenuItem value="DECEASED">DECEASED</MenuItem>
+                  <MenuItem value="DECEASED">DECEASED / DEAD</MenuItem>
+                  <MenuItem value="TRANSFERRED_OUT">TRANSFERRED OUT</MenuItem>
+                  <MenuItem value="LTFU">LOST TO FOLLOW-UP</MenuItem>
+                  <MenuItem value="STOPPED_TREATMENT">STOPPED TREATMENT</MenuItem>
                   <MenuItem value="ARCHIVED">ARCHIVED</MenuItem>
                 </Select>
               </FormControl>
@@ -372,7 +413,7 @@ const MPI = () => {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Patient MRN</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Patient MRN / ART</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Demographics</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Phone & Location</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Scheme / Insurance</TableCell>
@@ -386,7 +427,25 @@ const MPI = () => {
               <TableBody>
                 {patients.map(p => (
                   <TableRow key={p.id} hover>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{p.mrn}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {p.mrn}
+                      </Typography>
+                      {p.artNumber && (
+                        <Chip
+                          label={`ART: ${p.artNumber}`}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(5, 150, 105, 0.12)',
+                            color: '#047857',
+                            fontWeight: 700,
+                            fontSize: '0.7rem',
+                            height: 20,
+                            mt: 0.4
+                          }}
+                        />
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar src={p.photoUrl || undefined} alt={p.firstName} sx={{ width: 34, height: 34 }}>
@@ -436,6 +495,9 @@ const MPI = () => {
                       </IconButton>
                       <IconButton onClick={() => handlePrintCardOpen(p)} color="secondary" title="Print identification card">
                         <QrCodeScanner fontSize="small" />
+                      </IconButton>
+                      <IconButton onClick={() => handleOpenEsmForm(p)} color="success" title="Launch National Form (OpenMRS ESM Engine)">
+                        <HealthAndSafety fontSize="small" />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -679,6 +741,101 @@ const MPI = () => {
         <DialogActions>
           <Button onClick={handleCloseScan}>Close</Button>
         </DialogActions>
+      </Dialog>
+
+      {/* ── National Clinical Form (OpenMRS ESM Engine) Dialog ── */}
+      <Dialog
+        open={openEsmModal}
+        onClose={() => setOpenEsmModal(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden', p: 0 } }}
+      >
+        {esmPatient && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {availableSchemas.length > 1 && (
+              <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>
+                  Select National Form:
+                </Typography>
+                <FormControl size="small" sx={{ minWidth: 320 }}>
+                  <Select
+                    value={selectedEsmSchemaId}
+                    onChange={(e) => setSelectedEsmSchemaId(e.target.value)}
+                  >
+                    {availableSchemas.map((s) => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.formName} {s.version ? `(v${s.version})` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+
+            {(() => {
+              const active = availableSchemas.find((s) => s.id === selectedEsmSchemaId) || availableSchemas[0];
+              const rawSchema = active?.schemaJson || {};
+              const schemaToRender: FormSchema = rawSchema.pages && rawSchema.pages.length > 0
+                ? rawSchema
+                : {
+                    name: active?.formName || 'National Encounter Form',
+                    encounterType: rawSchema.encounterType || 'Clinical Encounter',
+                    pages: [
+                      {
+                        label: active?.formName || 'Clinical Form Details',
+                        sections: rawSchema.sections || [],
+                      }
+                    ],
+                    processor: 'EncounterFormProcessor',
+                    uuid: active?.id,
+                  };
+
+              return (
+                <EsmFormEngine
+                  schema={schemaToRender}
+                  patientContext={{
+                    id: esmPatient.id,
+                    uuid: esmPatient.id,
+                    patientNumber: esmPatient.mrn,
+                    name: `${esmPatient.firstName} ${esmPatient.lastName}`,
+                    firstName: esmPatient.firstName,
+                    lastName: esmPatient.lastName,
+                    gender: esmPatient.gender,
+                    sex: esmPatient.gender,
+                    age: esmPatient.birthDate ? Math.max(1, Math.floor((Date.now() - new Date(esmPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))) : 30,
+                    birthDate: esmPatient.birthDate || undefined,
+                    phone: esmPatient.phone,
+                    artNumber: esmPatient.artNumber || esmPatient.mrn,
+                    hospitalNumber: esmPatient.nmrsHospitalNumber || esmPatient.mrn,
+                  }}
+                  mode="enter"
+                  isSubmitting={savingEsmEncounter}
+                  onCancel={() => setOpenEsmModal(false)}
+                  onSubmit={async (formData, encounterPayload) => {
+                    setSavingEsmEncounter(true);
+                    try {
+                      await api.post('/nmrs/encounters', {
+                        patientId: esmPatient.id,
+                        formSchemaId: active?.id,
+                        encounterType: schemaToRender.encounterType || active?.formName,
+                        formData,
+                        encounterPayload,
+                      });
+                      enqueueSnackbar('National encounter form saved successfully.', { variant: 'success' });
+                      setOpenEsmModal(false);
+                      fetchPatients();
+                    } catch (err: any) {
+                      enqueueSnackbar(err.response?.data?.message || 'Failed to save encounter form', { variant: 'error' });
+                    } finally {
+                      setSavingEsmEncounter(false);
+                    }
+                  }}
+                />
+              );
+            })()}
+          </Box>
+        )}
       </Dialog>
     </div>
   );

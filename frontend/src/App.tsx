@@ -181,6 +181,9 @@ function App() {
         <Route path="eye-clinic/optical-rx"   element={<EyeClinic />} />
         <Route path="eye-clinic/telemetry"    element={<EyeClinic />} />
         <Route path="eye-clinic/*"            element={<EyeClinic />} />
+        {/* Nigeria Medical Records System (NMRS) Redirects */}
+        <Route path="nmrs-interop"            element={<Navigate to="/emr-workspace" replace />} />
+        <Route path="nmrs-interop/*"          element={<Navigate to="/emr-workspace" replace />} />
         {/* Finance & HR */}
         <Route path="billing"      element={<Billing />} />
         <Route path="billing/*"    element={<Billing />} />

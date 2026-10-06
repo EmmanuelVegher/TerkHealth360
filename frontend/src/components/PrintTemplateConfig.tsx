@@ -156,8 +156,8 @@ const MOCK_ANC_PREGNANCY = {
 
 export const PrintTemplateConfig = () => {
   const { enqueueSnackbar } = useSnackbar();
-  const [limsTemplate, setLimsTemplate] = useState('standard_dynamic');
-  const [pharmacyTemplate, setPharmacyTemplate] = useState('standard');
+  const [limsTemplate, setLimsTemplate] = useState('lims_classic_grid');
+  const [pharmacyTemplate, setPharmacyTemplate] = useState('rx_standard_a4');
   const [registrationTemplate, setRegistrationTemplate] = useState('reg_standard');
   const [ancTemplate, setAncTemplate] = useState('anc_faith_foundation_replica');
   const [logoLeft, setLogoLeft] = useState('/anglican-logo.png');
@@ -182,8 +182,18 @@ export const PrintTemplateConfig = () => {
         const stampConfig = configs.find((c: any) => c.moduleKey === 'HOSPITAL_STAMP');
         
         if (limsConfig?.description) setLimsTemplate(limsConfig.description);
-        if (pharmConfig?.description) setPharmacyTemplate(pharmConfig.description);
-        if (regConfig?.description) setRegistrationTemplate(regConfig.description);
+        if (pharmConfig?.description) {
+          const pDesc = pharmConfig.description;
+          const validRx = [
+            'rx_standard_a4', 'rx_pad_a5', 'rx_modern_minimalist', 'rx_zebra_striped', 'rx_two_column',
+            'rx_classic_blue', 'rx_classic_green', 'rx_thermal_80mm_standard', 'rx_thermal_58mm_narrow',
+            'rx_thermal_centered', 'rx_thermal_compact', 'rx_thermal_detailed', 'rx_label_sticker',
+            'rx_multi_label_grid', 'rx_dosage_calendar', 'rx_instructions_bold', 'rx_bilingual',
+            'rx_pediatric_theme', 'rx_discharge_summary', 'rx_high_contrast'
+          ];
+          setPharmacyTemplate(validRx.includes(pDesc) ? pDesc : 'rx_standard_a4');
+        }
+        if (regConfig?.description) setRegistrationTemplate(regConfig.description === 'standard' ? 'reg_standard' : regConfig.description);
         if (ancConfig?.description) setAncTemplate(ancConfig.description);
         if (logoLeftConfig?.description) {
           const url = logoLeftConfig.description.startsWith('http')

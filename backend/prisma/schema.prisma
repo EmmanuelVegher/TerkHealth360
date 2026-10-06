@@ -174,6 +174,8 @@ model Patient {
   dentalEncounters             DentalEncounter[]
   dentalConsents               DentalConsent[]
   eyeEncounters                EyeEncounter[]
+  nmrsMapping                  NmrsPatientMapping?
+  nmrsEncounters               NmrsEncounterRecord[]
 
   @@index([familyAccountId])
   @@index([lastName, firstName])
@@ -4778,5 +4780,131 @@ model TaxFiling {
   updatedAt    DateTime? @updatedAt @map("updated_at")
 
   @@map("tax_filings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NMRS (Nigeria Medical Records System / OpenMRS) & NDR Interoperability Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model NmrsConfig {
+  id                String   @id @default(uuid())
+  openmrsBaseUrl    String   @default("http://localhost:8080/openmrs") @map("openmrs_base_url")
+  openmrsUsername   String   @default("admin") @map("openmrs_username")
+  openmrsPassword   String   @default("Admin123") @map("openmrs_password")
+  facilityName      String   @default("Faith Foundation Specialist Hospital") @map("facility_name")
+  facilityDATIMCode String   @default("DATIM-NIG-7821") @map("facility_datim_code")
+  stateName         String   @default("Benue") @map("state_name")
+  lgaName           String   @default("Makurdi") @map("lga_name")
+  autoSyncEnabled   Boolean  @default(true) @map("auto_sync_enabled")
+  ndrVersion        String   @default("1.6") @map("ndr_version")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("nmrs_configs")
+}
+
+model NmrsPatientMapping {
+  id              String    @id @default(uuid())
+  patientId       String    @unique @map("patient_id")
+  openmrsUuid     String?   @unique @map("openmrs_uuid")
+  pepfarId        String?   @unique @map("pepfar_id")
+  hospitalNumber  String?   @map("hospital_number")
+  nationalId      String?   @map("national_id")
+  enrollmentDate  DateTime? @map("enrollment_date")
+  artStartDate    DateTime? @map("art_start_date")
+  currentRegimen  String?   @map("current_regimen")
+  lastViralLoad   Decimal?  @map("last_viral_load") @db.Decimal(10, 2)
+  lastVlDate      DateTime? @map("last_vl_date")
+  lastCd4Count    Decimal?  @map("last_cd4_count") @db.Decimal(10, 2)
+  syncStatus      String    @default("SYNCED") @map("sync_status")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  errorMessage    String?   @map("error_message") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([pepfarId])
+  @@index([syncStatus])
+  @@map("nmrs_patient_mappings")
+}
+
+model NmrsFormSchema {
+  id              String   @id @default(uuid())
+  formCode        String   @unique @map("form_code")
+  formName        String   @map("form_name")
+  description     String?  @db.Text
+  category        String   @default("HIV_PROGRAM") @map("category")
+  version         String   @default("1.0.0")
+  openmrsFormUuid String?  @map("openmrs_form_uuid")
+  schemaJson      Json     @map("schema_json")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  encounters      NmrsEncounterRecord[]
+
+  @@map("nmrs_form_schemas")
+}
+
+model NmrsEncounterRecord {
+  id                   String          @id @default(uuid())
+  encounterNumber      String          @unique @map("encounter_number")
+  patientId            String          @map("patient_id")
+  formSchemaId         String          @map("form_schema_id")
+  encounterType        String          @map("encounter_type")
+  encounterDate        DateTime        @default(now()) @map("encounter_date")
+  clinicianName        String?         @map("clinician_name")
+  clinicianId          String?         @map("clinician_id")
+  formData             Json            @map("form_data")
+  openmrsEncounterUuid String?         @map("openmrs_encounter_uuid")
+  syncStatus           String          @default("SYNCED") @map("sync_status")
+  syncedAt             DateTime?       @map("synced_at")
+  syncError            String?         @map("sync_error") @db.Text
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  patient              Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  formSchema           NmrsFormSchema  @relation(fields: [formSchemaId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, encounterDate])
+  @@index([syncStatus])
+  @@map("nmrs_encounter_records")
+}
+
+model NmrsConceptMap {
+  id              String   @id @default(uuid())
+  localConceptKey String   @unique @map("local_concept_key")
+  displayName     String   @map("display_name")
+  cielConceptId   Int      @map("ciel_concept_id")
+  openmrsUuid     String?  @map("openmrs_uuid")
+  datatype        String   @default("Numeric") @map("datatype")
+  category        String   @default("GENERAL") @map("category")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("nmrs_concept_maps")
+}
+
+model NmrsSyncQueue {
+  id              String    @id @default(uuid())
+  jobType         String    @map("job_type")
+  entityType      String    @map("entity_type")
+  entityId        String    @map("entity_id")
+  patientId       String?   @map("patient_id")
+  status          String    @default("PENDING") @map("status")
+  payload         Json      @map("payload")
+  responsePayload Json?     @map("response_payload")
+  retryCount      Int       @default(0) @map("retry_count")
+  maxRetries      Int       @default(3) @map("max_retries")
+  errorMessage    String?   @map("error_message") @db.Text
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([entityType, entityId])
+  @@map("nmrs_sync_queues")
 }
 

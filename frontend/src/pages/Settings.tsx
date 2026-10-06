@@ -10,7 +10,8 @@ import {
   Settings as SettingsIcon, Shield, Storage, People, Add, Delete, AccountBalance, Badge as BadgeIcon,
   Visibility, VisibilityOff, MedicalServices, Edit, Bed, LocalHospital, SwapHoriz, PersonPin, Psychology,
   MemoryOutlined, SmartToy, Circle, Biotech, Download, CheckCircle, CheckCircleOutline, DeleteOutline,
-  Refresh, CalendarMonth, ArrowForward, AutoAwesome, CloudQueue, CameraAlt, Key
+  Refresh, CalendarMonth, ArrowForward, AutoAwesome, CloudQueue, CameraAlt, Key,
+  CloudSync, Wifi, WifiOff, SyncAlt, CloudDownload
 } from '@mui/icons-material';
 import { NairaCircleIcon } from '../components/NairaIcon';
 import { useSnackbar } from 'notistack';
@@ -122,6 +123,123 @@ const Settings = () => {
     finally { setBankLoading(false); }
   };
 
+  // ── NMRS / OpenMRS Integration State ──────────────────────────────────────
+  const [nmrsConfig, setNmrsConfig] = useState<any>({
+    openmrsBaseUrl: 'http://localhost:8080/openmrs',
+    openmrsUsername: 'admin',
+    openmrsPassword: 'Admin123',
+    facilityName: 'Faith Foundation Specialist Hospital',
+    facilityDATIMCode: 'DATIM-NIG-7821',
+    stateName: 'Benue',
+    lgaName: 'Makurdi',
+    autoSyncEnabled: true,
+    ndrVersion: '1.6'
+  });
+  const [nmrsStatus, setNmrsStatus] = useState<{
+    tested: boolean;
+    connected: boolean;
+    latencyMs?: number;
+    message?: string;
+    checking?: boolean;
+  }>({ tested: false, connected: false });
+  const [pullingNmrs, setPullingNmrs] = useState(false);
+  const [pullingNmrsForms, setPullingNmrsForms] = useState(false);
+  const [savingNmrs, setSavingNmrs] = useState(false);
+
+  const fetchNmrsConfig = async () => {
+    try {
+      const res = await api.get('/nmrs/config');
+      if (res.data?.data) {
+        setNmrsConfig(res.data.data);
+        setHospitalInfo(prev => ({
+          ...prev,
+          openmrsUrl: res.data.data.openmrsBaseUrl || prev.openmrsUrl,
+          openmrsUsername: res.data.data.openmrsUsername || prev.openmrsUsername,
+          openmrsPassword: res.data.data.openmrsPassword || prev.openmrsPassword
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to load NMRS config:', err);
+    }
+  };
+
+  const handleTestNmrsConnection = async () => {
+    setNmrsStatus(prev => ({ ...prev, checking: true }));
+    try {
+      const res = await api.post('/nmrs/test-connection', {
+        serverUrl: nmrsConfig.openmrsBaseUrl,
+        username: nmrsConfig.openmrsUsername,
+        password: nmrsConfig.openmrsPassword
+      });
+      const data = res.data?.data || {};
+      setNmrsStatus({
+        tested: true,
+        connected: data.connected || false,
+        latencyMs: data.latencyMs,
+        message: data.message,
+        checking: false
+      });
+      if (data.connected) {
+        enqueueSnackbar(`Connected to OpenMRS Server (${data.latencyMs}ms)`, { variant: 'success' });
+      } else {
+        enqueueSnackbar(data.message || 'Connection failed', { variant: 'warning' });
+      }
+    } catch (err: any) {
+      setNmrsStatus({
+        tested: true,
+        connected: false,
+        message: 'OpenMRS Host is offline on hospital LAN.',
+        checking: false
+      });
+      enqueueSnackbar('OpenMRS Host is offline or unreachable on hospital LAN.', { variant: 'error' });
+    }
+  };
+
+  const handleSaveNmrsConfig = async () => {
+    setSavingNmrs(true);
+    try {
+      await api.post('/nmrs/config', nmrsConfig);
+      setHospitalInfo(prev => ({
+        ...prev,
+        openmrsUrl: nmrsConfig.openmrsBaseUrl,
+        openmrsUsername: nmrsConfig.openmrsUsername,
+        openmrsPassword: nmrsConfig.openmrsPassword
+      }));
+      enqueueSnackbar('NMRS configuration saved successfully', { variant: 'success' });
+      handleTestNmrsConnection();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to save configuration', { variant: 'error' });
+    } finally {
+      setSavingNmrs(false);
+    }
+  };
+
+  const handlePullAllNmrsPatients = async () => {
+    setPullingNmrs(true);
+    try {
+      const res = await api.post('/nmrs/pull-all-patients', {}, { timeout: 180000 });
+      enqueueSnackbar(res.data?.message || 'All NMRS patients & forms pulled and synced into TerkHealth360!', { variant: 'success', autoHideDuration: 6000 });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to pull patients from OpenMRS host';
+      enqueueSnackbar(msg, { variant: 'error', autoHideDuration: 8000 });
+    } finally {
+      setPullingNmrs(false);
+    }
+  };
+
+  const handlePullAllNmrsForms = async () => {
+    setPullingNmrsForms(true);
+    try {
+      const res = await api.post('/nmrs/forms/pull-all', {}, { timeout: 120000 });
+      enqueueSnackbar(res.data?.message || 'All official form schemas pulled from OpenMRS into TerkHealth360!', { variant: 'success', autoHideDuration: 6000 });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to pull form schemas from OpenMRS host';
+      enqueueSnackbar(msg, { variant: 'error', autoHideDuration: 8000 });
+    } finally {
+      setPullingNmrsForms(false);
+    }
+  };
+
   // ── Nurse Shift Configuration State ─────────────────────────────────────
   const [nurseShifts, setNurseShifts] = useState<any[]>([]);
   const [openAddShift, setOpenAddShift] = useState(false);
@@ -179,6 +297,7 @@ const Settings = () => {
     fetchConsultServices();
     fetchNurseShifts();
     fetchWards();
+    fetchNmrsConfig();
   }, []);
 
   const handleAddBank = async () => {
@@ -345,6 +464,21 @@ const Settings = () => {
         api.put('/config/modules/OPENMRS_USERNAME', { description: hospitalInfo.openmrsUsername, isActive: true }),
         api.put('/config/modules/OPENMRS_PASSWORD', { description: hospitalInfo.openmrsPassword, isActive: true }),
       ]);
+      if (hospitalInfo.openmrsUrl) {
+        api.post('/nmrs/config', {
+          ...nmrsConfig,
+          openmrsBaseUrl: hospitalInfo.openmrsUrl,
+          openmrsUsername: hospitalInfo.openmrsUsername || nmrsConfig.openmrsUsername,
+          openmrsPassword: hospitalInfo.openmrsPassword || nmrsConfig.openmrsPassword
+        }).then(() => {
+          setNmrsConfig((prev: any) => ({
+            ...prev,
+            openmrsBaseUrl: hospitalInfo.openmrsUrl,
+            openmrsUsername: hospitalInfo.openmrsUsername || prev.openmrsUsername,
+            openmrsPassword: hospitalInfo.openmrsPassword || prev.openmrsPassword
+          }));
+        }).catch(() => {});
+      }
       enqueueSnackbar('Hospital settings saved successfully!', { variant: 'success' });
     } catch (err) {
       enqueueSnackbar('Failed to save hospital settings', { variant: 'error' });
@@ -742,6 +876,217 @@ const Settings = () => {
           <WorkflowBuilder />
         </Grid>
 
+        {/* ── Nigeria Medical Records System (NMRS) & Public Health Integration ── */}
+        <Grid item xs={12}>
+          <Card sx={{
+            border: '1px solid #10b981',
+            boxShadow: '0 8px 32px rgba(16, 185, 129, 0.08)',
+            borderRadius: 3,
+            overflow: 'hidden'
+          }}>
+            <Box sx={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              p: 2.5,
+              color: '#ffffff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 46, height: 46 }}>
+                  <CloudSync sx={{ color: '#fff', fontSize: 28 }} />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" fontWeight={800} sx={{ color: '#fff' }}>
+                    Nigeria Medical Records System (NMRS / OpenMRS) Bridge
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', display: 'block' }}>
+                    Bi-directional OpenMRS FHIR/REST sync, dynamic national HIV/TB form engine, and automatic cohort ingestion
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Chip
+                  icon={nmrsStatus.checking ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : nmrsStatus.connected ? <Wifi sx={{ fontSize: '16px !important', color: '#fff' }} /> : <WifiOff sx={{ fontSize: '16px !important', color: '#fff' }} />}
+                  label={nmrsStatus.checking ? 'Pinging Host...' : nmrsStatus.connected ? `OpenMRS Online (${nmrsStatus.latencyMs || 24}ms)` : 'OpenMRS Offline (LAN Mode)'}
+                  sx={{ bgcolor: nmrsStatus.connected ? '#10b981' : '#f59e0b', color: '#fff', fontWeight: 800 }}
+                />
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Refresh />}
+                  onClick={handleTestNmrsConnection}
+                  sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)', textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                >
+                  Test Connection
+                </Button>
+              </Box>
+            </Box>
+
+            <CardContent sx={{ p: 3 }}>
+              <Grid container spacing={2.5}>
+                {/* Server Network Configuration */}
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={1.5}>
+                    Remote OpenMRS Server (Host Laptop / LAN IP)
+                  </Typography>
+                  <Stack spacing={2}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="OpenMRS Server Base URL"
+                      helperText="e.g. http://192.168.100.205:8080/openmrs or http://localhost:8080/openmrs"
+                      value={nmrsConfig.openmrsBaseUrl}
+                      onChange={e => setNmrsConfig({ ...nmrsConfig, openmrsBaseUrl: e.target.value })}
+                    />
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="OpenMRS Username"
+                          value={nmrsConfig.openmrsUsername}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, openmrsUsername: e.target.value })}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="password"
+                          label="OpenMRS Password"
+                          value={nmrsConfig.openmrsPassword}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, openmrsPassword: e.target.value })}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Stack>
+                </Grid>
+
+                {/* Facility & National Data Repository Identifiers */}
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={1.5}>
+                    Public Health Facility & NDR Identification
+                  </Typography>
+                  <Stack spacing={2}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Facility DATIM Code"
+                          value={nmrsConfig.facilityDATIMCode}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, facilityDATIMCode: e.target.value })}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Facility Name"
+                          value={nmrsConfig.facilityName}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, facilityName: e.target.value })}
+                        />
+                      </Grid>
+                    </Grid>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="State"
+                          value={nmrsConfig.stateName}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, stateName: e.target.value })}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="LGA"
+                          value={nmrsConfig.lgaName}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, lgaName: e.target.value })}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Stack>
+                </Grid>
+
+                {/* Actions & Bulk Pull Patients */}
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 1 }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        startIcon={pullingNmrs ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : <Download />}
+                        onClick={handlePullAllNmrsPatients}
+                        disabled={pullingNmrs || pullingNmrsForms}
+                        sx={{
+                          background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          px: 3,
+                          py: 1.2,
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)'
+                        }}
+                      >
+                        {pullingNmrs ? 'Pulling & Synchronizing Cohort...' : '📥 Pull & Sync All 4,200+ Patients & 103 Forms'}
+                      </Button>
+
+                      <Button
+                        variant="outlined"
+                        size="large"
+                        startIcon={pullingNmrsForms ? <CircularProgress size={20} sx={{ color: '#0284c7' }} /> : <SyncAlt />}
+                        onClick={handlePullAllNmrsForms}
+                        disabled={pullingNmrs || pullingNmrsForms}
+                        sx={{
+                          borderColor: '#0284c7',
+                          color: '#0284c7',
+                          fontWeight: 800,
+                          px: 2.5,
+                          py: 1.2,
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          bgcolor: 'rgba(2, 132, 199, 0.04)',
+                          '&:hover': { bgcolor: 'rgba(2, 132, 199, 0.1)', borderColor: '#0369a1' }
+                        }}
+                      >
+                        {pullingNmrsForms ? 'Syncing Form Schemas...' : '📑 Sync All 103 Official Forms'}
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        startIcon={savingNmrs ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <CheckCircle />}
+                        onClick={handleSaveNmrsConfig}
+                        disabled={savingNmrs}
+                        sx={{
+                          bgcolor: '#059669',
+                          '&:hover': { bgcolor: '#047857' },
+                          fontWeight: 800,
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          px: 3
+                        }}
+                      >
+                        Save Gateway Configuration
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
         <Grid item xs={12} md={6}>
         <Card sx={{ border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
             <CardContent>
@@ -1101,6 +1446,7 @@ const Settings = () => {
                       >
                         <ListItemText 
                           primary={<Typography variant="body2" fontWeight={700}>{b.name}</Typography>}
+                          secondaryTypographyProps={{ component: 'div' }}
                           secondary={
                             <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                               <Chip label={b.type} size="small" variant="outlined" sx={{ fontSize: 9, height: 16 }} />

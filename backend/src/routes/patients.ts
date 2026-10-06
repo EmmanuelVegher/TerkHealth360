@@ -8,6 +8,7 @@ import { logAudit } from '../utils/auditHelper.js';
 import { soundex } from '../utils/phonetic.js';
 import { checkDuplicates, scanAllPotentialDuplicates } from '../utils/duplicateDetector.js';
 import { createVisitWorkflowState } from './workflow.js';
+import { enrichPatientBioDataAndVisits } from '../services/nmrs/patientEnricher.js';
 
 const router = ExpressRouter();
 import { prisma } from '../prisma.js';
@@ -267,6 +268,8 @@ router.get('/mpi', authMiddleware, async (req, res, next) => {
             { lastName: { contains: w, mode: 'insensitive' } },
             { middleName: { contains: w, mode: 'insensitive' } },
             { telecoms: { some: { value: { contains: w, mode: 'insensitive' } } } },
+            { nmrsMapping: { pepfarId: { contains: w, mode: 'insensitive' } } },
+            { nmrsMapping: { hospitalNumber: { contains: w, mode: 'insensitive' } } },
           ]
         }));
       } else {
@@ -277,6 +280,8 @@ router.get('/mpi', authMiddleware, async (req, res, next) => {
           { lastName: { contains: q, mode: 'insensitive' } },
           { middleName: { contains: q, mode: 'insensitive' } },
           { telecoms: { some: { value: { contains: q, mode: 'insensitive' } } } },
+          { nmrsMapping: { pepfarId: { contains: q, mode: 'insensitive' } } },
+          { nmrsMapping: { hospitalNumber: { contains: q, mode: 'insensitive' } } },
         ];
       }
     }
@@ -291,6 +296,15 @@ router.get('/mpi', authMiddleware, async (req, res, next) => {
           insurancePolicies: { include: { provider: true } },
           visits: { orderBy: { createdAt: 'desc' }, take: 1 }, // most recent visit
           createdBy: { include: { staff: true } },
+          nmrsMapping: {
+            select: {
+              pepfarId: true,
+              hospitalNumber: true,
+              currentRegimen: true,
+              syncStatus: true,
+              lastViralLoad: true
+            }
+          }
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -319,6 +333,10 @@ router.get('/mpi', authMiddleware, async (req, res, next) => {
         email: emailVal,
         photoUrl: pat.photoUrl,
         nin: pat.nin,
+        artNumber: pat.nmrsMapping?.pepfarId || null,
+        nmrsHospitalNumber: pat.nmrsMapping?.hospitalNumber || null,
+        currentRegimen: pat.nmrsMapping?.currentRegimen || null,
+        nmrsStatus: pat.nmrsMapping?.syncStatus || null,
         familyAccount: pat.familyAccount,
         lastVisitDate: pat.visits[0]?.createdAt || null,
         insurance: pat.insurancePolicies.map(p => p.provider.name).join(', ') || 'Self Payer',
@@ -344,7 +362,7 @@ router.get('/mpi', authMiddleware, async (req, res, next) => {
 // Single patient detail
 router.get('/:id', authMiddleware, async (req, res, next) => {
   try {
-    const patient = await prisma.patient.findUnique({
+    let patient = await prisma.patient.findUnique({
       where: { id: req.params.id },
       include: {
         telecoms: true,
@@ -369,6 +387,11 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
           orderBy: { createdAt: 'desc' } 
         },
         cardReprints: { orderBy: { reprintedAt: 'desc' } },
+        nmrsMapping: true,
+        nmrsEncounters: {
+          include: { formSchema: true },
+          orderBy: { encounterDate: 'desc' }
+        }
       },
     });
 
@@ -376,6 +399,7 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
       return res.status(404).json({ message: 'Patient not found' });
     }
 
+    // Return patient profile immediately (Instant loading)
     res.json(patient);
   } catch (error) {
     next(error);
@@ -654,11 +678,11 @@ router.post('/merge', authMiddleware, async (req: any, res, next) => {
   }
 });
 
-// PATCH /:id/status — update patient status (ACTIVE, INACTIVE, DECEASED, ARCHIVED)
+// PATCH /:id/status — update patient status (ACTIVE, INACTIVE, DECEASED, DEAD, TRANSFERRED_OUT, LTFU, STOPPED_TREATMENT, ARCHIVED)
 router.patch('/:id/status', authMiddleware, async (req: any, res, next) => {
   try {
     const { status } = z.object({
-      status: z.enum(['ACTIVE', 'INACTIVE', 'DECEASED', 'ARCHIVED']),
+      status: z.enum(['ACTIVE', 'INACTIVE', 'DECEASED', 'DEAD', 'TRANSFERRED_OUT', 'LTFU', 'STOPPED_TREATMENT', 'ARCHIVED']),
     }).parse(req.body);
 
     const patientId = req.params.id;

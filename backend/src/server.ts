@@ -71,6 +71,7 @@ import medgemmaRoutes from './routes/medgemma.js';
 import recordsMigrationRoutes from './routes/recordsMigration.js';
 import dentalRoutes from './routes/dental.js';
 import ophthalmologyRoutes from './routes/ophthalmology.js';
+import nmrsRoutes from './routes/nmrs.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -248,6 +249,7 @@ app.use('/api/medgemma', authMiddleware, medgemmaRoutes);
 app.use('/api/records-migration', authMiddleware, recordsMigrationRoutes);
 app.use('/api/dental', authMiddleware, dentalRoutes);
 app.use('/api/ophthalmology', authMiddleware, ophthalmologyRoutes);
+app.use('/api/nmrs', authMiddleware, nmrsRoutes);
 
 
 // ── SPA catch-all: return index.html for any non-API route ──────────────────

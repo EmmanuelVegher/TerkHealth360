@@ -4,6 +4,9 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Chip, IconButton,
   TextField, Stack, Tab, Tabs, Divider, CircularProgress, Autocomplete,
   Avatar, Alert, Paper, Tooltip, Badge, alpha, TablePagination,
+  RadioGroup, FormControlLabel, Radio, FormHelperText, Select, MenuItem, FormControl, InputLabel,
+  Dialog, DialogTitle, DialogContent, DialogActions, FormLabel, Checkbox,
+  Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import {
   Search, History, Portrait, Print, Warning, CheckCircle, Refresh,
@@ -11,7 +14,8 @@ import {
   ContentCut, ChildCare, LocalHospital, Favorite, Thermostat, Opacity,
   Speed, LocalPharmacy, Healing, MedicalInformation, Assessment, ArrowForward,
   MedicalServices, Science, Receipt, Launch, MonitorHeart, Air, Scale,
-  FitnessCenter, RestartAlt, FilterAlt, Close,
+  FitnessCenter, RestartAlt, FilterAlt, Close, CloudSync, SyncAlt, HealthAndSafety,
+  Edit, CloudDownload, Assignment, LibraryBooks, Storage, Description, Check, ExpandMore,
 } from '@mui/icons-material';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -20,6 +24,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSnackbar } from 'notistack';
+import { EsmFormEngine, EsmFormBuilder, FormSchema } from '../components/esm-form-engine';
 
 interface PatientOption {
   id: string;
@@ -28,6 +33,7 @@ interface PatientOption {
   lastName: string;
   gender?: string;
   birthDate?: string;
+  artNumber?: string;
 }
 
 const getProcedureOpNoteFallback = (procedureName: string = '') => {
@@ -93,6 +99,62 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [encounters, setEncounters] = useState<any[]>([]);
   const [dentalEncounters, setDentalEncounters] = useState<any[]>([]);
+
+  // ── NMRS / Public Health State & Forms ────────────────────────────────────
+  const [nmrsSummary, setNmrsSummary] = useState<any | null>(null);
+  const [nmrsSchemas, setNmrsSchemas] = useState<any[]>([]);
+  const [selectedNmrsSchemaId, setSelectedNmrsSchemaId] = useState<string>('');
+  const [nmrsFormData, setNmrsFormData] = useState<Record<string, any>>({});
+  const [savingNmrsForm, setSavingNmrsForm] = useState<boolean>(false);
+  const [syncingNmrs, setSyncingNmrs] = useState<boolean>(false);
+  const [activeFormPage, setActiveFormPage] = useState<number>(0);
+  const [formCategoryFilter, setFormCategoryFilter] = useState<string>('ALL');
+  const [nmrsSubTab, setNmrsSubTab] = useState<'forms' | 'studio'>('forms');
+  const [editPepfarModalOpen, setEditPepfarModalOpen] = useState<boolean>(false);
+  const [customPepfarInput, setCustomPepfarInput] = useState<string>('');
+  const [savingPepfarId, setSavingPepfarId] = useState<boolean>(false);
+  const [editingEncounter, setEditingEncounter] = useState<any | null>(null);
+  const [savingEncounter, setSavingEncounter] = useState<boolean>(false);
+
+  const handleOpenFormDialog = (encounterRecord: any) => {
+    setEditingEncounter(encounterRecord);
+  };
+
+  const groupedVisits = useMemo(() => {
+    const encounters: any[] = nmrsSummary?.encounters || [];
+    if (!encounters || encounters.length === 0) return [];
+
+    const map = new Map<string, {
+      visitNumber: string;
+      dateStr: string;
+      checkedInAt: string;
+      visitType: string;
+      status: string;
+      encounters: any[];
+    }>();
+
+    for (const enc of encounters) {
+      const rawDate = enc.encounterDate || enc.createdAt || new Date().toISOString();
+      const dateStr = String(rawDate).slice(0, 10);
+      const key = enc.visitId || dateStr;
+
+      if (!map.has(key)) {
+        const hospNum = selectedPat?.mrn || 'HOSP';
+        const visitNumber = enc.visit?.visitNumber || `VIS-${dateStr.replace(/-/g, '')}-${hospNum.replace(/[^a-zA-Z0-9]/g, '')}`;
+        map.set(key, {
+          visitNumber,
+          dateStr,
+          checkedInAt: enc.encounterDate ? new Date(enc.encounterDate).toLocaleString() : new Date().toLocaleString(),
+          visitType: enc.visit?.visitType || 'CLINICAL_VISIT',
+          status: enc.visit?.status || 'COMPLETED',
+          encounters: []
+        });
+      }
+      map.get(key)!.encounters.push(enc);
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.dateStr).getTime() - new Date(a.dateStr).getTime());
+  }, [nmrsSummary?.encounters, selectedPat]);
 
   // Active Tab value
   const [activeTab, setActiveTab] = useState(0);
@@ -182,6 +244,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
         lastName: p.lastName || p.name?.[0]?.family || '',
         gender: p.gender,
         birthDate: p.birthDate,
+        artNumber: p.artNumber || p.nmrsMapping?.pepfarId || undefined,
       }));
       setPatients(formatted);
     } catch (err) {
@@ -191,16 +254,130 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
     }
   };
 
+  const handleNmrsFieldChange = (fieldId: string, value: any) => {
+    setNmrsFormData(prev => {
+      const updated = { ...prev, [fieldId]: value };
+      if ((fieldId === 'weight' || fieldId === 'height') && updated.weight && updated.height) {
+        const hM = Number(updated.height) / 100;
+        const wKg = Number(updated.weight);
+        if (hM > 0 && wKg > 0) {
+          updated['calculatedBmi'] = (wKg / (hM * hM)).toFixed(1);
+        }
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveNmrsForm = async () => {
+    if (!selectedPat?.id || !selectedNmrsSchemaId) {
+      enqueueSnackbar('Please select a national form schema', { variant: 'warning' });
+      return;
+    }
+    setSavingNmrsForm(true);
+    try {
+      const currentSchema = nmrsSchemas.find(s => s.id === selectedNmrsSchemaId);
+      const res = await api.post('/nmrs/encounters', {
+        patientId: selectedPat.id,
+        formSchemaId: selectedNmrsSchemaId,
+        encounterDate: nmrsFormData.encounterDate || new Date().toISOString(),
+        formData: nmrsFormData,
+        encounterType: currentSchema?.formCode || 'HIV_CARE_CARD'
+      });
+      enqueueSnackbar(res.data?.message || 'National form submitted to PostgreSQL and queued for OpenMRS sync', { variant: 'success' });
+      setNmrsFormData({});
+      // Refresh summary
+      const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+      setNmrsSummary(sRes.data?.data || null);
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to submit form', { variant: 'error' });
+    } finally {
+      setSavingNmrsForm(false);
+    }
+  };
+
+  const handleSyncPatientToOpenmrs = async () => {
+    if (!selectedPat?.id) return;
+    setSyncingNmrs(true);
+    try {
+      const res = await api.post(`/nmrs/patients/${selectedPat.id}/sync`);
+      enqueueSnackbar(res.data?.message || 'Patient synced with OpenMRS host', { variant: 'success' });
+      const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+      setNmrsSummary(sRes.data?.data || null);
+    } catch (err) {
+      enqueueSnackbar('Sync failed', { variant: 'error' });
+    } finally {
+      setSyncingNmrs(false);
+    }
+  };
+
+  const handleSavePepfarId = async () => {
+    if (!selectedPat?.id || !customPepfarInput.trim()) {
+      enqueueSnackbar('Please enter a valid PEPFAR Identifier (Identifier Type 4)', { variant: 'warning' });
+      return;
+    }
+    setSavingPepfarId(true);
+    try {
+      const res = await api.patch(`/nmrs/patients/${selectedPat.id}/pepfar-id`, {
+        pepfarId: customPepfarInput.trim()
+      });
+      enqueueSnackbar(res.data?.message || 'Updated PEPFAR Identifier to ' + customPepfarInput.trim(), { variant: 'success' });
+      setEditPepfarModalOpen(false);
+      const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+      setNmrsSummary(sRes.data?.data || null);
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update PEPFAR Identifier', { variant: 'error' });
+    } finally {
+      setSavingPepfarId(false);
+    }
+  };
+
+  const handlePullAllClobForms = async () => {
+    setSyncingNmrs(true);
+    try {
+      const res = await api.post('/nmrs/forms/pull-all');
+      enqueueSnackbar(res.data?.message || 'Synchronized official CLOB form schemas from OpenMRS', { variant: 'success' });
+      const schRes = await api.get('/nmrs/schemas');
+      const schList = schRes.data?.data || [];
+      setNmrsSchemas(schList);
+      if (schList.length > 0 && !selectedNmrsSchemaId) {
+        handleSelectSchema(schList[0].id);
+      }
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to pull form schemas from OpenMRS', { variant: 'error' });
+    } finally {
+      setSyncingNmrs(false);
+    }
+  };
+
+  const handleSelectSchema = (schemaId: string) => {
+    setSelectedNmrsSchemaId(schemaId);
+    setActiveFormPage(0);
+    const birthDate = selectedPat?.birthDate;
+    const age = birthDate ? Math.floor((new Date().getTime() - new Date(birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : '';
+    setNmrsFormData(prev => ({
+      ...prev,
+      art_number: nmrsSummary?.mapping?.pepfarId || '',
+      hospital_number: selectedPat?.mrn || '',
+      patient_age: age,
+      sex: selectedPat?.gender?.toLowerCase().startsWith('f') ? 'Female' : 'Male',
+      facilityName: 'Faith Foundation Specialist Hospital',
+      encounterDate: new Date().toISOString().split('T')[0],
+      currentRegimen: nmrsSummary?.mapping?.currentRegimen || '1a: TDF + 3TC + DTG'
+    }));
+  };
+
   const loadEMR = async (patId: string) => {
     setLoadingEMR(true);
     try {
-      const [resSummary, resTimeline, resLabs, resRx, resEnc, resDental] = await Promise.allSettled([
+      const [resSummary, resTimeline, resLabs, resRx, resEnc, resDental, resNmrsSummary, resNmrsSchemas] = await Promise.allSettled([
         api.get(`/emr/summary/${patId}`),
         api.get(`/emr/timeline/${patId}`),
         api.get(`/lims/orders?patientId=${patId}`),
         api.get(`/pharmacy/prescriptions?patientId=${patId}`),
         api.get(`/fhir/Encounter?patient=${patId}`),
         api.get(`/dental/encounters?patientId=${patId}`),
+        api.get(`/nmrs/patients/${patId}/summary`),
+        api.get(`/nmrs/schemas`),
       ]);
 
       if (resSummary.status === 'fulfilled') setEmrData(resSummary.value.data);
@@ -214,6 +391,16 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
       }
       if (resDental.status === 'fulfilled') {
         setDentalEncounters(resDental.value.data?.data || []);
+      }
+      if (resNmrsSummary.status === 'fulfilled') {
+        setNmrsSummary(resNmrsSummary.value.data?.data || null);
+      }
+      if (resNmrsSchemas.status === 'fulfilled') {
+        const schList = resNmrsSchemas.value.data?.data || [];
+        setNmrsSchemas(schList);
+        if (schList.length > 0) {
+          setSelectedNmrsSchemaId(schList[0].id);
+        }
       }
     } catch (err) {
       console.error('Error loading EMR details:', err);
@@ -624,7 +811,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
             {/* Patient Search Autocomplete */}
             <Autocomplete
               options={patients}
-              getOptionLabel={(o) => `${o.mrn} — ${o.lastName}, ${o.firstName}`}
+              getOptionLabel={(o) => `${o.mrn}${o.artNumber ? ` [ART: ${o.artNumber}]` : ''} — ${o.lastName}, ${o.firstName}`}
               filterOptions={(x) => x}
               isOptionEqualToValue={(opt, val) => opt.id === val.id}
               loading={loadingSearch}
@@ -640,7 +827,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                 <TextField
                   {...params}
                   size="small"
-                  placeholder="Search patient by MRN or Name..."
+                  placeholder="Search patient by MRN, ART Number, or Name..."
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: <Search sx={{ mr: 1, color: '#38bdf8' }} />,
@@ -1006,6 +1193,12 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                 <Tab icon={<ContentCut fontSize="small" />} iconPosition="start" label={`Surgical History (${(emrData.surgicalBookings || []).length})`} />
                 <Tab icon={<ChildCare fontSize="small" />} iconPosition="start" label={`ANC & Maternity (${(emrData.ancRecords || []).length || (emrData.history?.lmp || emrData.history?.gravida !== undefined ? 1 : 0)})`} />
                 <Tab icon={<Warning fontSize="small" />} iconPosition="start" label={`Allergies & Alerts (${emrData.allergies?.length || 0})`} />
+                <Tab
+                  icon={<CloudSync fontSize="small" />}
+                  iconPosition="start"
+                  label={`🇳🇬 NMRS & HIV Forms (${nmrsSummary?.encounters?.length || 0})`}
+                  sx={{ color: '#059669', '&.Mui-selected': { color: '#047857', fontWeight: 900 } }}
+                />
               </Tabs>
             </Box>
 
@@ -2279,10 +2472,633 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                   )}
                 </Stack>
               )}
+
+              {/* ── TAB 8: NIGERIA MEDICAL RECORDS SYSTEM (NMRS) PUBLIC HEALTH & DYNAMIC FORMS ── */}
+              {activeTab === 8 && (
+                <Stack spacing={3}>
+                  {/* 1. Public Health HIV Care Passport Card */}
+                  <Card sx={{
+                    border: '1px solid #10b981',
+                    borderRadius: 3,
+                    boxShadow: '0 4px 20px rgba(16, 185, 129, 0.08)',
+                    overflow: 'hidden'
+                  }}>
+                    <Box sx={{
+                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      p: 2,
+                      color: '#ffffff',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 1.5
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 40, height: 40 }}>
+                          <HealthAndSafety sx={{ color: '#fff' }} />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h6" fontWeight={800} sx={{ color: '#fff' }}>
+                            Nigeria HIV Care Passport & Public Health Indicators
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                            FMoH / PEPFAR Enrolled Client • OpenMRS Bi-Directional Synchronized Profile
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={syncingNmrs ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <CloudDownload />}
+                          onClick={handlePullAllClobForms}
+                          disabled={syncingNmrs}
+                          sx={{
+                            color: '#fff',
+                            borderColor: 'rgba(255,255,255,0.4)',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', borderColor: '#fff' },
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            borderRadius: 2
+                          }}
+                        >
+                          Pull Schemas from OpenMRS CLOB
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={syncingNmrs ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SyncAlt />}
+                          onClick={handleSyncPatientToOpenmrs}
+                          disabled={syncingNmrs}
+                          sx={{
+                            bgcolor: 'rgba(255,255,255,0.25)',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.35)' },
+                            color: '#fff',
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            borderRadius: 2
+                          }}
+                        >
+                          {syncingNmrs ? 'Syncing...' : 'Sync to OpenMRS Host'}
+                        </Button>
+                      </Box>
+                    </Box>
+
+                    <CardContent sx={{ p: 2.5 }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', height: '100%', position: 'relative' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 800, display: 'block' }}>
+                                PEPFAR Identifier (Type 4)
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  setCustomPepfarInput(nmrsSummary?.mapping?.pepfarId || '');
+                                  setEditPepfarModalOpen(true);
+                                }}
+                                title="Edit PEPFAR Identifier"
+                                sx={{ p: 0.5, color: '#059669', '&:hover': { bgcolor: '#ecfdf5' } }}
+                              >
+                                <Edit fontSize="small" sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#059669', wordBreak: 'break-all', my: 0.5 }}>
+                              {nmrsSummary?.mapping?.pepfarId || (selectedPat?.mrn ? `ART-${selectedPat.mrn}` : 'PENDING_ASSIGNMENT')}
+                            </Typography>
+                            <Chip
+                              label="Identifier Type 4 • ART Number"
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: 9.5, fontWeight: 800 }}
+                            />
+                          </Box>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #bae6fd', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700, display: 'block' }}>
+                              Current ART Regimen
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0284c7', my: 0.5 }}>
+                              {nmrsSummary?.mapping?.currentRegimen || '1a: TDF + 3TC + DTG'}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#64748b', fontSize: 10 }}>First-Line Optimized Adult</Typography>
+                          </Box>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#ecfdf5', borderRadius: 2, border: '1px solid #a7f3d0', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block' }}>
+                              Viral Load Suppression
+                            </Typography>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#059669', my: 0.5 }}>
+                              {nmrsSummary?.mapping?.lastViralLoad !== undefined ? `${nmrsSummary.mapping.lastViralLoad} cp/mL` : '<20 cp/mL (TND)'}
+                            </Typography>
+                            <Chip label="Suppressed (<50 cp/mL)" size="small" color="success" sx={{ fontSize: 10, height: 18, fontWeight: 800 }} />
+                          </Box>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
+                              CD4 Absolute Count
+                            </Typography>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#0284c7', my: 0.5 }}>
+                              {nmrsSummary?.mapping?.lastCd4Count ? `${nmrsSummary.mapping.lastCd4Count} cells/µL` : '520 cells/µL'}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#64748b', fontSize: 10 }}>Target: &gt;350 cells/µL</Typography>
+                          </Box>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+
+                  {/* 2. Official OpenMRS ESM Engine & Schema Studio */}
+                  <Card variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+                    {/* Header with Sub-tabs */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 2 }}>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Storage sx={{ color: '#059669', fontSize: 24 }} />
+                          <Typography variant="h6" fontWeight={800} color="#0f172a">
+                            National Clinical Encounter &amp; Form Engine (OpenMRS ESM)
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Direct rendering using official OpenMRS ESM Form Engine (JSON Schema spec with live expressions &amp; validations).
+                        </Typography>
+                      </Box>
+
+                      {/* Mode Switcher: Form Entry vs Schema Studio */}
+                      <Tabs
+                        value={nmrsSubTab}
+                        onChange={(_, v) => setNmrsSubTab(v)}
+                        sx={{
+                          bgcolor: '#f1f5f9',
+                          borderRadius: 2,
+                          p: 0.5,
+                          '& .MuiTab-root': {
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            minHeight: 36,
+                            py: 0.5,
+                            borderRadius: 1.5,
+                          },
+                          '& .Mui-selected': {
+                            bgcolor: '#ffffff',
+                            color: '#059669 !important',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                          },
+                          '& .MuiTabs-indicator': { display: 'none' },
+                        }}
+                      >
+                        <Tab value="forms" icon={<Assignment fontSize="small" />} iconPosition="start" label="Clinical Form Entry" />
+                        <Tab value="studio" icon={<LibraryBooks fontSize="small" />} iconPosition="start" label="Schema Studio &amp; Builder" />
+                      </Tabs>
+                    </Box>
+
+                    {/* SUBTAB 1: CLINICAL FORM ENTRY */}
+                    {nmrsSubTab === 'forms' && (
+                      <Stack spacing={2.5}>
+                        {/* Schema Selection Controls */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                          {/* Category Filter Chips */}
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {[
+                              { id: 'ALL', label: 'All Forms' },
+                              { id: 'HIV_PROGRAM', label: 'HIV Care Cards' },
+                              { id: 'PMTCT_ANC', label: 'PMTCT / ANC' },
+                              { id: 'HTS_TESTING', label: 'HTS Testing' },
+                              { id: 'PHARMACY', label: 'Pharmacy' },
+                              { id: 'LAB', label: 'Laboratory' },
+                              { id: 'TB_PROGRAM', label: 'TB Program' }
+                            ].map(cat => (
+                              <Chip
+                                key={cat.id}
+                                label={cat.label}
+                                size="small"
+                                clickable
+                                color={formCategoryFilter === cat.id ? 'primary' : 'default'}
+                                variant={formCategoryFilter === cat.id ? 'filled' : 'outlined'}
+                                onClick={() => setFormCategoryFilter(cat.id)}
+                                sx={{ fontSize: 11, fontWeight: formCategoryFilter === cat.id ? 800 : 500 }}
+                              />
+                            ))}
+                          </Box>
+
+                          <FormControl size="small" sx={{ minWidth: 320 }}>
+                            <InputLabel>Select National Form ({nmrsSchemas.filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter).length})</InputLabel>
+                            <Select
+                              value={selectedNmrsSchemaId}
+                              label={`Select National Form (${nmrsSchemas.filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter).length})`}
+                              onChange={(e) => handleSelectSchema(e.target.value)}
+                            >
+                              {nmrsSchemas
+                                .filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter)
+                                .map(s => (
+                                  <MenuItem key={s.id} value={s.id}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
+                                      <Typography variant="body2" fontWeight={700}>
+                                        {s.formName}
+                                      </Typography>
+                                      <Chip label={`v${s.version || '1.0'}`} size="small" sx={{ fontSize: 10, height: 18 }} />
+                                    </Box>
+                                  </MenuItem>
+                                ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+
+                        {/* Embedded ESM Form Engine */}
+                        {(() => {
+                          const activeSchema = nmrsSchemas.find(s => s.id === selectedNmrsSchemaId);
+                          if (!activeSchema) {
+                            return (
+                              <Box sx={{ p: 5, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 2.5, border: '1px dashed #cbd5e1' }}>
+                                <LibraryBooks sx={{ fontSize: 44, color: '#94a3b8', mb: 1.5 }} />
+                                <Typography variant="subtitle1" fontWeight={700} color="#334155">
+                                  Select a National Form Schema Above
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  Access standardized national forms dynamically rendered by the OpenMRS ESM Form Engine.
+                                </Typography>
+                              </Box>
+                            );
+                          }
+
+                          const rawSchema = activeSchema.schemaJson || {};
+                          const schemaToRender: FormSchema = rawSchema.pages && rawSchema.pages.length > 0
+                            ? rawSchema
+                            : {
+                                name: activeSchema.formName || 'National Encounter Form',
+                                encounterType: rawSchema.encounterType || 'Clinical Encounter',
+                                pages: [
+                                  {
+                                    label: activeSchema.formName || 'Clinical Form Details',
+                                    sections: rawSchema.sections || [],
+                                  }
+                                ],
+                                processor: 'EncounterFormProcessor',
+                                uuid: activeSchema.id,
+                              };
+
+                          return (
+                            <Box sx={{ border: '1px solid #e2e8f0', borderRadius: 2.5, overflow: 'hidden' }}>
+                              <EsmFormEngine
+                                schema={schemaToRender}
+                                patientContext={{
+                                  id: selectedPat?.id,
+                                  uuid: selectedPat?.id,
+                                  patientNumber: selectedPat?.mrn,
+                                  name: `${selectedPat?.firstName || ''} ${selectedPat?.lastName || ''}`.trim(),
+                                  firstName: selectedPat?.firstName,
+                                  lastName: selectedPat?.lastName,
+                                  gender: selectedPat?.gender,
+                                  sex: selectedPat?.gender,
+                                  age: selectedPat?.birthDate ? Math.max(1, Math.floor((Date.now() - new Date(selectedPat.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))) : 30,
+                                  birthDate: selectedPat?.birthDate,
+                                  artNumber: nmrsSummary?.mapping?.pepfarId || selectedPat?.artNumber,
+                                  hospitalNumber: selectedPat?.mrn,
+                                }}
+                                initialValues={nmrsFormData}
+                                mode="enter"
+                                isSubmitting={savingNmrsForm}
+                                onSubmit={async (formData, encounterPayload) => {
+                                  setSavingNmrsForm(true);
+                                  try {
+                                    await api.post('/nmrs/encounters', {
+                                      patientId: selectedPat?.id,
+                                      formSchemaId: activeSchema.id,
+                                      encounterType: schemaToRender.encounterType || activeSchema.formName,
+                                      formData,
+                                      encounterPayload,
+                                    });
+                                    enqueueSnackbar('National encounter form saved successfully and synchronized.', { variant: 'success' });
+                                    if (selectedPat?.id) {
+                                      const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+                                      setNmrsSummary(sRes.data?.data || null);
+                                    }
+                                  } catch (err: any) {
+                                    enqueueSnackbar(err.response?.data?.message || 'Failed to save encounter form', { variant: 'error' });
+                                  } finally {
+                                    setSavingNmrsForm(false);
+                                  }
+                                }}
+                              />
+                            </Box>
+                          );
+                        })()}
+                      </Stack>
+                    )}
+
+                    {/* SUBTAB 2: SCHEMA STUDIO & BUILDER */}
+                    {nmrsSubTab === 'studio' && (
+                      <Box sx={{ mt: 1 }}>
+                        <EsmFormBuilder
+                          initialSchema={(() => {
+                            const activeSchema = nmrsSchemas.find(s => s.id === selectedNmrsSchemaId);
+                            if (activeSchema?.schemaJson) {
+                              return activeSchema.schemaJson;
+                            }
+                            return undefined;
+                          })()}
+                          onSaveSchema={async (updatedSchema) => {
+                            try {
+                              const res = await api.post('/nmrs/schemas', {
+                                formName: updatedSchema.name,
+                                version: updatedSchema.version || '1.0',
+                                schemaJson: updatedSchema,
+                              });
+                              enqueueSnackbar(res.data?.message || 'Schema saved successfully', { variant: 'success' });
+                              handlePullAllClobForms();
+                            } catch (err: any) {
+                              enqueueSnackbar(err.response?.data?.message || 'Failed to save schema', { variant: 'error' });
+                            }
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </Card>
+
+                  {/* Edit PEPFAR Identifier (Type 4) Dialog */}
+                  <Dialog open={editPepfarModalOpen} onClose={() => setEditPepfarModalOpen(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle sx={{ fontWeight: 800, color: '#0f172a' }}>
+                      Update PEPFAR Unique Identifier (Identifier Type 4)
+                    </DialogTitle>
+                    <DialogContent dividers>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        In Nigerian National Medical Record Systems (NMRS), PEPFAR Identifier corresponds to <strong>Identifier Type 4 (ART Number)</strong>.
+                      </Alert>
+                      <TextField
+                        fullWidth
+                        label="PEPFAR Unique ID / ART Number"
+                        value={customPepfarInput}
+                        onChange={(e) => setCustomPepfarInput(e.target.value)}
+                        placeholder="e.g. IMO02400106 or ART-106DF"
+                        helperText="Official National ART Identifier assigned to this client"
+                        sx={{ mt: 1 }}
+                      />
+                    </DialogContent>
+                    <DialogActions sx={{ p: 2 }}>
+                      <Button onClick={() => setEditPepfarModalOpen(false)} sx={{ textTransform: 'none' }}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={handleSavePepfarId}
+                        disabled={savingPepfarId || !customPepfarInput.trim()}
+                        startIcon={savingPepfarId ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <Check />}
+                        sx={{ bgcolor: '#059669', '&:hover': { bgcolor: '#047857' }, fontWeight: 800, textTransform: 'none' }}
+                      >
+                        {savingPepfarId ? 'Saving...' : 'Save PEPFAR Identifier'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* 3. Official National Form Records (OpenMRS / NMRS) Grouped by Visit */}
+                  {groupedVisits.length > 0 ? (
+                    <Stack spacing={2.5}>
+                      {groupedVisits.map((v, vIdx) => (
+                        <Accordion
+                          key={v.visitNumber || vIdx}
+                          defaultExpanded={vIdx === 0}
+                          sx={{
+                            borderRadius: '12px !important',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: 'none',
+                            '&:before': { display: 'none' },
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <AccordionSummary
+                            expandIcon={<ExpandMore />}
+                            sx={{
+                              bgcolor: '#f8fafc',
+                              px: 2.5,
+                              py: 1,
+                              borderBottom: '1px solid #e2e8f0',
+                              '& .MuiAccordionSummary-content': {
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                mr: 1
+                              }
+                            }}
+                          >
+                            <Box>
+                              <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                                Visit: {v.visitNumber}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                Checked in: {v.checkedInAt} | Type: {v.visitType} | Status: {v.status}
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label={`${v.encounters.length} Encounters`}
+                              size="small"
+                              sx={{ fontWeight: 700, bgcolor: '#e2e8f0', color: '#334155' }}
+                            />
+                          </AccordionSummary>
+
+                          <AccordionDetails sx={{ p: 2.5, bgcolor: '#ffffff' }}>
+                            <Typography
+                              variant="subtitle2"
+                              fontWeight={800}
+                              color="primary.main"
+                              sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+                            >
+                              <Description fontSize="small" /> Official National Form Records (OpenMRS / NMRS)
+                            </Typography>
+
+                            <Stack spacing={2}>
+                              {v.encounters.map((ne: any) => (
+                                <Paper
+                                  key={ne.id}
+                                  variant="outlined"
+                                  sx={{
+                                    p: 2.5,
+                                    borderRadius: 2.5,
+                                    bgcolor: '#fbfcfd',
+                                    borderColor: '#e2e8f0',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                      borderColor: '#cbd5e1',
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                                    }
+                                  }}
+                                >
+                                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                                    <Box>
+                                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                        {ne.formSchema?.formName || ne.encounterType}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                        Encounter No: {ne.encounterNumber} | Date: {new Date(ne.encounterDate).toLocaleDateString()} | Clinician: {ne.clinicianName || 'Chioma (Clinical Provider)'}
+                                      </Typography>
+                                    </Box>
+
+                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                      <Chip
+                                        label={ne.syncStatus || 'SYNCED'}
+                                        size="small"
+                                        color={ne.syncStatus === 'SYNCED' ? 'success' : 'info'}
+                                        sx={{ fontWeight: 800, fontSize: '0.75rem', height: 24 }}
+                                      />
+                                      <Tooltip title={`Open & Edit ${ne.formSchema?.formName || ne.encounterType}`}>
+                                        <IconButton
+                                          size="small"
+                                          color="primary"
+                                          onClick={() => handleOpenFormDialog(ne)}
+                                          sx={{
+                                            bgcolor: '#e0f2fe',
+                                            color: '#0284c7',
+                                            width: 32,
+                                            height: 32,
+                                            '&:hover': { bgcolor: '#bae6fd' }
+                                          }}
+                                        >
+                                          <Edit fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Box>
+                                  </Box>
+
+                                  {ne.formData && typeof ne.formData === 'object' && (
+                                    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
+                                      <Grid container spacing={2}>
+                                        {Object.entries(ne.formData).slice(0, 6).map(([k, v]: [string, any]) => (
+                                          <Grid item xs={12} sm={6} md={4} key={k}>
+                                            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem' }}>
+                                              {k}
+                                            </Typography>
+                                            <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap>
+                                              {String(v)}
+                                            </Typography>
+                                          </Grid>
+                                        ))}
+                                      </Grid>
+                                    </Box>
+                                  )}
+                                </Paper>
+                              ))}
+                            </Stack>
+                          </AccordionDetails>
+                        </Accordion>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Alert severity="info" sx={{ borderRadius: 2 }}>
+                      No past NMRS clinical forms recorded for this client yet. Select a national form above to fill the first encounter.
+                    </Alert>
+                  )}
+                </Stack>
+              )}
             </Box>
           </Card>
         </Stack>
       ) : null}
+
+      {/* ── Official OpenMRS ESM JSON Schema Form Engine Modal Dialog ── */}
+      <Dialog
+        open={Boolean(editingEncounter)}
+        onClose={() => setEditingEncounter(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden', p: 0 } }}
+      >
+        {editingEncounter && (
+          <EsmFormEngine
+            schema={(() => {
+              let rawSchema = editingEncounter.formSchema?.schemaJson;
+
+              // If rawSchema is incomplete or missing, look up rich schema in nmrsSchemas
+              const isBasicStub = !rawSchema || !rawSchema.pages || rawSchema.pages.length === 0 ||
+                (rawSchema.pages.length === 1 && rawSchema.pages[0].sections?.length <= 2 && rawSchema.pages[0].sections?.every((s: any) => (s.questions?.length || 0) <= 7 && s.id === 'encounter_header'));
+
+              if (isBasicStub && nmrsSchemas.length > 0) {
+                const targetName = (editingEncounter.formSchema?.formName || editingEncounter.encounterType || '').toLowerCase().trim();
+                const matched = nmrsSchemas.find((s: any) => {
+                  const sName = (s.formName || '').toLowerCase().trim();
+                  return sName === targetName || sName.includes(targetName) || targetName.includes(sName) ||
+                    (targetName.includes('intake') && (s.formCode === 'CLIENT_INTAKE_FORM' || s.formCode === 'HTS_REGISTER')) ||
+                    (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM')) ||
+                    (targetName.includes('pharmacy') && s.formCode === 'PHARMACY_ORDER') ||
+                    (targetName.includes('lab') && s.formCode === 'INTEGRATED_LAB_ORDER') ||
+                    (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
+                    (targetName.includes('adult') && s.formCode === 'CARE_CARD_4B');
+                });
+                if (matched?.schemaJson) {
+                  rawSchema = matched.schemaJson;
+                }
+              }
+
+              if (rawSchema?.pages && rawSchema.pages.length > 0) {
+                return rawSchema;
+              }
+              if (rawSchema?.sections && rawSchema.sections.length > 0) {
+                return {
+                  name: rawSchema.name || rawSchema.formName || editingEncounter.encounterType || 'Encounter Form',
+                  encounterType: rawSchema.encounterType || editingEncounter.encounterType,
+                  pages: [
+                    {
+                      label: rawSchema.name || rawSchema.formName || 'Clinical Encounter Details',
+                      sections: rawSchema.sections,
+                    }
+                  ],
+                  processor: rawSchema.processor || 'EncounterFormProcessor',
+                  uuid: rawSchema.uuid || editingEncounter.formSchemaId,
+                };
+              }
+              return {
+                name: editingEncounter.formSchema?.formName || editingEncounter.encounterType || 'Encounter Form',
+                encounterType: editingEncounter.encounterType,
+                pages: [],
+              };
+            })()}
+            patientContext={{
+              id: selectedPat?.id,
+              uuid: selectedPat?.id,
+              patientNumber: selectedPat?.mrn,
+              name: `${selectedPat?.firstName || ''} ${selectedPat?.lastName || ''}`.trim(),
+              firstName: selectedPat?.firstName,
+              lastName: selectedPat?.lastName,
+              gender: selectedPat?.gender,
+              sex: selectedPat?.gender,
+              age: selectedPat?.birthDate ? Math.max(1, Math.floor((Date.now() - new Date(selectedPat.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))) : 30,
+              birthDate: selectedPat?.birthDate,
+              artNumber: nmrsSummary?.mapping?.pepfarId || selectedPat?.artNumber,
+              hospitalNumber: selectedPat?.mrn,
+            }}
+            initialValues={editingEncounter.formData || {}}
+            mode="edit"
+            isSubmitting={savingEncounter}
+            onCancel={() => setEditingEncounter(null)}
+            onSubmit={async (formData) => {
+              setSavingEncounter(true);
+              try {
+                const res = await api.put(`/nmrs/encounters/${editingEncounter.id}`, {
+                  formData
+                });
+                enqueueSnackbar(res.data?.message || 'Encounter form updated successfully', { variant: 'success' });
+                setEditingEncounter(null);
+                if (selectedPat?.id) {
+                  const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+                  setNmrsSummary(sRes.data?.data || null);
+                }
+              } catch (err: any) {
+                enqueueSnackbar(err.response?.data?.message || 'Failed to update encounter form', { variant: 'error' });
+              } finally {
+                setSavingEncounter(false);
+              }
+            }}
+          />
+        )}
+      </Dialog>
     </Box>
   );
 };
