@@ -8,7 +8,8 @@ import {
 } from '@mui/material';
 import {
   Visibility, VisibilityOff, Lock, Person, Key, Email, ArrowBack,
-  Shield, Sync, ArrowForward, CheckCircle, RadioButtonUnchecked
+  Shield, Sync, ArrowForward, CheckCircle, RadioButtonUnchecked,
+  ChevronLeft, ChevronRight
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
@@ -19,6 +20,51 @@ const pulseAnimation = keyframes`
   50% { transform: scale(1.25); opacity: 1; }
   100% { transform: scale(0.9); opacity: 0.6; }
 `;
+
+export const HOSPITAL_SLIDES = [
+  {
+    image: '/hospital_slides/slide0_laboratory_scientist.webp?v=2',
+    dept: 'Medical Laboratory & Diagnostics',
+    title: 'Diagnostic Excellence',
+    desc: 'Advanced medical diagnostics & pathology investigations',
+  },
+  {
+    image: '/hospital_slides/slide3_nurses_reception.webp?v=2',
+    dept: 'Outpatient Triage & Reception',
+    title: 'Compassionate Nursing Care',
+    desc: 'Dedicated healthcare staff welcoming patients 24/7',
+  },
+  {
+    image: '/hospital_slides/slide1_consultation_booth.webp?v=2',
+    dept: 'Clinical Consultation Suites',
+    title: 'Personalized Doctor Consultations',
+    desc: 'Attentive doctor evaluations and tailored patient treatment',
+  },
+  {
+    image: '/hospital_slides/slide2_hospital_hallway.webp?v=2',
+    dept: 'Inpatient Hallways & Patient Wards',
+    title: 'Serene Healing Environment',
+    desc: 'Immaculate, peaceful facility designed for patient recovery',
+  },
+  {
+    image: '/hospital_slides/slide4_records_administration.webp?v=2',
+    dept: 'Health Records & Administration',
+    title: 'Integrated Medical Records',
+    desc: 'Electronic health records and seamless clinic coordination',
+  },
+  {
+    image: '/hospital_slides/slide5_clinical_examination.webp?v=2',
+    dept: 'Clinical Examination Suite',
+    title: 'Diagnostic Examination Room',
+    desc: 'Fully equipped diagnostic stations and patient examination',
+  },
+  {
+    image: '/hospital_slides/slide6_cashier_point.webp?v=2',
+    dept: 'Patient Accounts & Cashier Point',
+    title: 'Admissions & Administrative Services',
+    desc: 'Transparent, efficient hospital admissions and payment desk',
+  },
+];
 
 const Login = () => {
   const { login, verify2FA } = useAuth();
@@ -57,6 +103,33 @@ const Login = () => {
   const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [startupPhases, setStartupPhases] = useState<any[]>([]);
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'starting' | 'unreachable'>('checking');
+
+  // Background Slideshow state
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Auto-advance slideshow & preload all slide images
+  useEffect(() => {
+    HOSPITAL_SLIDES.forEach((s) => {
+      const img = new window.Image();
+      img.src = assetUrl(s.image);
+    });
+
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % HOSPITAL_SLIDES.length);
+    }, 6500);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handlePrevSlide = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentSlide((prev) => (prev - 1 + HOSPITAL_SLIDES.length) % HOSPITAL_SLIDES.length);
+  };
+
+  const handleNextSlide = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentSlide((prev) => (prev + 1) % HOSPITAL_SLIDES.length);
+  };
 
   useEffect(() => {
     let interval: any = null;
@@ -193,17 +266,41 @@ const Login = () => {
         fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}
     >
-      {/* LEFT PANEL: Background + Logo + Text (55% width) */}
+      {/* LEFT PANEL: Slideshow Background + Hospital Branding + Navigation */}
       <Box
         sx={{
           display: { xs: 'none', md: 'flex' },
           width: '55%',
-          backgroundImage: `url(${assetUrl('/login_bg.webp')})`,  
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
           position: 'relative',
+          overflow: 'hidden',
+          backgroundColor: '#071533',
         }}
       >
+        {/* Render each slide with smooth cross-fade & Ken Burns zoom effect */}
+        {HOSPITAL_SLIDES.map((slide, index) => {
+          const isActive = index === currentSlide;
+          return (
+            <Box
+              key={slide.image}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: `url(${assetUrl(slide.image)})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                opacity: isActive ? 1 : 0,
+                transform: isActive ? 'scale(1.04)' : 'scale(1.0)',
+                transition: 'opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1), transform 8s cubic-bezier(0.2, 0, 0.2, 1)',
+                zIndex: 0,
+                pointerEvents: 'none',
+              }}
+            />
+          );
+        })}
+
         {/* Semi-transparent Overlay */}
         <Box
           sx={{
@@ -212,16 +309,17 @@ const Login = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(9, 31, 80, 0.88)',
+            background: 'linear-gradient(180deg, rgba(7, 22, 58, 0.70) 0%, rgba(8, 28, 72, 0.46) 45%, rgba(5, 17, 46, 0.78) 100%)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
-            p: { md: 4, lg: 5, xl: 8 },
+            p: { md: 3.5, lg: 4.5, xl: 7 },
+            zIndex: 1,
             '@media (max-height: 800px)': {
-              p: 4,
+              p: 3,
             },
             '@media (max-height: 700px)': {
-              p: 3,
+              p: 2.5,
             },
           }}
         >
@@ -233,8 +331,8 @@ const Login = () => {
               position: 'absolute',
               top: { xs: '10px', md: '15px', lg: '20px' },
               left: { xs: '10px', md: '15px', lg: '20px' },
-              width: { xs: '95px', md: '140px', lg: '180px', xl: '220px' },
-              height: { xs: '95px', md: '140px', lg: '180px', xl: '220px' },
+              width: { xs: '95px', md: '130px', lg: '170px', xl: '210px' },
+              height: { xs: '95px', md: '130px', lg: '170px', xl: '210px' },
               opacity: 0.35,
               filter: 'drop-shadow(-1px -1px 0px #fff) drop-shadow(1px -1px 0px #fff) drop-shadow(-1px 1px 0px #fff) drop-shadow(1px 1px 0px #fff) drop-shadow(0 0 8px rgba(255, 255, 255, 0.35))',
               objectFit: 'contain',
@@ -243,7 +341,7 @@ const Login = () => {
             }}
           />
 
-          {/* Top Section */}
+          {/* Top / Center Branding Section */}
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%', my: 'auto', zIndex: 1 }}>
             {/* Hospital Logo */}
             <Box
@@ -251,18 +349,18 @@ const Login = () => {
               src={assetUrl('/hospital-logo.webp')}
               decoding="async"
               sx={{
-                width: { xs: '180px', md: '240px', lg: '300px', xl: '350px' },
-                height: { xs: '180px', md: '240px', lg: '300px', xl: '350px' },
+                width: { xs: '160px', md: '210px', lg: '270px', xl: '320px' },
+                height: { xs: '160px', md: '210px', lg: '270px', xl: '320px' },
                 objectFit: 'contain',
                 mb: 0,
                 '@media (max-height: 800px)': {
-                  width: '240px',
-                  height: '240px',
+                  width: '200px',
+                  height: '200px',
                   mb: 0,
                 },
                 '@media (max-height: 700px)': {
-                  width: '190px',
-                  height: '190px',
+                  width: '165px',
+                  height: '165px',
                   mb: 0,
                 },
                 filter: 'drop-shadow(-2px -2px 0px #fff) drop-shadow(2px -2px 0px #fff) drop-shadow(-2px 2px 0px #fff) drop-shadow(2px 2px 0px #fff) drop-shadow(0 0 12px rgba(255, 255, 255, 0.45))',
@@ -270,20 +368,19 @@ const Login = () => {
               }}
             />
 
-            {/* Brand Block: Title and Subheading centered relative to each other */}
+            {/* Brand Block */}
             <Box
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 width: '100%',
-                mb: { xs: 2, md: 2.5, lg: 3 },
+                mb: { xs: 1.5, md: 2, lg: 2.5 },
                 '@media (max-height: 800px)': {
-                  mb: 2,
+                  mb: 1.5,
                 },
               }}
             >
-              {/* Typography */}
               <Typography
                 variant="h3"
                 fontWeight={700}
@@ -291,31 +388,27 @@ const Login = () => {
                 sx={{
                   color: '#fff',
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  fontSize: { md: '2.2rem', lg: '2.8rem', xl: '3.6rem' },
+                  fontSize: { md: '2.1rem', lg: '2.6rem', xl: '3.4rem' },
                   lineHeight: 1.15,
-                  mb: { xs: 1.5, md: 2, lg: 2.5 },
+                  mb: { xs: 1, md: 1.5, lg: 2 },
                   '@media (max-height: 800px)': {
-                    fontSize: '2.6rem',
-                    mb: 1.5,
+                    fontSize: '2.3rem',
+                    mb: 1,
                   },
                   '@media (max-height: 700px)': {
-                    fontSize: '2.1rem',
+                    fontSize: '1.9rem',
                   },
                 }}
               >
                 Faith Foundation<br />Mission Hospital<br />Nsukka
               </Typography>
 
-              {/* Accent Line + Subheading + Accent Line */}
+              {/* Accent Line + Subheading */}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 0.5 }}>
                 <Box
                   sx={{
                     width: { md: 35, lg: 40, xl: 50 },
                     height: { md: 2.5, lg: 3, xl: 3.5 },
-                    '@media (max-height: 800px)': {
-                      width: 35,
-                      height: 2.5,
-                    },
                     backgroundColor: '#d32f2f',
                     borderRadius: 1,
                   }}
@@ -327,9 +420,6 @@ const Login = () => {
                     letterSpacing: '0.25em',
                     fontWeight: 700,
                     fontSize: { md: '0.85rem', lg: '0.95rem', xl: '1.05rem' },
-                    '@media (max-height: 800px)': {
-                      fontSize: '0.95rem',
-                    },
                   }}
                 >
                   JEHOVAH RAPHA
@@ -338,10 +428,6 @@ const Login = () => {
                   sx={{
                     width: { md: 35, lg: 40, xl: 50 },
                     height: { md: 2.5, lg: 3, xl: 3.5 },
-                    '@media (max-height: 800px)': {
-                      width: 35,
-                      height: 2.5,
-                    },
                     backgroundColor: '#d32f2f',
                     borderRadius: 1,
                   }}
@@ -354,14 +440,14 @@ const Login = () => {
               variant="body1"
               textAlign="center"
               sx={{
-                color: 'rgba(255, 255, 255, 0.75)',
-                fontSize: { md: '0.95rem', lg: '1.05rem', xl: '1.2rem' },
-                lineHeight: 1.6,
+                color: 'rgba(255, 255, 255, 0.82)',
+                fontSize: { md: '0.9rem', lg: '1rem', xl: '1.15rem' },
+                lineHeight: 1.5,
                 maxWidth: { md: 440, lg: 480, xl: 520 },
                 mx: 'auto',
                 '@media (max-height: 800px)': {
-                  fontSize: '1.05rem',
-                  maxWidth: 480,
+                  fontSize: '0.95rem',
+                  maxWidth: 460,
                 },
               }}
             >
@@ -369,47 +455,129 @@ const Login = () => {
             </Typography>
           </Box>
 
-          {/* Bottom Section */}
-          <Box sx={{ mt: 'auto', alignSelf: 'center' }}>
-            {/* Info Badges */}
-            <Box sx={{ display: 'flex', gap: 4 }}>
+          {/* Bottom Section: Slideshow Department Indicator & Navigation Controls */}
+          <Box sx={{ mt: 'auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.8 }}>
+            {/* Interactive Department Badge & Prev/Next Arrows */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1.5,
+                backgroundColor: 'rgba(12, 32, 75, 0.65)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: 5,
+                px: 2,
+                py: 0.8,
+                maxWidth: '92%',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+              }}
+            >
+              <IconButton
+                size="small"
+                onClick={handlePrevSlide}
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.22)' },
+                  p: 0.5,
+                }}
+                aria-label="Previous hospital slide"
+              >
+                <ChevronLeft fontSize="small" />
+              </IconButton>
+
+              <Box sx={{ textAlign: 'center', minWidth: { md: 230, lg: 280 } }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: '#ffc107',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    fontSize: '0.72rem',
+                    display: 'block',
+                  }}
+                >
+                  {HOSPITAL_SLIDES[currentSlide].dept}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: { md: '0.78rem', lg: '0.86rem' },
+                    lineHeight: 1.25,
+                  }}
+                >
+                  {HOSPITAL_SLIDES[currentSlide].desc}
+                </Typography>
+              </Box>
+
+              <IconButton
+                size="small"
+                onClick={handleNextSlide}
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.22)' },
+                  p: 0.5,
+                }}
+                aria-label="Next hospital slide"
+              >
+                <ChevronRight fontSize="small" />
+              </IconButton>
+            </Box>
+
+            {/* Slide Progress Dots */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              {HOSPITAL_SLIDES.map((s, idx) => (
+                <Box
+                  key={s.image}
+                  onClick={() => setCurrentSlide(idx)}
+                  sx={{
+                    width: idx === currentSlide ? 24 : 7,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: idx === currentSlide ? '#d32f2f' : 'rgba(255, 255, 255, 0.35)',
+                    cursor: 'pointer',
+                    transition: 'all 0.35s ease',
+                    '&:hover': {
+                      backgroundColor: idx === currentSlide ? '#e53935' : 'rgba(255, 255, 255, 0.7)',
+                    },
+                  }}
+                  title={s.dept}
+                />
+              ))}
+            </Box>
+
+            {/* Info Badges (Secure Portal & NIGERIAMRS SYNC) */}
+            <Box sx={{ display: 'flex', gap: 4, pt: 0.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box
                   sx={{
-                    width: 36,
-                    height: 36,
+                    width: 30,
+                    height: 30,
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Shield sx={{ color: '#fff', fontSize: 18 }} />
+                  <Shield sx={{ color: '#fff', fontSize: 16 }} />
                 </Box>
-                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 600 }}>
+                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 600, fontSize: '0.8rem' }}>
                   Secure Portal
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Sync sx={{ color: '#fff', fontSize: 18 }} />
-                </Box>
-                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 600 }}>
-                  NIGERIAMRS SYNC
-                </Typography>
+                
+                
               </Box>
+            
             </Box>
           </Box>
         </Box>
