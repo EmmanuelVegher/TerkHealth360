@@ -853,6 +853,25 @@ async function runPullAllPatientsJob(job: PullJobState) {
   }
 }
 
+// ── 3.5. Providers & Locations from OpenMRS / NMRS MySQL ─────────────────────
+router.get('/providers', async (req: Request, res: Response) => {
+  try {
+    const providers = await NmrsMySqlConnector.fetchProviders();
+    return res.json({ success: true, data: providers });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/locations', async (req: Request, res: Response) => {
+  try {
+    const locations = await NmrsMySqlConnector.fetchLocations();
+    return res.json({ success: true, data: locations });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── 4. Dynamic Form Encounters ────────────────────────────────────────────────
 router.get('/encounters', async (req: Request, res: Response) => {
   try {

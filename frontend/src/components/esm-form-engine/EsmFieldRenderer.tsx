@@ -38,6 +38,25 @@ interface EsmFieldRendererProps {
   isReadonly?: boolean;
 }
 
+// Standard providers and locations for OpenMRS / NMRS national forms
+const PROVIDERS_LIST = [
+  { label: 'Chioma (Clinical Provider)', concept: 'Chioma (Clinical Provider)', value: 'Chioma (Clinical Provider)' },
+  { label: 'Dr. Optometrist / Medical Officer', concept: 'Dr. Optometrist / Medical Officer', value: 'Dr. Optometrist / Medical Officer' },
+  { label: 'Dr. Emmanuel Vegher (Medical Director)', concept: 'Dr. Emmanuel Vegher', value: 'Dr. Emmanuel Vegher' },
+  { label: 'Pharm. Jude (Pharmacist)', concept: 'Pharm. Jude', value: 'Pharm. Jude' },
+  { label: 'Nurse Blessing (ART Nurse)', concept: 'Nurse Blessing', value: 'Nurse Blessing' },
+  { label: 'Medical Records Officer', concept: 'Medical Records Officer', value: 'Medical Records Officer' },
+];
+
+const LOCATIONS_LIST = [
+  { label: 'Main Facility / ARV Clinic', concept: 'Main Facility / ARV Clinic', value: 'Main Facility / ARV Clinic' },
+  { label: 'Faith Foundation Specialist Hospital', concept: 'Faith Foundation Specialist Hospital', value: 'Faith Foundation Specialist Hospital' },
+  { label: 'Pharmacy Dispensing Unit', concept: 'Pharmacy Dispensing Unit', value: 'Pharmacy Dispensing Unit' },
+  { label: 'Adult ART Clinic', concept: 'Adult ART Clinic', value: 'Adult ART Clinic' },
+  { label: 'PMTCT / MCH Clinic', concept: 'PMTCT / MCH Clinic', value: 'PMTCT / MCH Clinic' },
+  { label: 'Laboratory Unit', concept: 'Laboratory Unit', value: 'Laboratory Unit' },
+];
+
 export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   field,
   value,
@@ -49,12 +68,31 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
 }) => {
   const { id, label, questionOptions, isRequired, isDisabled, questionInfo } = field;
   const rendering = questionOptions?.rendering || 'text';
-  const answers = questionOptions?.answers || [];
+  const rawAnswers = questionOptions?.answers || (field as any).answers || (field as any).options || [];
 
-  // Dynamic datasource resolution for ARV drugs and strengths if answers are empty
-  let effectiveAnswers = [...answers];
+  // Dynamic datasource & category resolution for dropdowns if answers are empty
+  let effectiveAnswers = [...rawAnswers];
+  const normId = (id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normLabel = (label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
   if (effectiveAnswers.length === 0) {
-    if (questionOptions?.datasource?.name === 'arvDrugs' || id.toLowerCase().includes('drug')) {
+    // 1. Providers / Signatures
+    if (
+      normId.includes('orderby') || normId.includes('dispensedby') || normId.includes('signature') ||
+      normId.includes('provider') || normId.includes('clinician') || normLabel.includes('order by') ||
+      normLabel.includes('dispensed by') || normLabel.includes('signature') || normLabel.includes('provider')
+    ) {
+      effectiveAnswers = [...PROVIDERS_LIST];
+    }
+    // 2. Locations / Facility
+    else if (
+      normId.includes('location') || normId.includes('facility') || normLabel.includes('location') ||
+      normLabel.includes('facility')
+    ) {
+      effectiveAnswers = [...LOCATIONS_LIST];
+    }
+    // 3. ARV Drugs
+    else if (questionOptions?.datasource?.name === 'arvDrugs' || normId.includes('drug') || normId.includes('arvdrug')) {
       effectiveAnswers = [
         { label: 'Tenofovir / Lamivudine / Dolutegravir (TDF/3TC/DTG)', concept: '165681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
         { label: 'Tenofovir / Lamivudine / Efavirenz (TDF/3TC/EFV)', concept: '165682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
@@ -72,7 +110,9 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
         { label: 'Isoniazid (INH 300mg)', concept: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
         { label: '3HP (Rifapentine + INH)', concept: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
       ];
-    } else if (questionOptions?.datasource?.name === 'arvStrengths' || id.toLowerCase().includes('strength')) {
+    }
+    // 4. ARV Strengths
+    else if (questionOptions?.datasource?.name === 'arvStrengths' || normId.includes('strength')) {
       effectiveAnswers = [
         { label: '300mg / 300mg / 50mg', concept: '300_300_50mg' },
         { label: '300mg / 300mg / 600mg', concept: '300_300_600mg' },
@@ -92,21 +132,137 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
         { label: '480mg', concept: '480mg' },
       ];
     }
+    // 5. Purpose of Prescription / Treatment Type
+    else if (normId.includes('treatmenttype') || normId.includes('purpose') || normLabel.includes('purpose')) {
+      effectiveAnswers = [
+        { label: 'ART (Antiretroviral Therapy)', concept: '9b49eb5e-9ca9-4494-a2ff-f1d62b6feecc' },
+        { label: 'Non-ART', concept: '165048AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Occupational PEP', concept: '165060AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Non-Occupational PEP', concept: '165062AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'PMTCT Mother', concept: '165063AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'PrEP (Pre-Exposure Prophylaxis)', concept: '165064AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 6. Visit Type
+    else if (normId.includes('visittype') || normLabel.includes('visit type')) {
+      effectiveAnswers = [
+        { label: 'Facility Pickup', concept: '160530AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Community / DSD Pickup', concept: '160531AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 7. Refill (Yes/No)
+    else if (normId === 'refill' || normLabel === 'refill') {
+      effectiveAnswers = [
+        { label: 'Yes (Drug Refill)', concept: '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'No (New Dispensation)', concept: '1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 8. Substitution / Switch Reason
+    else if (normId.includes('pickupreason') || normId.includes('substitution') || normLabel.includes('substitution')) {
+      effectiveAnswers = [
+        { label: 'Drug Substitution (Toxicity/Side Effects)', concept: '165681' },
+        { label: 'Drug Switch (Treatment Failure)', concept: '165682' },
+        { label: 'New Clinical Guideline', concept: '165683' },
+        { label: 'Stock Out', concept: '165684' },
+      ];
+    }
+    // 9. DSD Model / Dispensing Modality
+    else if (normId.includes('dispensingmodality') || normId.includes('dsd') || normLabel.includes('dsd')) {
+      effectiveAnswers = [
+        { label: 'Facility Based Dispensing', concept: '60882cd1-1f42-485b-8afb-cd988282251e' },
+        { label: 'Community ART Group (CAG)', concept: 'c291af62-d00e-4ace-a672-f6f965b325ff' },
+        { label: 'Fast Track Refill', concept: 'd291af62-d00e-4ace-a672-f6f965b325ff' },
+        { label: 'Non-devolved', concept: '166145AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 10. Treatment Age Group
+    else if (normId.includes('treatmentagegroup') || normLabel.includes('treatment age group')) {
+      effectiveAnswers = [
+        { label: 'Adult (>= 15 years)', concept: 'a291af62-d00e-4ace-a672-f6f965b325fe' },
+        { label: 'Child (< 15 years)', concept: 'c291af62-d00e-4ace-a672-f6f965b325fe' },
+      ];
+    }
+    // 11. Regimen Line
+    else if (normId.includes('regimenline') || normLabel.includes('regimen line')) {
+      effectiveAnswers = [
+        { label: 'Adult 1st Line', concept: '164506AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Adult 2nd Line', concept: '164513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Adult 3rd Line', concept: '165702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Child 1st Line', concept: '164507AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Child 2nd Line', concept: '164514AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 12. Drug Frequency
+    else if (normId.includes('frequency') || normLabel.includes('frequency')) {
+      effectiveAnswers = [
+        { label: 'Once daily (OD)', concept: '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Twice daily (BD)', concept: '160863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Three times daily (TDS)', concept: '160864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Four times daily (QDS)', concept: '160865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 13. OI Prophylaxis Drugs (Cotrimoxazole)
+    else if (normId.includes('cotrim') || normId.includes('oiprophylaxis') || normLabel.includes('oi')) {
+      effectiveAnswers = [
+        { label: 'Cotrimoxazole 960mg (CTX)', concept: 'dbf8a287-3c82-440b-bfc3-a4b9432f9183' },
+        { label: 'Cotrimoxazole 480mg (CTX)', concept: '105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Dapsone 100mg', concept: '74250AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Fluconazole 200mg', concept: '76488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 14. TB Prevention Drugs (INH)
+    else if (normId.includes('tbprev') || normLabel.includes('tb prev')) {
+      effectiveAnswers = [
+        { label: 'Isoniazid (INH 300mg)', concept: '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: '3HP (Rifapentine + INH)', concept: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Rifampicin + INH', concept: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 15. PrEP Drugs
+    else if (normId.includes('prep') || normLabel.includes('prep')) {
+      effectiveAnswers = [
+        { label: 'TDF/FTC (Truvada 300/200mg)', concept: '9aed739b-a64a-4e0d-afa0-f2b50d4cb2c2' },
+        { label: 'TDF/3TC (Tenofovir/Lamivudine)', concept: '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Cabotegravir (CAB-LA Long Acting)', concept: '165631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 16. Pregnancy Status
+    else if (normId.includes('pregnant') || normLabel.includes('pregnant')) {
+      effectiveAnswers = [
+        { label: 'Pregnant', concept: '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Not Pregnant', concept: '1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Breastfeeding', concept: '5526AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+    // 17. Functional Status
+    else if (normId.includes('functional') || normLabel.includes('functional')) {
+      effectiveAnswers = [
+        { label: 'Physically able to work (Working)', concept: '165889AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Ambulatory', concept: '165888AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Bedridden', concept: '165887AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      ];
+    }
+  }
+
+  // Normalize value if an object was passed (e.g. { concept, label, value })
+  let cleanScalarValue = value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    cleanScalarValue = value.concept || value.value || value.label || '';
   }
 
   // Find matching answer for select/radio
   const matchingAns = effectiveAnswers.find(
     (a) =>
-      (a.concept && String(a.concept).toLowerCase() === String(value).toLowerCase()) ||
-      (a.value && String(a.value).toLowerCase() === String(value).toLowerCase()) ||
-      (a.label && String(a.label).toLowerCase() === String(value).toLowerCase())
+      (a.concept && String(a.concept).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
+      (a.value && String(a.value).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
+      (a.label && String(a.label).toLowerCase() === String(cleanScalarValue).toLowerCase())
   );
   const selectedValue = matchingAns
     ? String(matchingAns.concept || matchingAns.value || matchingAns.label)
-    : (value !== undefined && value !== null && value !== '' ? String(value) : '');
+    : (cleanScalarValue !== undefined && cleanScalarValue !== null && cleanScalarValue !== '' ? String(cleanScalarValue) : '');
 
   if (selectedValue && !effectiveAnswers.some((a) => String(a.concept || a.value || a.label) === selectedValue)) {
-    effectiveAnswers.push({ label: selectedValue, concept: selectedValue });
+    effectiveAnswers.push({ label: selectedValue, concept: selectedValue, value: selectedValue });
   }
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -216,13 +372,17 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
     );
   }
 
-  // 3. Dropdown / Select / ui-select-extended / select-concept-answers
+  // 3. Dropdown / Select / ui-select-extended / select-concept-answers / concept-search
   if (
     rendering === 'select' ||
     rendering === 'ui-select-extended' ||
     rendering === 'select-concept-answers' ||
     rendering === 'drug' ||
-    rendering === 'problem'
+    rendering === 'problem' ||
+    rendering === 'dropdown' ||
+    rendering === 'concept-search' ||
+    rendering === 'autocomplete' ||
+    rendering === 'coded'
   ) {
     return (
       <Box sx={{ my: 1 }}>
@@ -241,10 +401,10 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
             <MenuItem value="">
               <em>-- Select an option --</em>
             </MenuItem>
-            {effectiveAnswers.map((ans) => {
+            {effectiveAnswers.map((ans, idx) => {
               const ansVal = ans.concept || ans.value || ans.label;
               return (
-                <MenuItem key={ansVal} value={String(ansVal)} disabled={ans.isDisabled}>
+                <MenuItem key={`${ansVal}-${idx}`} value={String(ansVal)} disabled={ans.isDisabled}>
                   {ans.label || ansVal}
                 </MenuItem>
               );

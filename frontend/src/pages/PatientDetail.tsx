@@ -19,6 +19,86 @@ import { RegistrationPrintTemplate } from '../components/RegistrationPrintTempla
 import { useAuth } from '../contexts/AuthContext';
 import { EsmFormEngine } from '../components/esm-form-engine';
 
+// Dictionary mapping OpenMRS CIEL concept UUIDs and coded values to human-readable labels
+const CIEL_NAME_DICTIONARY: Record<string, string> = {
+  '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Yes',
+  '1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'No',
+  '1085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Refill / Follow-up',
+  '160530AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Facility Pickup',
+  '160531AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Community Pickup',
+  '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Once daily (OD)',
+  '160863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Twice daily (BD)',
+  '164506AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Adult 1st Line',
+  '164513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Adult 2nd Line',
+  '165702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Adult 3rd Line',
+  '165681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '1a: TDF + 3TC + DTG',
+  '8a343013-0216-44e0-aefe-53909ffd5631': '1a: TDF + 3TC + DTG',
+  '165682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '1b: TDF + 3TC + EFV400',
+  '165688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '2a: AZT + 3TC + ATV/r',
+  '9b49eb5e-9ca9-4494-a2ff-f1d62b6feecc': 'ART (Antiretroviral Therapy)',
+  'a291af62-d00e-4ace-a672-f6f965b325fe': 'Adult (>= 15 years)',
+  '60882cd1-1f42-485b-8afb-cd988282251e': 'Facility-based Dispensing',
+  '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Isoniazid (INH 300mg)',
+  '9aed739b-a64a-4e0d-afa0-f2b50d4cb2c2': 'TDF/FTC (Truvada)',
+  'dbf8a287-3c82-440b-bfc3-a4b9432f9183': 'Cotrimoxazole (CTX 960mg)',
+  'fcd74eb9-c917-42b1-969a-696b15a5627c': '300mg',
+  '5942eb74-1dca-4199-bd60-875b0fcc683a': '300mg / 200mg',
+  'c03561ed-1402-4bfe-b95d-9547fe6b9bf7': '960mg',
+  '166144AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Devolved',
+  '166145AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Non-devolved',
+  '165889AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Physically able to work',
+  '165888AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Ambulatory',
+  '165887AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Bedridden',
+};
+
+export const formatObsSummary = (k: string, v: any): string => {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (typeof v === 'number') return String(v);
+
+  if (typeof v === 'string') {
+    if (CIEL_NAME_DICTIONARY[v]) return CIEL_NAME_DICTIONARY[v];
+    return v;
+  }
+
+  if (Array.isArray(v)) {
+    if (v.length === 0) return 'None';
+    const first = v[0];
+    if (typeof first === 'object' && first !== null) {
+      if (k.toLowerCase().includes('tb_prev')) {
+        const drug = CIEL_NAME_DICTIONARY[first.tb_prev_drugs] || 'INH (Isoniazid)';
+        const days = first.tb_prevDispensedInDays || first.qty_prescribed_tb_prev || '90';
+        return `${drug} (${days} days / ${days} tabs)`;
+      }
+      if (k.toLowerCase().includes('prep')) {
+        const drug = CIEL_NAME_DICTIONARY[first.prev_drugs] || 'TDF/FTC (PrEP)';
+        const days = first.prepDispensedInDays || first.qty_prescribed_prev || '90';
+        return `${drug} (${days} days)`;
+      }
+      if (k.toLowerCase().includes('oi_prophylaxis')) {
+        const drug = CIEL_NAME_DICTIONARY[first.drugs_Cotrim] || 'Cotrimoxazole (CTX)';
+        const days = first.oi_prophylaxisDispensedInDays || first.qty_prescribed_Cotrim || '90';
+        return `${drug} (${days} days)`;
+      }
+      const label = first.label || first.name || first.drug || Object.values(first)[0];
+      return `${typeof label === 'string' ? label : 'Prescribed'} (${v.length} item${v.length > 1 ? 's' : ''})`;
+    }
+    return v.map((item) => (CIEL_NAME_DICTIONARY[String(item)] || String(item))).join(', ');
+  }
+
+  if (typeof v === 'object') {
+    if (v.label) return String(v.label);
+    if (v.name) return String(v.name);
+    if (v.display) return String(v.display);
+    if (v.value && typeof v.value !== 'object') return formatObsSummary(k, v.value);
+    const prims = Object.values(v).filter((x) => typeof x === 'string' || typeof x === 'number');
+    if (prims.length > 0) return String(prims[0]);
+    return JSON.stringify(v);
+  }
+
+  return String(v);
+};
+
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -65,9 +145,7 @@ const PatientDetail = () => {
     refill: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
     pickupreason: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
     pickupreasonpharm: ['refill', 'pickupreason', 'pick_up_reason_pharm'],
-    dsdmodel: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
-    dsdstatus: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
-    dispensingmodality: ['dsdmodel', 'dsdstatus', 'dispensingmodality', 'dispensing_modality'],
+
     calculatednextappointmentdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
     returnvisitdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
     nextappointmentdate: ['calculatednextappointmentdate', 'returnvisitdate', 'nextappointmentdate', 'nextrefilldate'],
@@ -81,14 +159,28 @@ const PatientDetail = () => {
     multimonthdispensingmmd: ['multimonthdispensingmmd', 'mmd'],
     mmd: ['multimonthdispensingmmd', 'mmd'],
     adherencecounselingoffering: ['adherencecounselingoffering', 'adherencecounseling', 'adherence'],
-    weight: ['weight', 'latestweight', 'patientweightatinitiationkg'],
-    latestweight: ['weight', 'latestweight', 'patientweightatinitiationkg'],
-    height: ['height', 'latestheight', 'patientheightatinitiationcm'],
-    latestheight: ['height', 'latestheight', 'patientheightatinitiationcm'],
-    whostage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage'],
-    whohivclinicalstage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage'],
-    tbscreeningstatus: ['tbscreeningstatus', 'tuberculosisdiseasestatus'],
-    tuberculosisdiseasestatus: ['tbscreeningstatus', 'tuberculosisdiseasestatus']
+    weight: ['weight', 'latestweight', 'weightkg', 'patientweightatinitiationkg', 'patientweight', 'currentweight', '5089'],
+    latestweight: ['weight', 'latestweight', 'weightkg', 'patientweightatinitiationkg', 'patientweight', 'currentweight', '5089'],
+    height: ['height', 'latestheight', 'heightcm', 'patientheightatinitiationcm', 'patientheight', 'currentheight', '5090'],
+    latestheight: ['height', 'latestheight', 'heightcm', 'patientheightatinitiationcm', 'patientheight', 'currentheight', '5090'],
+    bodymassindex: ['bodymassindex', 'bmi', '1342'],
+    bmi: ['bodymassindex', 'bmi', '1342'],
+    dsdstatus: ['dsdstatus', 'dsdmodel', 'dispensingmodality', 'dispensing_modality', '166144', '166145'],
+    dsdmodel: ['dsdstatus', 'dsdmodel', 'dispensingmodality', 'dispensing_modality', '166144', '166145'],
+    dispensingmodality: ['dsdstatus', 'dsdmodel', 'dispensingmodality', 'dispensing_modality', '166144', '166145'],
+    functionalstatus: ['functionalstatus', 'functional_status', '165889', '165888', '165887'],
+    familyplanning: ['familyplanning', 'familyplanningmethod', 'fpmethod', '1388', '374'],
+    viralload: ['viralload', 'viralloadvalue', 'vl', 'lastviralload', 'viralloadcopiesml', '856'],
+    viralloadvalue: ['viralload', 'viralloadvalue', 'vl', 'lastviralload', 'viralloadcopiesml', '856'],
+    cd4: ['cd4', 'cd4value', 'cd4count', 'lastcd4count', '5497'],
+    cd4value: ['cd4', 'cd4value', 'cd4count', 'lastcd4count', '5497'],
+    tbstatus: ['tbstatus', 'tbscreeningstatus', 'tuberculosisdiseasestatus', 'tb_screening_status', '1659'],
+    tbscreeningstatus: ['tbstatus', 'tbscreeningstatus', 'tuberculosisdiseasestatus', 'tb_screening_status', '1659'],
+    whostage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage', '1204', '1205', '1206', '1207'],
+    whohivclinicalstage: ['whohivclinicalstage', 'currentwhohivstage', 'whostage', '1204', '1205', '1206', '1207'],
+    signature: ['signature', 'orderby', 'dispensedby', 'provider', 'clinician'],
+    orderby: ['signature', 'orderby', 'dispensedby', 'provider', 'clinician'],
+    dispensedby: ['signature', 'orderby', 'dispensedby', 'provider', 'clinician']
   };
 
   const STANDARD_NMRS_DROPDOWNS: Record<string, string[]> = {
@@ -372,25 +464,67 @@ const PatientDetail = () => {
     }
   };
 
+  const mapValueToAnswer = (q: any, rawVal: any): any => {
+    if (rawVal === undefined || rawVal === null || rawVal === '') return '';
+    const answers = q.questionOptions?.answers || q.options || q.answers || [];
+    if (!answers || answers.length === 0) return rawVal;
+
+    const rawStr = String(rawVal).toLowerCase().trim();
+
+    // 1. Exact match on concept or value
+    const exactMatch = answers.find((a: any) =>
+      String(a.concept || a.value || '').toLowerCase() === rawStr
+    );
+    if (exactMatch) return exactMatch.concept || exactMatch.value;
+
+    // 2. Match on human readable label (e.g. "Non-devolved", "Physically able to work", "Yes")
+    const labelMatch = answers.find((a: any) =>
+      String(a.label || '').toLowerCase().trim() === rawStr ||
+      normalizeKey(String(a.label || '')) === normalizeKey(rawStr)
+    );
+    if (labelMatch) return labelMatch.concept || labelMatch.value || labelMatch.label;
+
+    // 3. Partial label match
+    const partialMatch = answers.find((a: any) =>
+      a.label && (rawStr.includes(String(a.label).toLowerCase()) || String(a.label).toLowerCase().includes(rawStr))
+    );
+    if (partialMatch) return partialMatch.concept || partialMatch.value || partialMatch.label;
+
+    return rawVal;
+  };
+
   const resolveInitialValue = (q: any, rawData: Record<string, any>, encounter: any): any => {
-    if (rawData[q.label] !== undefined && rawData[q.label] !== '') return rawData[q.label];
-    if (rawData[q.id] !== undefined && rawData[q.id] !== '') return rawData[q.id];
+    if (rawData[q.label] !== undefined && rawData[q.label] !== '') return mapValueToAnswer(q, rawData[q.label]);
+    if (rawData[q.id] !== undefined && rawData[q.id] !== '') return mapValueToAnswer(q, rawData[q.id]);
 
     const qNormId = normalizeKey(q.id);
     const qNormLabel = normalizeKey(q.label);
 
+    // 1. Direct key/label match
     for (const [k, v] of Object.entries(rawData)) {
       const kNorm = normalizeKey(k);
       if ((kNorm === qNormId || kNorm === qNormLabel) && v !== undefined && v !== '') {
-        return v;
+        return mapValueToAnswer(q, v);
       }
     }
 
+    // 2. Concept ID or Concept UUID match
+    const qConcept = String(q.conceptId || q.questionOptions?.concept || '');
+    if (qConcept) {
+      const normConcept = normalizeKey(qConcept);
+      for (const [k, v] of Object.entries(rawData)) {
+        if (normalizeKey(k) === normConcept && v !== undefined && v !== '') {
+          return mapValueToAnswer(q, v);
+        }
+      }
+    }
+
+    // 3. Aliases match
     const aliases = [...(ALIAS_MAP[qNormId] || []), ...(ALIAS_MAP[qNormLabel] || [])];
     for (const alias of aliases) {
       for (const [k, v] of Object.entries(rawData)) {
         if (normalizeKey(k) === alias && v !== undefined && v !== '') {
-          return v;
+          return mapValueToAnswer(q, v);
         }
       }
     }
@@ -1181,7 +1315,7 @@ const PatientDetail = () => {
                               {Object.entries(ne.formData).slice(0, 6).map(([k, v]: [string, any]) => (
                                 <Grid item xs={12} sm={6} md={4} key={k}>
                                   <Typography variant="caption" color="text.secondary" display="block">{k}</Typography>
-                                  <Typography variant="body2" fontWeight={600} noWrap>{String(v)}</Typography>
+                                  <Typography variant="body2" fontWeight={600} noWrap title={formatObsSummary(k, v)}>{formatObsSummary(k, v)}</Typography>
                                 </Grid>
                               ))}
                             </Grid>

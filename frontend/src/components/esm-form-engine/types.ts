@@ -222,7 +222,11 @@ export type RenderType =
   | 'workspace-launcher'
   | 'markdown'
   | 'extension-widget'
-  | 'select-concept-answers';
+  | 'select-concept-answers'
+  | 'dropdown'
+  | 'concept-search'
+  | 'autocomplete'
+  | 'coded';
 
 export interface RepeatOptions {
   addText?: string;

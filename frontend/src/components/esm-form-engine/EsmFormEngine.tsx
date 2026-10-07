@@ -83,8 +83,15 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
 
   // Handle Field Value Change & Run Calculate Expressions
   const handleFieldChange = useCallback((fieldId: string, value: any) => {
+    let cleanVal = value;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value.value !== undefined) cleanVal = value.value;
+      else if (value.concept !== undefined) cleanVal = value.concept;
+      else if (value.label !== undefined) cleanVal = value.label;
+    }
+
     setFormValues((prev) => {
-      const updated = { ...prev, [fieldId]: value };
+      const updated = { ...prev, [fieldId]: cleanVal };
 
       // Evaluate any calculate expressions on dependent fields
       allRawFields.forEach((field) => {

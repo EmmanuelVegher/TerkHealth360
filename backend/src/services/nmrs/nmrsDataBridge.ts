@@ -1081,6 +1081,16 @@ export class NmrsDataBridge {
       }
     }
 
+    // 0. Primary: Direct MySQL push to OpenMRS database on laptop server
+    try {
+      const mysqlRes = await NmrsMySqlConnector.pushEncounterToMySql(recordId);
+      if (mysqlRes?.success) {
+        return mysqlRes;
+      }
+    } catch (err: any) {
+      console.warn(`[NMRS Push] Direct MySQL push failed (${err.message}), falling back to REST/FHIR`);
+    }
+
     // 1. Attempt OpenMRS REST Web Services POST /ws/rest/v1/encounter
     try {
       const { client: restClient } = await this.getRestClient(8000);
