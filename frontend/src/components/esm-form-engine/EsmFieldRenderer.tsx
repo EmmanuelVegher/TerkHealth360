@@ -3,7 +3,7 @@
  * Replicates input controls from @openmrs/esm-form-engine-lib/src/components/inputs
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,6 +27,8 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoIcon } from '@mui/icons-material';
 import { FormField, PatientContext } from './types';
+import { matchAnswerConcept, normalizeDateToYMD } from './legacyFormNormalizer';
+import { api } from '../../services/api';
 
 interface EsmFieldRendererProps {
   field: FormField;
@@ -38,14 +40,15 @@ interface EsmFieldRendererProps {
   isReadonly?: boolean;
 }
 
-// Standard providers and locations for OpenMRS / NMRS national forms
-const PROVIDERS_LIST = [
-  { label: 'Chioma (Clinical Provider)', concept: 'Chioma (Clinical Provider)', value: 'Chioma (Clinical Provider)' },
-  { label: 'Dr. Optometrist / Medical Officer', concept: 'Dr. Optometrist / Medical Officer', value: 'Dr. Optometrist / Medical Officer' },
+// Fallback clinical providers reflecting authentic hospital staffing
+const FALLBACK_PROVIDERS_LIST = [
+  { label: 'Dr. John Smith (Chief Consultant Physician)', concept: 'Dr. John Smith', value: 'Dr. John Smith' },
   { label: 'Dr. Emmanuel Vegher (Medical Director)', concept: 'Dr. Emmanuel Vegher', value: 'Dr. Emmanuel Vegher' },
-  { label: 'Pharm. Jude (Pharmacist)', concept: 'Pharm. Jude', value: 'Pharm. Jude' },
-  { label: 'Nurse Blessing (ART Nurse)', concept: 'Nurse Blessing', value: 'Nurse Blessing' },
-  { label: 'Medical Records Officer', concept: 'Medical Records Officer', value: 'Medical Records Officer' },
+  { label: 'Pharm. Kemi Adeleke (Director of Pharmacy Services)', concept: 'Pharm. Kemi Adeleke', value: 'Pharm. Kemi Adeleke' },
+  { label: 'Pharm. Ibrahim Musa (Chief Pharmacist)', concept: 'Pharm. Ibrahim Musa', value: 'Pharm. Ibrahim Musa' },
+  { label: 'Pharm. Chidi Nwosu (Clinical Pharmacist)', concept: 'Pharm. Chidi Nwosu', value: 'Pharm. Chidi Nwosu' },
+  { label: 'Nurse Blessing (Senior ART Nursing Officer)', concept: 'Nurse Blessing', value: 'Nurse Blessing' },
+  { label: 'Medical Records Officer (Health Records)', concept: 'Medical Records Officer', value: 'Medical Records Officer' },
 ];
 
 const LOCATIONS_LIST = [
@@ -56,6 +59,33 @@ const LOCATIONS_LIST = [
   { label: 'PMTCT / MCH Clinic', concept: 'PMTCT / MCH Clinic', value: 'PMTCT / MCH Clinic' },
   { label: 'Laboratory Unit', concept: 'Laboratory Unit', value: 'Laboratory Unit' },
 ];
+
+// In-memory cache for live providers loaded from database / OpenMRS
+let cachedProviders: Array<{ label: string; concept: string; value: string }> | null = null;
+let isFetchingProviders = false;
+
+export const loadProvidersFromApi = async (): Promise<Array<{ label: string; concept: string; value: string }>> => {
+  if (cachedProviders && cachedProviders.length > 0) return cachedProviders;
+  if (isFetchingProviders) return cachedProviders || [];
+  isFetchingProviders = true;
+  try {
+    const res = await api.get('/nmrs/providers');
+    const list = res.data?.data || [];
+    if (Array.isArray(list) && list.length > 0) {
+      cachedProviders = list.map((p: any) => ({
+        label: p.name || p.identifier,
+        concept: p.name || p.uuid || p.identifier,
+        value: p.name || p.identifier
+      }));
+      return cachedProviders;
+    }
+  } catch {
+    // ignore
+  } finally {
+    isFetchingProviders = false;
+  }
+  return cachedProviders || [];
+};
 
 export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   field,
@@ -70,19 +100,38 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   const rendering = questionOptions?.rendering || 'text';
   const rawAnswers = questionOptions?.answers || (field as any).answers || (field as any).options || [];
 
-  // Dynamic datasource & category resolution for dropdowns if answers are empty
-  let effectiveAnswers = [...rawAnswers];
+  const [providerOptions, setProviderOptions] = useState<any[]>(() => cachedProviders || []);
+
   const normId = (id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const normLabel = (label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+  const isProviderField =
+    field.type === 'encounterProvider' ||
+    normId.includes('orderby') || normId.includes('dispensedby') || normId.includes('signature') ||
+    normId.includes('provider') || normId.includes('clinician') || normLabel.includes('order by') ||
+    normLabel.includes('dispensed by') || normLabel.includes('signature') || normLabel.includes('provider');
+
+  useEffect(() => {
+    if (isProviderField) {
+      if (!cachedProviders || cachedProviders.length === 0) {
+        loadProvidersFromApi().then((list) => {
+          if (list && list.length > 0) {
+            setProviderOptions(list);
+          }
+        });
+      }
+    }
+  }, [isProviderField]);
+
+  // Dynamic datasource & category resolution for dropdowns if answers are empty
+  let effectiveAnswers = [...rawAnswers];
+
   if (effectiveAnswers.length === 0) {
     // 1. Providers / Signatures
-    if (
-      normId.includes('orderby') || normId.includes('dispensedby') || normId.includes('signature') ||
-      normId.includes('provider') || normId.includes('clinician') || normLabel.includes('order by') ||
-      normLabel.includes('dispensed by') || normLabel.includes('signature') || normLabel.includes('provider')
-    ) {
-      effectiveAnswers = [...PROVIDERS_LIST];
+    if (isProviderField) {
+      effectiveAnswers = providerOptions.length > 0
+        ? providerOptions
+        : (cachedProviders && cachedProviders.length > 0 ? cachedProviders : [...FALLBACK_PROVIDERS_LIST]);
     }
     // 2. Locations / Facility
     else if (
@@ -91,45 +140,64 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
     ) {
       effectiveAnswers = [...LOCATIONS_LIST];
     }
-    // 3. ARV Drugs
-    else if (questionOptions?.datasource?.name === 'arvDrugs' || normId.includes('drug') || normId.includes('arvdrug')) {
+    // 3. ARV Strengths (Checked before drugs because field IDs like 'Drug_Strength_ART_1' contain 'drug')
+    else if (
+      questionOptions?.datasource?.name === 'arvStrengths' ||
+      normId.includes('strength') ||
+      normLabel.includes('strength')
+    ) {
       effectiveAnswers = [
-        { label: 'Tenofovir / Lamivudine / Dolutegravir (TDF/3TC/DTG)', concept: '165681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Tenofovir / Lamivudine / Efavirenz (TDF/3TC/EFV)', concept: '165682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Abacavir / Lamivudine / Dolutegravir (ABC/3TC/DTG)', concept: '165692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Zidovudine / Lamivudine / Nevirapine (AZT/3TC/NVP)', concept: '165686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Abacavir / Lamivudine (ABC/3TC)', concept: '165691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Tenofovir / Lamivudine (TDF/3TC)', concept: '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Zidovudine / Lamivudine (AZT/3TC)', concept: '161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Dolutegravir (DTG 50mg)', concept: '165631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Atazanavir / Ritonavir (ATV/r 300/100mg)', concept: '161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Lopinavir / Ritonavir (LPV/r 200/50mg)', concept: '794AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Darunavir / Ritonavir (DRV/r 600/100mg)', concept: '165633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Raltegravir (RAL 400mg)', concept: '154378AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Cotrimoxazole (CTX 960mg)', concept: '105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: 'Isoniazid (INH 300mg)', concept: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-        { label: '3HP (Rifapentine + INH)', concept: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: '300/300/50mg', concept: '300/300/50mg', value: '300/300/50mg' },
+        { label: '300/300/600mg', concept: '300/300/600mg', value: '300/300/600mg' },
+        { label: '300/150/200mg', concept: '300/150/200mg', value: '300/150/200mg' },
+        { label: '600/300/50mg', concept: '600/300/50mg', value: '600/300/50mg' },
+        { label: '600/300/600mg', concept: '600/300/600mg', value: '600/300/600mg' },
+        { label: '300/300mg', concept: '300/300mg', value: '300/300mg' },
+        { label: '300/150mg', concept: '300/150mg', value: '300/150mg' },
+        { label: '300/100mg', concept: '300/100mg', value: '300/100mg' },
+        { label: '200/50mg', concept: '200/50mg', value: '200/50mg' },
+        { label: '300mg', concept: '300mg', value: '300mg' },
+        { label: '200mg', concept: '200mg', value: '200mg' },
+        { label: '150mg', concept: '150mg', value: '150mg' },
+        { label: '100mg', concept: '100mg', value: '100mg' },
+        { label: '50mg', concept: '50mg', value: '50mg' },
+        { label: '10mg', concept: '10mg', value: '10mg' },
+        { label: '600mg', concept: '600mg', value: '600mg' },
+        { label: '400mg', concept: '400mg', value: '400mg' },
+        { label: '960mg', concept: '960mg', value: '960mg' },
+        { label: '480mg', concept: '480mg', value: '480mg' },
       ];
     }
-    // 4. ARV Strengths
-    else if (questionOptions?.datasource?.name === 'arvStrengths' || normId.includes('strength')) {
+    // 4. ARV Drugs (Clean NMRS mappings without duplicate CIEL options)
+    else if (
+      questionOptions?.datasource?.name === 'arvDrugs' ||
+      ((normId.includes('drug') || normId.includes('arvdrug')) &&
+        !normId.includes('strength') &&
+        !normLabel.includes('strength') &&
+        !normId.includes('frequency') &&
+        !normLabel.includes('frequency') &&
+        !normId.includes('duration') &&
+        !normId.includes('qty') &&
+        !normId.includes('cotrim') &&
+        !normId.includes('tbprev') &&
+        !normId.includes('prep'))
+    ) {
       effectiveAnswers = [
-        { label: '300mg / 300mg / 50mg', concept: '300_300_50mg' },
-        { label: '300mg / 300mg / 600mg', concept: '300_300_600mg' },
-        { label: '300mg / 150mg / 200mg', concept: '300_150_200mg' },
-        { label: '600mg / 300mg / 50mg', concept: '600_300_50mg' },
-        { label: '300mg / 300mg', concept: '300_300mg' },
-        { label: '300mg / 150mg', concept: '300_150mg' },
-        { label: '300mg', concept: '300mg' },
-        { label: '50mg', concept: '50mg' },
-        { label: '10mg', concept: '10mg' },
-        { label: '600mg', concept: '600mg' },
-        { label: '400mg', concept: '400mg' },
-        { label: '200mg', concept: '200mg' },
-        { label: '300mg / 100mg', concept: '300_100mg' },
-        { label: '200mg / 50mg', concept: '200_50mg' },
-        { label: '960mg', concept: '960mg' },
-        { label: '480mg', concept: '480mg' },
+        { label: 'Tenofovir / Lamivudine / Dolutegravir (TDF/3TC/DTG)', concept: '8a343013-0216-44e0-aefe-53909ffd5631', value: '8a343013-0216-44e0-aefe-53909ffd5631' },
+        { label: 'Tenofovir / Lamivudine / Efavirenz (TDF/3TC/EFV)', concept: '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Abacavir / Lamivudine / Dolutegravir (ABC/3TC/DTG)', concept: '14c41615-9c0e-4254-b4b1-770956d390e9', value: '14c41615-9c0e-4254-b4b1-770956d390e9' },
+        { label: 'Zidovudine / Lamivudine / Nevirapine (AZT/3TC/NVP)', concept: '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Abacavir / Lamivudine (ABC/3TC)', concept: '165691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '165691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Tenofovir / Lamivudine (TDF/3TC)', concept: '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Zidovudine / Lamivudine (AZT/3TC)', concept: '161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Dolutegravir (DTG 50mg)', concept: '165631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '165631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Atazanavir / Ritonavir (ATV/r 300/100mg)', concept: '161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Lopinavir / Ritonavir (LPV/r 200/50mg)', concept: '794AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '794AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Darunavir / Ritonavir (DRV/r 600/100mg)', concept: '165633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '165633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Raltegravir (RAL 400mg)', concept: '154378AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '154378AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Cotrimoxazole (CTX 960mg)', concept: '105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: 'Isoniazid (INH 300mg)', concept: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+        { label: '3HP (Rifapentine + INH)', concept: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', value: '167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
       ];
     }
     // 5. Purpose of Prescription / Treatment Type
@@ -251,15 +319,22 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   }
 
   // Find matching answer for select/radio
-  const matchingAns = effectiveAnswers.find(
-    (a) =>
-      (a.concept && String(a.concept).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
-      (a.value && String(a.value).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
-      (a.label && String(a.label).toLowerCase() === String(cleanScalarValue).toLowerCase())
-  );
+  const matchedUuid = matchAnswerConcept(cleanScalarValue, effectiveAnswers);
+  const matchingAns = matchedUuid
+    ? effectiveAnswers.find(
+        (a) =>
+          (a.concept && a.concept.toLowerCase() === matchedUuid.toLowerCase()) ||
+          (a.value && String(a.value).toLowerCase() === matchedUuid.toLowerCase())
+      )
+    : effectiveAnswers.find(
+        (a) =>
+          (a.concept && String(a.concept).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
+          (a.value && String(a.value).toLowerCase() === String(cleanScalarValue).toLowerCase()) ||
+          (a.label && String(a.label).toLowerCase() === String(cleanScalarValue).toLowerCase())
+      );
   const selectedValue = matchingAns
     ? String(matchingAns.concept || matchingAns.value || matchingAns.label)
-    : (cleanScalarValue !== undefined && cleanScalarValue !== null && cleanScalarValue !== '' ? String(cleanScalarValue) : '');
+    : (matchedUuid ? String(matchedUuid) : (cleanScalarValue !== undefined && cleanScalarValue !== null && cleanScalarValue !== '' ? String(cleanScalarValue) : ''));
 
   if (selectedValue && !effectiveAnswers.some((a) => String(a.concept || a.value || a.label) === selectedValue)) {
     effectiveAnswers.push({ label: selectedValue, concept: selectedValue, value: selectedValue });
@@ -417,19 +492,19 @@ export const EsmFieldRenderer: React.FC<EsmFieldRendererProps> = ({
   }
 
   // 4. Date / DateTime
-  if (rendering === 'date' || rendering === 'datetime') {
+  if (rendering === 'date' || rendering === 'datetime' || field.type === 'encounterDatetime') {
     const safeDateValue = (() => {
       if (!value || typeof value === 'boolean' || value === 'true' || value === 'false') return '';
-      try {
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return '';
-        if (rendering === 'datetime') {
+      if (rendering === 'datetime') {
+        try {
+          const d = new Date(value);
+          if (isNaN(d.getTime())) return '';
           return d.toISOString().slice(0, 16);
+        } catch {
+          return '';
         }
-        return d.toISOString().slice(0, 10);
-      } catch {
-        return '';
       }
+      return normalizeDateToYMD(value);
     })();
 
     return (

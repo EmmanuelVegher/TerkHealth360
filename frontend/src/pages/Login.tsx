@@ -30,15 +30,15 @@ export const HOSPITAL_SLIDES = [
   },
   {
     image: '/hospital_slides/slide3_nurses_reception.webp?v=2',
-    dept: 'Outpatient Triage & Reception',
+    dept: 'Nursing Station',
     title: 'Compassionate Nursing Care',
     desc: 'Dedicated healthcare staff welcoming patients 24/7',
   },
   {
     image: '/hospital_slides/slide1_consultation_booth.webp?v=2',
-    dept: 'Clinical Consultation Suites',
-    title: 'Personalized Doctor Consultations',
-    desc: 'Attentive doctor evaluations and tailored patient treatment',
+    dept: 'Outpatient Triage & Reception',
+    title: 'Compassionate Nursing Care',
+    desc: 'Dedicated healthcare staff welcoming patients 24/7',
   },
   {
     image: '/hospital_slides/slide2_hospital_hallway.webp?v=2',
@@ -73,13 +73,13 @@ const Login = () => {
 
   // Navigation steps: 'login' | 'mfa' | 'reset_temp' | 'forgot'
   const [step, setStep] = useState<'login' | 'mfa' | 'reset_temp' | 'forgot'>('login');
-  
+
   // Login form state
   const [usernameOrEmail, setUsernameOrEmail] = useState('admin');
   const [password, setPassword] = useState('admin123');
   const [showPw, setShowPw] = useState(false);
   const [trustDevice, setTrustDevice] = useState(false);
-  
+
   // MFA state
   const [mfaCode, setMfaCode] = useState('');
   const [mfaType, setMfaType] = useState('TOTP'); // 'TOTP' or 'EMAIL'
@@ -574,10 +574,10 @@ const Login = () => {
               </Box>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                
-                
+
+
               </Box>
-            
+
             </Box>
           </Box>
         </Box>
@@ -712,8 +712,8 @@ const Login = () => {
                     {startupPhases.map((phase) => (
                       <Box key={phase.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {phase.status === 'done' ? <CheckCircle sx={{ color: 'success.main', fontSize: 16 }} /> :
-                         phase.status === 'running' ? <CircularProgress size={14} sx={{ ml: '1px', mr: '1px' }} /> :
-                         <RadioButtonUnchecked sx={{ color: 'text.disabled', fontSize: 16 }} />}
+                          phase.status === 'running' ? <CircularProgress size={14} sx={{ ml: '1px', mr: '1px' }} /> :
+                            <RadioButtonUnchecked sx={{ color: 'text.disabled', fontSize: 16 }} />}
                         <Typography variant="caption" sx={{ color: phase.status === 'running' ? 'primary.main' : phase.status === 'pending' ? 'text.disabled' : 'text.primary', fontWeight: phase.status === 'running' ? 700 : 400 }}>
                           {phase.label}
                         </Typography>
@@ -1264,23 +1264,23 @@ const Login = () => {
                   width: 7,
                   height: 7,
                   borderRadius: '50%',
-                  backgroundColor: 
-                    serverStatus === 'online' ? '#4ade80' : 
-                    serverStatus === 'starting' ? '#fb923c' : 
-                    serverStatus === 'unreachable' ? '#f87171' : '#9ca3af',
+                  backgroundColor:
+                    serverStatus === 'online' ? '#4ade80' :
+                      serverStatus === 'starting' ? '#fb923c' :
+                        serverStatus === 'unreachable' ? '#f87171' : '#9ca3af',
                   animation: `${pulseAnimation} 2s infinite ease-in-out`,
                 }}
               />
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: 
-                    serverStatus === 'online' ? '#4ade80' : 
-                    serverStatus === 'starting' ? '#fb923c' : 
-                    serverStatus === 'unreachable' ? '#f87171' : '#9ca3af',
-                  fontWeight: 700, 
-                  fontSize: '0.75rem', 
-                  letterSpacing: '0.05em' 
+              <Typography
+                variant="caption"
+                sx={{
+                  color:
+                    serverStatus === 'online' ? '#4ade80' :
+                      serverStatus === 'starting' ? '#fb923c' :
+                        serverStatus === 'unreachable' ? '#f87171' : '#9ca3af',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.05em'
                 }}
               >
                 {serverStatus === 'online' && 'SYSTEM ONLINE'}

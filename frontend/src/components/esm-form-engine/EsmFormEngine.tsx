@@ -29,6 +29,7 @@ import { FormSchema, FormField, FormPage, FormSection, PatientContext, SessionMo
 import { evaluateExpression } from './expressionRunner';
 import { EsmPageRenderer } from './EsmPageRenderer';
 import { EsmSidebar } from './EsmSidebar';
+import { normalizeLegacyFormData } from './legacyFormNormalizer';
 
 export interface EsmFormEngineProps {
   schema: FormSchema;
@@ -53,17 +54,12 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Form State
-  const [formValues, setFormValues] = useState<Record<string, any>>({ ...initialValues });
+  const [formValues, setFormValues] = useState<Record<string, any>>(() => {
+    return normalizeLegacyFormData(initialValues || {}, patientContext);
+  });
   const [activePageIndex, setActivePageIndex] = useState<number>(0);
   const [forceExpandAll, setForceExpandAll] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Sync initialValues if changed
-  useEffect(() => {
-    if (initialValues && Object.keys(initialValues).length > 0) {
-      setFormValues((prev) => ({ ...initialValues, ...prev }));
-    }
-  }, [initialValues]);
 
   // Flatten all fields for expression & validation processing
   const allRawFields = useMemo(() => {
@@ -80,6 +76,27 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
     });
     return fields;
   }, [schema]);
+
+  // Sync initialValues if changed & evaluate initial calculate expressions
+  useEffect(() => {
+    if (initialValues && Object.keys(initialValues).length > 0) {
+      const normalized = normalizeLegacyFormData(initialValues, patientContext);
+      allRawFields.forEach((field) => {
+        const calcExpr = field.questionOptions?.calculate?.calculateExpression;
+        if (calcExpr && (normalized[field.id] === undefined || normalized[field.id] === '')) {
+          try {
+            const calculatedVal = evaluateExpression(calcExpr, field, allRawFields, normalized, patientContext);
+            if (calculatedVal !== null && calculatedVal !== undefined) {
+              normalized[field.id] = calculatedVal;
+            }
+          } catch {
+            // Ignore calculate evaluation error
+          }
+        }
+      });
+      setFormValues((prev) => ({ ...prev, ...normalized }));
+    }
+  }, [initialValues, patientContext, allRawFields]);
 
   // Handle Field Value Change & Run Calculate Expressions
   const handleFieldChange = useCallback((fieldId: string, value: any) => {
@@ -278,7 +295,7 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
     }
 
     // Build standard OpenMRS / NMRS Obs Encounter Payload
-    const obsList: Array<{ concept: string; value: any; obsDatetime?: string }> = [];
+    const obsList: Array<{ concept: string; value: any; obsDatetime?: string; formFieldNamespace?: string; formFieldPath?: string }> = [];
     allRawFields.forEach((field) => {
       const val = formValues[field.id];
       if (val !== undefined && val !== null && val !== '') {
@@ -288,6 +305,8 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
             concept: conceptUuid,
             value: val,
             obsDatetime: formValues['encounterDatetime'] || new Date().toISOString(),
+            formFieldNamespace: 'rfe',
+            formFieldPath: field.id,
           });
         }
       }

@@ -8,3 +8,4 @@ export * from './EsmPageRenderer';
 export * from './EsmSidebar';
 export * from './EsmFormEngine';
 export * from './EsmFormBuilder';
+export * from './legacyFormNormalizer';

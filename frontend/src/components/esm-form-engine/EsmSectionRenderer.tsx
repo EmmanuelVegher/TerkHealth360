@@ -17,6 +17,7 @@ import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { FormSection, FormField, PatientContext } from './types';
 import { EsmFieldRenderer } from './EsmFieldRenderer';
 import { EsmObsGroupRenderer } from './EsmObsGroupRenderer';
+import { resolveFieldValue } from './legacyFormNormalizer';
 
 interface EsmSectionRendererProps {
   section: FormSection;
@@ -130,7 +131,7 @@ export const EsmSectionRenderer: React.FC<EsmSectionRendererProps> = ({
               <Grid item xs={12} sm={isFullWidth ? 12 : 6} key={q.id}>
                 <EsmFieldRenderer
                   field={q}
-                  value={formValues[q.id]}
+                  value={resolveFieldValue(q, formValues)}
                   onChange={onChange}
                   formValues={formValues}
                   patientContext={patientContext}

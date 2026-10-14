@@ -15,7 +15,7 @@ import {
   Speed, LocalPharmacy, Healing, MedicalInformation, Assessment, ArrowForward,
   MedicalServices, Science, Receipt, Launch, MonitorHeart, Air, Scale,
   FitnessCenter, RestartAlt, FilterAlt, Close, CloudSync, SyncAlt, HealthAndSafety,
-  Edit, CloudDownload, Assignment, LibraryBooks, Storage, Description, Check, ExpandMore,
+  Edit, CloudDownload, Assignment, LibraryBooks, Storage, Description, Check, ExpandMore, Sync,
 } from '@mui/icons-material';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -24,7 +24,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSnackbar } from 'notistack';
-import { EsmFormEngine, EsmFormBuilder, FormSchema } from '../components/esm-form-engine';
+import { EsmFormEngine, EsmFormBuilder, FormSchema, normalizeLegacyFormData } from '../components/esm-form-engine';
 
 interface PatientOption {
   id: string;
@@ -54,6 +54,126 @@ const getProcedureOpNoteFallback = (procedureName: string = '') => {
     return 'Midline laparotomy incision made under general anaesthesia. Systematic abdominal exploration performed. Pathological focus identified and managed. Peritoneal cavity irrigated with warm normal saline. Abdominal wall closed in layers. Swab and instrument count confirmed correct x2.';
   }
   return `Under sterile operating theatre conditions, ${procedureName || 'the procedure'} was successfully performed following standard surgical technique. Intra-operative haemostasis secured. Tissue layers reconstructed. Swab and instrument counts verified and reconciled x2.`;
+};
+
+const LABEL_DICTIONARY: Record<string, string> = {
+  tb_prev: 'TB Preventive Therapy (TPT)',
+  prepdrug: 'PrEP Medication',
+  oi_prophylaxis: 'Opportunistic Infection (OI) Prophylaxis',
+  refill: 'Refill Dispensed',
+  art_number: 'National ART / PEPFAR No.',
+  hospital_number: 'Hospital Unit No.',
+  visitDate: 'Visit Date',
+  encounterDate: 'Encounter Date',
+  Treatment_type: 'Treatment Modality',
+  Adult_1st_Line_Regimens: '1st Line ARV Regimen',
+  currentRegimen: 'Current ARV Regimen',
+  dispensedRegimen: 'Dispensed ARV Regimen',
+  regimen_line: 'Regimen Line',
+  quantityDispensed: 'Quantity Dispensed',
+  refillMonths: 'Refill Duration',
+  dateOrdered: 'Prescription Order Date',
+  calculated_next_appointment_date: 'Next Appointment',
+  Dispensing_Modality: 'Dispensing Modality',
+  Treatment_age_group: 'Treatment Age Group',
+  sex: 'Sex',
+  patient_age: 'Age (Years)',
+  facilityName: 'Enrolling Facility',
+  latestWeight: 'Weight (kg)',
+  latestHeight: 'Height (cm)',
+  viralLoadValue: 'Viral Load (copies/mL)',
+  cd4Value: 'CD4 Count (cells/µL)',
+  whoStage: 'WHO Clinical Stage',
+  tbStatus: 'TB Screening Status',
+  adherenceRate: 'Adherence Rate (%)',
+  functionalStatus: 'Functional Status',
+  regimenLine: 'Regimen Line',
+  artStatus: 'ART Status',
+};
+
+const CONCEPT_NAME_MAP: Record<string, string> = {
+  '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Yes',
+  '1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'No',
+  '160530AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Repeat / Refill Prescription',
+  '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Once Daily (OD)',
+  '164506AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Adult 1st Line',
+  '8a343013-0216-44e0-aefe-53909ffd5631': '1a: TDF + 3TC + DTG',
+  '9b49eb5e-9ca9-4494-a2ff-f1d62b6feecc': 'ART Refill / Standard Maintenance',
+  '60882cd1-1f42-485b-8afb-cd988282251e': 'Facility Dispensing',
+  'a291af62-d00e-4ace-a672-f6f965b325fe': 'Adult (≥15 yrs)',
+  '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Isoniazid (INH)',
+  '9aed739b-a64a-4e0d-afa0-f2b50d4cb2c2': 'TDF/FTC (PrEP)',
+  'dbf8a287-3c82-440b-bfc3-a4b9432f9183': 'Cotrimoxazole (CTX)',
+  'fcd74eb9-c917-42b1-969a-696b15a5627c': '300mg',
+  '5942eb74-1dca-4199-bd60-875b0fcc683a': '300/200mg',
+  'c03561ed-1402-4bfe-b95d-9547fe6b9bf7': '960mg',
+  '165681': '1a: TDF + 3TC + DTG',
+  '165682': '1b: TDF + 3TC + EFV400',
+  '165688': '2a: AZT + 3TC + ATV/r',
+  '1065': 'Yes',
+  '1066': 'No'
+};
+
+const formatEncounterDisplayField = (key: string, val: any): { label: string; value: string } => {
+  const label = LABEL_DICTIONARY[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  if (val === null || val === undefined || val === '') {
+    return { label, value: '—' };
+  }
+  if (typeof val === 'boolean') {
+    return { label, value: val ? 'Yes' : 'No' };
+  }
+  if (typeof val === 'number') {
+    return { label, value: String(val) };
+  }
+
+  // Handle repeating drug/regimen arrays e.g. tb_prev, prepdrug
+  if (Array.isArray(val)) {
+    if (val.length === 0) return { label, value: 'None' };
+    const items = val.map((item: any) => {
+      if (typeof item === 'object' && item !== null) {
+        if (key.toLowerCase().includes('tb_prev')) {
+          const drug = CONCEPT_NAME_MAP[item.tb_prev_drugs] || item.tb_prev_drugs || 'Isoniazid (INH)';
+          const days = item.tb_prevDispensedInDays || item.qty_prescribed_tb_prev || 90;
+          return `${drug} (${days} days / ${days} tabs)`;
+        }
+        if (key.toLowerCase().includes('prep')) {
+          const drug = CONCEPT_NAME_MAP[item.prev_drugs] || item.prev_drugs || 'TDF/FTC (PrEP)';
+          const days = item.prepDispensedInDays || item.qty_prescribed_prev || 90;
+          return `${drug} (${days} days)`;
+        }
+        if (key.toLowerCase().includes('oi_prophylaxis')) {
+          const drug = CONCEPT_NAME_MAP[item.drugs_Cotrim] || item.drugs_Cotrim || 'Cotrimoxazole';
+          const days = item.oi_prophylaxisDispensedInDays || item.qty_prescribed_Cotrim || 90;
+          return `${drug} (${days} days)`;
+        }
+        const parts = Object.entries(item)
+          .filter(([ik, iv]) => iv && !String(iv).includes('AAAA') && !String(ik).includes('id'))
+          .map(([ik, iv]) => `${ik}: ${iv}`);
+        if (parts.length > 0) return parts.slice(0, 2).join(', ');
+        return 'Dispensed';
+      }
+      return CONCEPT_NAME_MAP[String(item)] || String(item);
+    });
+    return { label, value: items.join('; ') };
+  }
+
+  if (typeof val === 'object') {
+    if (val.label) return { label, value: String(val.label) };
+    if (val.name) return { label, value: String(val.name) };
+    if (val.display) return { label, value: String(val.display) };
+    if (val.value && typeof val.value !== 'object') return formatEncounterDisplayField(key, val.value);
+    const prims = Object.values(val).filter((x) => typeof x === 'string' || typeof x === 'number');
+    if (prims.length > 0) return { label, value: String(prims[0]) };
+    return { label, value: JSON.stringify(val) };
+  }
+
+  const str = String(val).trim();
+  if (CONCEPT_NAME_MAP[str]) {
+    return { label, value: CONCEPT_NAME_MAP[str] };
+  }
+
+  return { label, value: str };
 };
 
 export interface EMRDashboardProps {
@@ -115,9 +235,32 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
   const [savingPepfarId, setSavingPepfarId] = useState<boolean>(false);
   const [editingEncounter, setEditingEncounter] = useState<any | null>(null);
   const [savingEncounter, setSavingEncounter] = useState<boolean>(false);
+  const [syncingEncounterId, setSyncingEncounterId] = useState<string | null>(null);
 
   const handleOpenFormDialog = (encounterRecord: any) => {
     setEditingEncounter(encounterRecord);
+  };
+
+  const handleSyncSingleEncounter = async (encounterId: string) => {
+    setSyncingEncounterId(encounterId);
+    try {
+      const res = await api.post(`/nmrs/encounters/${encounterId}/sync`, {}, {
+        skipOfflineQueue: true
+      } as any);
+      if (res.data?.offline) {
+        enqueueSnackbar('Encounter queued offline. Will sync when server is reachable.', { variant: 'info' });
+      } else {
+        enqueueSnackbar(res.data?.message || 'Encounter successfully synchronized to OpenMRS on laptop', { variant: 'success' });
+      }
+      if (selectedPat?.id) {
+        const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+        setNmrsSummary(sRes.data?.data || null);
+      }
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to sync encounter to OpenMRS laptop', { variant: 'error' });
+    } finally {
+      setSyncingEncounterId(null);
+    }
   };
 
   const groupedVisits = useMemo(() => {
@@ -155,6 +298,20 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
 
     return Array.from(map.values()).sort((a, b) => new Date(b.dateStr).getTime() - new Date(a.dateStr).getTime());
   }, [nmrsSummary?.encounters, selectedPat]);
+
+  const filteredNationalSchemas = useMemo(() => {
+    return (nmrsSchemas || [])
+      .filter((s: any) => formCategoryFilter === 'ALL' || s.category === formCategoryFilter)
+      .sort((a: any, b: any) => {
+        const aPages = a.schemaJson?.pages?.length || 0;
+        const bPages = b.schemaJson?.pages?.length || 0;
+        if (aPages > 1 && bPages <= 1) return -1;
+        if (bPages > 1 && aPages <= 1) return 1;
+        const aTitle = a.schemaJson?.name || a.formName || '';
+        const bTitle = b.schemaJson?.name || b.formName || '';
+        return aTitle.localeCompare(bTitle);
+      });
+  }, [nmrsSchemas, formCategoryFilter]);
 
   // Active Tab value
   const [activeTab, setActiveTab] = useState(0);
@@ -399,7 +556,11 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
         const schList = resNmrsSchemas.value.data?.data || [];
         setNmrsSchemas(schList);
         if (schList.length > 0) {
-          setSelectedNmrsSchemaId(schList[0].id);
+          const adultForm = schList.find((s: any) => 
+            (s.formName || '').toLowerCase().includes('adult initial') || 
+            (s.schemaJson?.name || '').toLowerCase().includes('adult initial')
+          );
+          setSelectedNmrsSchemaId((prev: any) => prev && schList.some((s: any) => s.id === prev) ? prev : (adultForm ? adultForm.id : schList[0].id));
         }
       }
     } catch (err) {
@@ -2676,7 +2837,9 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                               { id: 'HTS_TESTING', label: 'HTS Testing' },
                               { id: 'PHARMACY', label: 'Pharmacy' },
                               { id: 'LAB', label: 'Laboratory' },
-                              { id: 'TB_PROGRAM', label: 'TB Program' }
+                              { id: 'TB_PROGRAM', label: 'TB Program' },
+                              { id: 'PREP_PEP', label: 'PrEP & PEP' },
+                              { id: 'CARE_SUPPORT', label: 'Care & Support' },
                             ].map(cat => (
                               <Chip
                                 key={cat.id}
@@ -2691,25 +2854,40 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                             ))}
                           </Box>
 
-                          <FormControl size="small" sx={{ minWidth: 320 }}>
-                            <InputLabel>Select National Form ({nmrsSchemas.filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter).length})</InputLabel>
+                          <FormControl size="small" sx={{ minWidth: 380 }}>
+                            <InputLabel>Select National Form ({filteredNationalSchemas.length})</InputLabel>
                             <Select
                               value={selectedNmrsSchemaId}
-                              label={`Select National Form (${nmrsSchemas.filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter).length})`}
+                              label={`Select National Form (${filteredNationalSchemas.length})`}
                               onChange={(e) => handleSelectSchema(e.target.value)}
+                              sx={{ bgcolor: '#ffffff' }}
                             >
-                              {nmrsSchemas
-                                .filter(s => formCategoryFilter === 'ALL' || s.category === formCategoryFilter)
-                                .map(s => (
+                              {filteredNationalSchemas.map((s: any) => {
+                                const displayName = s.schemaJson?.name || s.formName;
+                                const pageCount = s.schemaJson?.pages?.length || s.pages?.length || 1;
+                                const ver = s.schemaJson?.version || s.version || '1.0';
+                                return (
                                   <MenuItem key={s.id} value={s.id}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1 }}>
-                                      <Typography variant="body2" fontWeight={700}>
-                                        {s.formName}
-                                      </Typography>
-                                      <Chip label={`v${s.version || '1.0'}`} size="small" sx={{ fontSize: 10, height: 18 }} />
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Typography variant="body2" fontWeight={700}>
+                                          {displayName}
+                                        </Typography>
+                                        {pageCount > 1 && (
+                                          <Chip
+                                            label={`${pageCount} Pages`}
+                                            size="small"
+                                            color="primary"
+                                            variant="outlined"
+                                            sx={{ fontSize: 10, height: 20, fontWeight: 800, bgcolor: '#eff6ff' }}
+                                          />
+                                        )}
+                                      </Box>
+                                      <Chip label={`v${ver}`} size="small" sx={{ fontSize: 10, height: 18, bgcolor: '#f1f5f9' }} />
                                     </Box>
                                   </MenuItem>
-                                ))}
+                                );
+                              })}
                             </Select>
                           </FormControl>
                         </Box>
@@ -2731,12 +2909,43 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                             );
                           }
 
-                          const rawSchema = activeSchema.schemaJson || {};
+                          let rawSchema = activeSchema.schemaJson || {};
+
+                          // If rawSchema is incomplete or missing pages, look up rich schema in nmrsSchemas
+                          const isBasicStub = !rawSchema || !rawSchema.pages || rawSchema.pages.length === 0 ||
+                            (rawSchema.pages.length === 1 && rawSchema.pages[0].sections?.length <= 2 && rawSchema.pages[0].sections?.every((s: any) => (s.questions?.length || 0) <= 7 && s.id === 'encounter_header'));
+
+                          if (isBasicStub && nmrsSchemas.length > 0) {
+                            const targetName = (activeSchema.formName || activeSchema.formCode || '').toLowerCase().trim();
+                            const matched = nmrsSchemas.find((s: any) => {
+                              if (s.id === activeSchema.id) return false;
+                              const sName = (s.formName || '').toLowerCase().trim();
+                              const sJsonName = (s.schemaJson?.name || '').toLowerCase().trim();
+                              return sName === targetName || sJsonName === targetName ||
+                                (targetName.includes('adult') && (s.formCode === 'ADULT_CLINICAL_EVALUATION' || sName.includes('adult initial') || sJsonName.includes('adult initial'))) ||
+                                (targetName.includes('pharmacy') && (s.formCode === 'PHARMACY_ORDER' || sName.includes('pharmacy order'))) ||
+                                (targetName.includes('lab') && (s.formCode === 'INTEGRATED_LAB_ORDER' || sName.includes('laboratory order'))) ||
+                                (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
+                                (targetName.includes('intake') && s.formCode === 'CLIENT_INTAKE_FORM') ||
+                                (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM'));
+                            });
+                            if (matched?.schemaJson?.pages?.length) {
+                              rawSchema = matched.schemaJson;
+                            }
+                          }
+
                           const schemaToRender: FormSchema = rawSchema.pages && rawSchema.pages.length > 0
-                            ? rawSchema
+                            ? {
+                                ...rawSchema,
+                                name: rawSchema.name || activeSchema.formName,
+                                encounterType: rawSchema.encounterType || activeSchema.openmrsFormUuid || 'Clinical Encounter',
+                                version: rawSchema.version || activeSchema.version || '1.0',
+                                uuid: rawSchema.uuid || activeSchema.openmrsFormUuid || activeSchema.id,
+                              }
                             : {
-                                name: activeSchema.formName || 'National Encounter Form',
-                                encounterType: rawSchema.encounterType || 'Clinical Encounter',
+                                name: rawSchema.name || activeSchema.formName || 'National Encounter Form',
+                                encounterType: rawSchema.encounterType || activeSchema.openmrsFormUuid || 'Clinical Encounter',
+                                version: rawSchema.version || activeSchema.version || '1.0',
                                 pages: [
                                   {
                                     label: activeSchema.formName || 'Clinical Form Details',
@@ -2771,10 +2980,12 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                 onSubmit={async (formData, encounterPayload) => {
                                   setSavingNmrsForm(true);
                                   try {
+                                    const rawDate = formData.visitDate || formData.encounterDate || formData.encounterDatetime;
                                     await api.post('/nmrs/encounters', {
                                       patientId: selectedPat?.id,
                                       formSchemaId: activeSchema.id,
                                       encounterType: schemaToRender.encounterType || activeSchema.formName,
+                                      encounterDate: rawDate,
                                       formData,
                                       encounterPayload,
                                     });
@@ -2944,11 +3155,35 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
 
                                     <Box display="flex" alignItems="center" gap={1.5}>
                                       <Chip
-                                        label={ne.syncStatus || 'SYNCED'}
+                                        label={ne.syncStatus === 'SYNCED' ? 'SYNCED' : 'PENDING OPENMRS'}
                                         size="small"
-                                        color={ne.syncStatus === 'SYNCED' ? 'success' : 'info'}
-                                        sx={{ fontWeight: 800, fontSize: '0.75rem', height: 24 }}
+                                        color={ne.syncStatus === 'SYNCED' ? 'success' : 'warning'}
+                                        icon={ne.syncStatus === 'SYNCED' ? <CheckCircle sx={{ fontSize: '14px !important' }} /> : <Warning sx={{ fontSize: '14px !important' }} />}
+                                        sx={{ fontWeight: 800, fontSize: '0.75rem', height: 26 }}
                                       />
+                                      {ne.syncStatus !== 'SYNCED' && (
+                                        <Tooltip title="Sync this encounter to OpenMRS on laptop server">
+                                          <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="warning"
+                                            disabled={syncingEncounterId === ne.id}
+                                            startIcon={syncingEncounterId === ne.id ? <CircularProgress size={12} color="inherit" /> : <Sync sx={{ fontSize: 14 }} />}
+                                            onClick={() => handleSyncSingleEncounter(ne.id)}
+                                            sx={{
+                                              fontSize: '0.72rem',
+                                              fontWeight: 700,
+                                              py: 0.2,
+                                              px: 1,
+                                              height: 26,
+                                              textTransform: 'none',
+                                              borderRadius: 2
+                                            }}
+                                          >
+                                            Sync to NMRS
+                                          </Button>
+                                        </Tooltip>
+                                      )}
                                       <Tooltip title={`Open & Edit ${ne.formSchema?.formName || ne.encounterType}`}>
                                         <IconButton
                                           size="small"
@@ -2957,8 +3192,8 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                           sx={{
                                             bgcolor: '#e0f2fe',
                                             color: '#0284c7',
-                                            width: 32,
-                                            height: 32,
+                                            width: 30,
+                                            height: 30,
                                             '&:hover': { bgcolor: '#bae6fd' }
                                           }}
                                         >
@@ -2971,16 +3206,22 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                   {ne.formData && typeof ne.formData === 'object' && (
                                     <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
                                       <Grid container spacing={2}>
-                                        {Object.entries(ne.formData).slice(0, 6).map(([k, v]: [string, any]) => (
-                                          <Grid item xs={12} sm={6} md={4} key={k}>
-                                            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem' }}>
-                                              {k}
-                                            </Typography>
-                                            <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap>
-                                              {String(v)}
-                                            </Typography>
-                                          </Grid>
-                                        ))}
+                                        {Object.entries(ne.formData)
+                                          .filter(([k]) => !['groups_count', 'active_regimen_info', 'signature', 'id', 'uuid', 'facilityName'].includes(k))
+                                          .slice(0, 6)
+                                          .map(([k, v]: [string, any]) => {
+                                            const { label, value } = formatEncounterDisplayField(k, v);
+                                            return (
+                                              <Grid item xs={12} sm={6} md={4} key={k}>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                                                  {label}
+                                                </Typography>
+                                                <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap title={value}>
+                                                  {value}
+                                                </Typography>
+                                              </Grid>
+                                            );
+                                          })}
                                       </Grid>
                                     </Box>
                                   )}
@@ -3074,7 +3315,24 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
               artNumber: nmrsSummary?.mapping?.pepfarId || selectedPat?.artNumber,
               hospitalNumber: selectedPat?.mrn,
             }}
-            initialValues={editingEncounter.formData || {}}
+            initialValues={normalizeLegacyFormData(
+              {
+                ...(editingEncounter.formData || {}),
+                ...(editingEncounter.encounterDate ? {
+                  visitDate: String(editingEncounter.encounterDate).slice(0, 10),
+                  encounterDatetime: String(editingEncounter.encounterDate).slice(0, 10),
+                  dateOrdered: String(editingEncounter.encounterDate).slice(0, 10),
+                } : {}),
+                currentRegimen: editingEncounter.formData?.dispensedRegimen || nmrsSummary?.mapping?.currentRegimen,
+              },
+              {
+                gender: selectedPat?.gender,
+                sex: selectedPat?.gender,
+                age: selectedPat?.birthDate ? Math.max(1, Math.floor((Date.now() - new Date(selectedPat.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))) : 30,
+                artNumber: nmrsSummary?.mapping?.pepfarId || selectedPat?.artNumber,
+                hospitalNumber: selectedPat?.mrn,
+              }
+            )}
             mode="edit"
             isSubmitting={savingEncounter}
             onCancel={() => setEditingEncounter(null)}

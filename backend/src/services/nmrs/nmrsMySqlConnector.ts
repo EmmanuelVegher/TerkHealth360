@@ -20,7 +20,7 @@ export class NmrsMySqlConnector {
    */
   public static async getConnectionConfig(): Promise<MySqlConfig> {
     const config = await prisma.nmrsConfig.findFirst({ where: { isActive: true } });
-    let urlHost = '10.11.2.29';
+    let urlHost = '10.120.221.29';
 
     if (config?.openmrsBaseUrl) {
       try {
@@ -155,16 +155,22 @@ export class NmrsMySqlConnector {
         [patientId]
       );
 
-      // 5. Fetch all observations
+      // 5. Fetch all observations with obs_group_id, form_namespace_and_path, and concept/coded UUIDs
       const [observations]: any = await conn.execute(
-        `SELECT o.encounter_id, o.concept_id, o.obs_datetime,
+        `SELECT o.obs_id, o.encounter_id, o.obs_group_id, o.concept_id, o.obs_datetime,
+                c.uuid as concept_uuid,
                 cn.name as concept_name,
                 o.value_numeric, o.value_text, o.value_datetime, o.value_coded,
-                cvn.name as coded_value_name
+                cv.uuid as coded_uuid,
+                cvn.name as coded_value_name,
+                o.form_namespace_and_path
          FROM obs o
+         JOIN concept c ON o.concept_id = c.concept_id
          LEFT JOIN concept_name cn ON o.concept_id = cn.concept_id AND cn.locale = 'en' AND cn.concept_name_type = 'FULLY_SPECIFIED'
+         LEFT JOIN concept cv ON o.value_coded = cv.concept_id
          LEFT JOIN concept_name cvn ON o.value_coded = cvn.concept_id AND cvn.locale = 'en' AND cvn.concept_name_type = 'FULLY_SPECIFIED'
-         WHERE o.person_id = ? AND o.voided = 0`,
+         WHERE o.person_id = ? AND o.voided = 0
+         ORDER BY o.encounter_id, o.obs_group_id ASC, o.obs_id ASC`,
         [patientId]
       );
 
@@ -172,17 +178,96 @@ export class NmrsMySqlConnector {
 
       // Group observations by encounter_id
       const obsByEnc = new Map<number, Record<string, any>>();
+      const obsListByEnc = new Map<number, any[]>();
       for (const o of observations) {
-        if (!obsByEnc.has(o.encounter_id)) {
-          obsByEnc.set(o.encounter_id, {});
+        if (!obsListByEnc.has(o.encounter_id)) {
+          obsListByEnc.set(o.encounter_id, []);
         }
-        const dict = obsByEnc.get(o.encounter_id)!;
-        const conceptLabel = o.concept_name || CIEL_CONCEPT_ID_MAP[o.concept_id] || `Concept #${o.concept_id}`;
-        let val: any = o.coded_value_name || o.value_numeric || o.value_text;
-        if (o.value_datetime) val = new Date(o.value_datetime).toISOString().split('T')[0];
-        if (val !== undefined && val !== null) {
-          dict[conceptLabel] = val;
+        obsListByEnc.get(o.encounter_id)!.push(o);
+      }
+
+      for (const [encId, encObsList] of obsListByEnc.entries()) {
+        const dict: Record<string, any> = {};
+
+        // Identify parent obsGroups
+        const groups = new Map<number, { groupType: string; items: Record<string, any> }>();
+        for (const o of encObsList) {
+          if (!o.obs_group_id) {
+            let groupType: string | null = null;
+            const path = o.form_namespace_and_path || '';
+            if (path.includes('oi_prophylaxis') || o.concept_id === 165726) groupType = 'oi_prophylaxis';
+            else if (path.includes('tb_prev') || o.concept_id === 167469) groupType = 'tb_prev';
+            else if (path.includes('prepdrug') || o.concept_id === 167468) groupType = 'prepdrug';
+            else if (path.includes('others_prev') || o.concept_id === 163101) groupType = 'others_prev';
+            else if (path.includes('ARVDrug_1') || (o.concept_id === 162240 && path.endsWith('ARVDrug_1'))) groupType = 'ARVDrug_1';
+            else if (path.includes('ARVDrug_2')) groupType = 'ARVDrug_2';
+            else if (path.includes('ARVDrug_3')) groupType = 'ARVDrug_3';
+            else if (path.includes('ARVDrug_4')) groupType = 'ARVDrug_4';
+            else if (path.includes('ARVDrug_5')) groupType = 'ARVDrug_5';
+            else if (o.concept_id === 162240) groupType = 'ARVDrug_1';
+
+            if (groupType) {
+              groups.set(o.obs_id, { groupType, items: {} });
+            }
+          }
         }
+
+        const repeating: Record<string, any[]> = {
+          oi_prophylaxis: [],
+          tb_prev: [],
+          prepdrug: [],
+          others_prev: []
+        };
+
+        for (const o of encObsList) {
+          const path = (o.form_namespace_and_path || '').replace(/^rfe(-forms)?\^(rfe-forms-)?/, '');
+          const fieldId = path.split('/').pop() || path;
+          const conceptLabel = o.concept_name || CIEL_CONCEPT_ID_MAP[o.concept_id] || `Concept #${o.concept_id}`;
+
+          let val: any = o.coded_uuid || o.coded_value_name || o.value_numeric || o.value_text;
+          if (o.value_datetime) val = new Date(o.value_datetime).toISOString().split('T')[0];
+
+          // Normalize ARV drug strength 166044 / 300/300/50Mg to standard value
+          if (
+            o.value_coded === 166044 ||
+            o.coded_uuid === '0cd9c98e-7f52-48b9-a987-404ec90cc5fe' ||
+            String(val).toLowerCase() === '300/300/50mg'
+          ) {
+            val = '300/300/50mg';
+          }
+
+          if (val === undefined || val === null) continue;
+
+          if (o.obs_group_id && groups.has(o.obs_group_id)) {
+            const grp = groups.get(o.obs_group_id)!;
+            if (fieldId) grp.items[fieldId] = val;
+            if (conceptLabel && !grp.items[conceptLabel]) grp.items[conceptLabel] = val;
+          } else if (!o.obs_group_id && !groups.has(o.obs_id)) {
+            if (fieldId) dict[fieldId] = val;
+            if (conceptLabel && !dict[conceptLabel]) dict[conceptLabel] = val;
+          }
+        }
+
+        for (const [_, grp] of groups.entries()) {
+          if (grp.groupType === 'oi_prophylaxis') {
+            if (Object.keys(grp.items).length > 0) repeating.oi_prophylaxis.push(grp.items);
+          } else if (grp.groupType === 'tb_prev') {
+            if (Object.keys(grp.items).length > 0) repeating.tb_prev.push(grp.items);
+          } else if (grp.groupType === 'prepdrug') {
+            if (Object.keys(grp.items).length > 0) repeating.prepdrug.push(grp.items);
+          } else if (grp.groupType === 'others_prev') {
+            if (Object.keys(grp.items).length > 0) repeating.others_prev.push(grp.items);
+          } else if (grp.groupType.startsWith('ARVDrug')) {
+            Object.assign(dict, grp.items);
+          }
+        }
+
+        dict.oi_prophylaxis = repeating.oi_prophylaxis;
+        dict.tb_prev = repeating.tb_prev;
+        dict.prepdrug = repeating.prepdrug;
+        dict.others_prev = repeating.others_prev;
+
+        obsByEnc.set(encId, dict);
       }
 
       // Group encounters by actual session date (YYYY-MM-DD)
@@ -328,18 +413,33 @@ export class NmrsMySqlConnector {
   }
 
   /**
-   * Fetch active clinical providers from OpenMRS provider & person_name tables
+   * Fetch active clinical providers from OpenMRS provider & person_name tables and local staff directory
    */
   public static async fetchProviders(): Promise<Array<{ id: string | number; name: string; identifier?: string; uuid?: string }>> {
-    const fallbackProviders = [
-      { id: '1', name: 'Chioma (Clinical Provider)', identifier: 'PROV-001' },
-      { id: '2', name: 'Dr. Optometrist / Medical Officer', identifier: 'PROV-002' },
-      { id: '3', name: 'Dr. Emmanuel Vegher (Medical Director)', identifier: 'PROV-003' },
-      { id: '4', name: 'Pharm. Jude (Pharmacist)', identifier: 'PROV-004' },
-      { id: '5', name: 'Nurse Blessing (ART Nurse)', identifier: 'PROV-005' },
-      { id: '6', name: 'Medical Records Officer', identifier: 'PROV-006' }
-    ];
+    const providerMap = new Map<string, { id: string | number; name: string; identifier?: string; uuid?: string }>();
 
+    // 1. Fetch real active staff from PostgreSQL database
+    try {
+      const staffMembers = await prisma.staff.findMany({
+        where: { isActive: true },
+        orderBy: { lastName: 'asc' },
+        take: 50
+      });
+      for (const s of staffMembers) {
+        const titleOrRole = s.designation || s.specialization || s.department || 'Clinical Officer';
+        const formattedName = `${s.firstName} ${s.lastName} (${titleOrRole})`;
+        providerMap.set(formattedName.toLowerCase(), {
+          id: s.employeeId || s.id,
+          name: formattedName,
+          identifier: s.employeeId || s.id,
+          uuid: s.id
+        });
+      }
+    } catch (err: any) {
+      console.warn(`[NMRS Providers] Could not fetch local staff: ${err.message}`);
+    }
+
+    // 2. Fetch active providers from OpenMRS MySQL if available
     try {
       const config = await this.getConnectionConfig();
       const conn = await mysql.createConnection({
@@ -362,18 +462,31 @@ export class NmrsMySqlConnector {
 
       await conn.end();
       if (rows && rows.length > 0) {
-        return rows.map((r: any) => ({
-          id: String(r.id),
-          name: r.name || `Provider ${r.identifier || r.id}`,
-          identifier: r.identifier,
-          uuid: r.uuid
-        }));
+        for (const r of rows) {
+          const pName = r.name || `Provider ${r.identifier || r.id}`;
+          providerMap.set(pName.toLowerCase(), {
+            id: String(r.id),
+            name: pName,
+            identifier: r.identifier,
+            uuid: r.uuid
+          });
+        }
       }
     } catch (err: any) {
       console.warn(`[NMRS MySQL] Could not fetch providers from MySQL: ${err.message}`);
     }
 
-    return fallbackProviders;
+    if (providerMap.size > 0) {
+      return Array.from(providerMap.values());
+    }
+
+    // Fallback standard clinical roles if no database staff is returned
+    return [
+      { id: '1', name: 'Chief Medical Officer / Consultant Physician', identifier: 'CMO-001' },
+      { id: '2', name: 'Clinical Pharmacist (ART Pharmacy)', identifier: 'PHARM-001' },
+      { id: '3', name: 'Nursing Officer / ART Counselor', identifier: 'NURSE-001' },
+      { id: '4', name: 'Medical Records Officer (Health Informatics)', identifier: 'MRO-001' }
+    ];
   }
 
   /**
@@ -453,41 +566,71 @@ export class NmrsMySqlConnector {
     try {
       // 1. Locate patient in MySQL
       const artClean = (patient.patientNumber || patient.identification || '').trim();
+      const pepfarClean = (patient.nmrsMapping?.pepfarId || (encRecord.formData as any)?.art_number || '').trim();
+      const ptUuid = patient.openmrsUuid || patient.nmrsMapping?.openmrsUuid || '';
+
       const [ptRows]: any = await conn.execute(`
         SELECT p.patient_id, per.uuid as person_uuid
         FROM patient p
         JOIN person per ON p.patient_id = per.person_id
         LEFT JOIN patient_identifier pi ON p.patient_id = pi.patient_id
-        WHERE per.uuid = ? OR pi.identifier = ? OR pi.identifier LIKE ?
+        WHERE (per.uuid = ? AND ? != '')
+           OR (pi.identifier = ? AND ? != '')
+           OR (pi.identifier = ? AND ? != '')
+           OR (pi.identifier LIKE ? AND ? != '')
         LIMIT 1
-      `, [patient.openmrsUuid || '', artClean, `%${artClean}%`]);
+      `, [ptUuid, ptUuid, artClean, artClean, pepfarClean, pepfarClean, `%${artClean}%`, artClean]);
 
       if (!ptRows || ptRows.length === 0) {
-        throw new Error(`Patient "${artClean}" not found in OpenMRS MySQL database`);
+        throw new Error(`Patient "${artClean || pepfarClean}" not found in OpenMRS MySQL database`);
       }
 
       const openmrsPatientId = ptRows[0].patient_id;
+      const openmrsPersonUuid = ptRows[0].person_uuid;
+
+      // Ensure local TerkHealth360 database has the OpenMRS patient UUID
+      if (openmrsPersonUuid && (!patient.openmrsUuid || patient.openmrsUuid !== openmrsPersonUuid)) {
+        await prisma.patient.update({
+          where: { id: patient.id },
+          data: { openmrsUuid: openmrsPersonUuid }
+        }).catch(() => {});
+      }
 
       // 2. Resolve Encounter Type
       const formName = encRecord.formSchema?.formName || encRecord.encounterType || 'Pharmacy Order Form';
+      const encTypeUuid = (encRecord.formSchema?.schemaJson as any)?.encounterType || '';
       let encounterTypeId = 1;
-      const [encTypes]: any = await conn.execute(`
-        SELECT encounter_type_id, name FROM encounter_type
-        WHERE retired = 0 AND (name LIKE ? OR name LIKE ?)
-        LIMIT 1
-      `, [`%${formName.slice(0, 8)}%`, '%Pharmacy%']);
 
-      if (encTypes && encTypes.length > 0) {
-        encounterTypeId = encTypes[0].encounter_type_id;
+      if (encTypeUuid) {
+        const [uuidTypes]: any = await conn.execute(
+          `SELECT encounter_type_id FROM encounter_type WHERE uuid = ? LIMIT 1`,
+          [encTypeUuid]
+        );
+        if (uuidTypes && uuidTypes.length > 0) {
+          encounterTypeId = uuidTypes[0].encounter_type_id;
+        }
+      }
+
+      if (encounterTypeId === 1) {
+        const [encTypes]: any = await conn.execute(`
+          SELECT encounter_type_id, name FROM encounter_type
+          WHERE retired = 0 AND (name LIKE ? OR name LIKE ? OR name LIKE ?)
+          LIMIT 1
+        `, [`%${formName.slice(0, 8)}%`, '%Pharmacy%', '%Clinical%']);
+
+        if (encTypes && encTypes.length > 0) {
+          encounterTypeId = encTypes[0].encounter_type_id;
+        }
       }
 
       // 3. Resolve Form ID
       let formId: number | null = null;
+      const formUuid = encRecord.formSchema?.openmrsFormUuid || (encRecord.formSchema?.schemaJson as any)?.uuid || '';
       const [forms]: any = await conn.execute(`
         SELECT form_id FROM form
-        WHERE retired = 0 AND (name LIKE ? OR uuid = ?)
+        WHERE retired = 0 AND (uuid = ? OR name LIKE ?)
         LIMIT 1
-      `, [`%${formName.slice(0, 10)}%`, encRecord.formSchema?.openmrsFormUuid || '']);
+      `, [formUuid, `%${formName.slice(0, 10)}%`]);
 
       if (forms && forms.length > 0) {
         formId = forms[0].form_id;
@@ -502,7 +645,86 @@ export class NmrsMySqlConnector {
       const [provs]: any = await conn.execute(`SELECT provider_id FROM provider WHERE retired = 0 LIMIT 1`);
       if (provs && provs.length > 0) providerId = provs[0].provider_id;
 
+      let encRoleId = 1;
+      const [roleRows]: any = await conn.execute(`SELECT encounter_role_id FROM encounter_role WHERE retired = 0 LIMIT 1`);
+      if (roleRows && roleRows.length > 0) encRoleId = roleRows[0].encounter_role_id;
+
       const encDatetime = encRecord.encounterDate ? new Date(encRecord.encounterDate) : new Date();
+
+      // 4b. Resolve or create OpenMRS Visit for this patient and encounter datetime
+      let hasVisitIdCol = true;
+      try {
+        const [colCheck]: any = await conn.execute(`
+          SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'encounter' AND COLUMN_NAME = 'visit_id'
+          LIMIT 1
+        `);
+        hasVisitIdCol = Boolean(colCheck && colCheck.length > 0);
+      } catch {
+        hasVisitIdCol = true;
+      }
+
+      let visitId: number | null = null;
+      if (hasVisitIdCol) {
+        try {
+          // Look for an existing visit covering the encounter date
+          const [existingVisits]: any = await conn.execute(`
+            SELECT visit_id FROM visit
+            WHERE patient_id = ?
+              AND voided = 0
+              AND DATE(date_started) <= DATE(?)
+              AND (date_stopped IS NULL OR DATE(date_stopped) >= DATE(?))
+            ORDER BY date_started DESC
+            LIMIT 1
+          `, [openmrsPatientId, encDatetime, encDatetime]);
+
+          if (existingVisits && existingVisits.length > 0) {
+            visitId = existingVisits[0].visit_id;
+          } else {
+            // Check for visit on exact same day
+            const [sameDayVisits]: any = await conn.execute(`
+              SELECT visit_id FROM visit
+              WHERE patient_id = ?
+                AND voided = 0
+                AND DATE(date_started) = DATE(?)
+              ORDER BY date_started DESC
+              LIMIT 1
+            `, [openmrsPatientId, encDatetime]);
+
+            if (sameDayVisits && sameDayVisits.length > 0) {
+              visitId = sameDayVisits[0].visit_id;
+            } else {
+              // Resolve visit_type_id (Facility Visit preferred)
+              let visitTypeId = 1;
+              try {
+                const [vtRows]: any = await conn.execute(`
+                  SELECT visit_type_id FROM visit_type
+                  WHERE retired = 0 OR retired IS NULL
+                  ORDER BY (CASE WHEN name LIKE '%Facility%' THEN 1 WHEN name LIKE '%Clinical%' THEN 2 ELSE 3 END), visit_type_id ASC
+                  LIMIT 1
+                `);
+                if (vtRows && vtRows.length > 0) {
+                  visitTypeId = vtRows[0].visit_type_id;
+                }
+              } catch {
+                visitTypeId = 1;
+              }
+
+              const isToday = new Date().toISOString().split('T')[0] === encDatetime.toISOString().split('T')[0];
+              const dateStopped = isToday ? null : encDatetime;
+
+              const [newVisitRes]: any = await conn.execute(`
+                INSERT INTO visit (patient_id, visit_type_id, date_started, date_stopped, location_id, creator, date_created, voided, uuid)
+                VALUES (?, ?, ?, ?, ?, 1, NOW(), 0, UUID())
+              `, [openmrsPatientId, visitTypeId, encDatetime, dateStopped, locationId]);
+
+              visitId = newVisitRes.insertId;
+            }
+          }
+        } catch (vErr: any) {
+          console.warn(`[NMRS MySql] Visit resolution warning: ${vErr?.message}`);
+        }
+      }
 
       // 5. Insert or Update Encounter
       let encounterId = 0;
@@ -510,17 +732,33 @@ export class NmrsMySqlConnector {
 
       if (openmrsUuid) {
         const [existingEnc]: any = await conn.execute(
-          `SELECT encounter_id FROM encounter WHERE uuid = ? LIMIT 1`,
+          `SELECT encounter_id, visit_id FROM encounter WHERE uuid = ? LIMIT 1`,
           [openmrsUuid]
         );
         if (existingEnc && existingEnc.length > 0) {
           encounterId = existingEnc[0].encounter_id;
-          await conn.execute(
-            `UPDATE encounter SET encounter_datetime = ?, form_id = ?, encounter_type = ? WHERE encounter_id = ?`,
-            [encDatetime, formId, encounterTypeId, encounterId]
-          );
-          // Delete old observations to re-insert fresh
-          await conn.execute(`DELETE FROM obs WHERE encounter_id = ?`, [encounterId]);
+          const targetVisitId = existingEnc[0].visit_id || visitId;
+          if (hasVisitIdCol) {
+            await conn.execute(
+              `UPDATE encounter SET encounter_datetime = ?, form_id = ?, encounter_type = ?, visit_id = ? WHERE encounter_id = ?`,
+              [encDatetime, formId, encounterTypeId, targetVisitId, encounterId]
+            );
+          } else {
+            await conn.execute(
+              `UPDATE encounter SET encounter_datetime = ?, form_id = ?, encounter_type = ? WHERE encounter_id = ?`,
+              [encDatetime, formId, encounterTypeId, encounterId]
+            );
+          }
+          // Delete old observations to re-insert fresh (breaking foreign keys first to prevent obs_grouping_id constraint failure)
+          try {
+            await conn.execute(`UPDATE obs SET obs_group_id = NULL WHERE encounter_id = ?`, [encounterId]);
+            await conn.execute(`DELETE FROM obs WHERE encounter_id = ?`, [encounterId]);
+          } catch (deleteObsErr: any) {
+            console.warn(`[NmrsMySqlConnector] Safe delete retry with foreign key checks toggled: ${deleteObsErr?.message}`);
+            await conn.execute(`SET FOREIGN_KEY_CHECKS = 0`);
+            await conn.execute(`DELETE FROM obs WHERE encounter_id = ?`, [encounterId]);
+            await conn.execute(`SET FOREIGN_KEY_CHECKS = 1`);
+          }
         } else {
           openmrsUuid = null;
         }
@@ -530,123 +768,311 @@ export class NmrsMySqlConnector {
         const [uuidRes]: any = await conn.execute(`SELECT UUID() as u`);
         openmrsUuid = uuidRes[0].u;
 
-        const [insertRes]: any = await conn.execute(`
-          INSERT INTO encounter (encounter_type, patient_id, location_id, form_id, encounter_datetime, creator, date_created, voided, uuid)
-          VALUES (?, ?, ?, ?, ?, 1, NOW(), 0, ?)
-        `, [encounterTypeId, openmrsPatientId, locationId, formId, encDatetime, openmrsUuid]);
-
-        encounterId = insertRes.insertId;
+        if (hasVisitIdCol) {
+          const [insertRes]: any = await conn.execute(`
+            INSERT INTO encounter (encounter_type, patient_id, location_id, form_id, encounter_datetime, visit_id, creator, date_created, voided, uuid)
+            VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), 0, ?)
+          `, [encounterTypeId, openmrsPatientId, locationId, formId, encDatetime, visitId, openmrsUuid]);
+          encounterId = insertRes.insertId;
+        } else {
+          const [insertRes]: any = await conn.execute(`
+            INSERT INTO encounter (encounter_type, patient_id, location_id, form_id, encounter_datetime, creator, date_created, voided, uuid)
+            VALUES (?, ?, ?, ?, ?, 1, NOW(), 0, ?)
+          `, [encounterTypeId, openmrsPatientId, locationId, formId, encDatetime, openmrsUuid]);
+          encounterId = insertRes.insertId;
+        }
 
         // Insert into encounter_provider
         try {
           await conn.execute(`
             INSERT INTO encounter_provider (encounter_id, provider_id, encounter_role_id, creator, date_created, voided, uuid)
-            VALUES (?, ?, 1, 1, NOW(), 0, UUID())
-          `, [encounterId, providerId]);
+            VALUES (?, ?, ?, 1, NOW(), 0, UUID())
+          `, [encounterId, providerId, encRoleId]);
         } catch {
           // non-fatal
         }
       }
 
       // 6. Insert Observations
-      const formData = encRecord.formData && typeof encRecord.formData === 'object' ? encRecord.formData : {};
+      const formData: Record<string, any> = (encRecord.formData && typeof encRecord.formData === 'object' ? encRecord.formData : {}) as Record<string, any>;
       let obsInserted = 0;
 
-      for (const [key, val] of Object.entries(formData)) {
-        if (val === undefined || val === null || val === '') continue;
-        if (key === 'groups_count' || key === 'active_regimen_info') continue;
+      // Build questionId -> conceptUuidOrId map from schemaJson
+      const schemaConceptMap: Record<string, string> = {};
+      const extractConcepts = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.id && (obj.conceptId || obj.concept || obj.questionOptions?.concept)) {
+          schemaConceptMap[String(obj.id)] = String(obj.conceptId || obj.concept || obj.questionOptions?.concept);
+        }
+        for (const child of Object.values(obj)) {
+          if (typeof child === 'object') extractConcepts(child);
+        }
+      };
+      if (encRecord.formSchema?.schemaJson) {
+        extractConcepts(encRecord.formSchema.schemaJson);
+      }
 
-        // Flatten arrays of objects (e.g. tb_prev, prepdrug repeating items)
-        const itemsToProcess = Array.isArray(val) ? val : [{ [key]: val }];
+      let hasFormNamespaceCol = false;
+      try {
+        const [colRows]: any = await conn.execute(`
+          SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'obs' AND COLUMN_NAME = 'form_namespace_and_path'
+          LIMIT 1
+        `);
+        hasFormNamespaceCol = Boolean(colRows && colRows.length > 0);
+      } catch {
+        hasFormNamespaceCol = false;
+      }
 
-        for (const item of itemsToProcess) {
-          const subEntries = typeof item === 'object' && item !== null ? Object.entries(item) : [[key, item]];
+      let hasObsGroupIdCol = false;
+      try {
+        const [ogCols]: any = await conn.execute(`
+          SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'obs' AND COLUMN_NAME = 'obs_group_id'
+          LIMIT 1
+        `);
+        hasObsGroupIdCol = Boolean(ogCols && ogCols.length > 0);
+      } catch {
+        hasObsGroupIdCol = false;
+      }
 
-          for (const [obsKey, obsVal] of subEntries) {
-            if (obsVal === undefined || obsVal === null || obsVal === '') continue;
+      // Helper: Resolve concept ID from UUID, numeric ID, CIEL map, or name
+      const resolveConceptId = async (conceptKeyOrUuid: string): Promise<number | null> => {
+        if (!conceptKeyOrUuid) return null;
+        const mapped = schemaConceptMap[conceptKeyOrUuid] || conceptKeyOrUuid;
 
-            const obsKeyStr = String(obsKey);
-            // Resolve concept in OpenMRS
-            const cielNum = (CIEL_CONCEPT_ID_MAP as any)[obsKeyStr] || (CIEL_CONCEPT_ID_MAP as any)[key];
-            let conceptId: number | null = null;
-            let datatypeId = 1; // default text
+        if (mapped.length >= 30) {
+          const [cRows]: any = await conn.execute(
+            `SELECT concept_id FROM concept WHERE uuid = ? LIMIT 1`,
+            [mapped]
+          );
+          if (cRows && cRows.length > 0) return cRows[0].concept_id;
+        } else if (!isNaN(Number(mapped))) {
+          const [cRows]: any = await conn.execute(
+            `SELECT concept_id FROM concept WHERE concept_id = ? LIMIT 1`,
+            [Number(mapped)]
+          );
+          if (cRows && cRows.length > 0) return cRows[0].concept_id;
+        }
 
-            if (cielNum) {
-              const [cRows]: any = await conn.execute(
-                `SELECT concept_id, datatype_id FROM concept WHERE concept_id = ? LIMIT 1`,
-                [cielNum]
+        const cielNum = (CIEL_CONCEPT_ID_MAP as any)[conceptKeyOrUuid] || (CIEL_CONCEPT_ID_MAP as any)[mapped];
+        if (cielNum) {
+          const [cRows]: any = await conn.execute(
+            `SELECT concept_id FROM concept WHERE concept_id = ? LIMIT 1`,
+            [cielNum]
+          );
+          if (cRows && cRows.length > 0) return cRows[0].concept_id;
+        }
+
+        const [cNameRows]: any = await conn.execute(`
+          SELECT c.concept_id FROM concept c
+          JOIN concept_name cn ON c.concept_id = cn.concept_id
+          WHERE cn.name = ? OR cn.name LIKE ?
+          LIMIT 1
+        `, [conceptKeyOrUuid, `%${conceptKeyOrUuid.slice(0, 15)}%`]);
+        if (cNameRows && cNameRows.length > 0) return cNameRows[0].concept_id;
+
+        return null;
+      };
+
+      // Helper: Insert a single observation (parent group or member)
+      const insertSingleObs = async (
+        cId: number,
+        obsVal: any,
+        namespacePath: string,
+        obsGroupId: number | null = null
+      ): Promise<number | null> => {
+        let valNumeric: number | null = null;
+        let valDatetime: Date | null = null;
+        let valCoded: number | null = null;
+        let valText: string | null = null;
+
+        if (obsVal !== null && obsVal !== undefined) {
+          if (typeof obsVal === 'number') {
+            valNumeric = obsVal;
+          } else if (typeof obsVal === 'boolean') {
+            valCoded = obsVal ? 1065 : 1066;
+          } else if (String(obsVal).match(/^\d{4}-\d{2}-\d{2}/)) {
+            valDatetime = new Date(String(obsVal));
+          } else {
+            const strVal = String(obsVal);
+            if (strVal.includes('AAAA') || strVal.length >= 30) {
+              const [codedRows]: any = await conn.execute(
+                `SELECT concept_id FROM concept WHERE uuid = ? LIMIT 1`,
+                [strVal]
               );
-              if (cRows && cRows.length > 0) {
-                conceptId = cRows[0].concept_id;
-                datatypeId = cRows[0].datatype_id;
-              }
-            }
-
-            if (!conceptId) {
-              const [cNameRows]: any = await conn.execute(`
-                SELECT c.concept_id, c.datatype_id
-                FROM concept c
-                JOIN concept_name cn ON c.concept_id = cn.concept_id
-                WHERE cn.name = ? OR cn.name LIKE ?
-                LIMIT 1
-              `, [obsKeyStr, `%${obsKeyStr.slice(0, 15)}%`]);
-
-              if (cNameRows && cNameRows.length > 0) {
-                conceptId = cNameRows[0].concept_id;
-                datatypeId = cNameRows[0].datatype_id;
-              }
-            }
-
-            // Fallback generic concept if not found
-            if (!conceptId) {
-              const [generic]: any = await conn.execute(`SELECT concept_id, datatype_id FROM concept LIMIT 1`);
-              if (generic && generic.length > 0) {
-                conceptId = generic[0].concept_id;
-                datatypeId = generic[0].datatype_id;
-              }
-            }
-
-            if (conceptId) {
-              let valNumeric: number | null = null;
-              let valDatetime: Date | null = null;
-              let valCoded: number | null = null;
-              let valText: string | null = null;
-
-              if (typeof obsVal === 'number') {
-                valNumeric = obsVal;
-              } else if (typeof obsVal === 'boolean') {
-                valCoded = obsVal ? 1065 : 1066;
-              } else if (String(obsVal).match(/^\d{4}-\d{2}-\d{2}/)) {
-                valDatetime = new Date(String(obsVal));
+              if (codedRows && codedRows.length > 0) {
+                valCoded = codedRows[0].concept_id;
               } else {
-                // If it looks like a coded UUID or numeric concept
-                const strVal = String(obsVal);
-                if (strVal.includes('AAAA') || strVal.length >= 30) {
-                  const [codedRows]: any = await conn.execute(
-                    `SELECT concept_id FROM concept WHERE uuid = ? LIMIT 1`,
-                    [strVal]
-                  );
-                  if (codedRows && codedRows.length > 0) {
-                    valCoded = codedRows[0].concept_id;
-                  } else {
-                    valText = strVal;
-                  }
-                } else if (!isNaN(Number(strVal)) && Number(strVal) > 100 && Number(strVal) < 200000) {
-                  valCoded = Number(strVal);
-                } else {
-                  valText = typeof obsVal === 'object' ? JSON.stringify(obsVal) : strVal;
-                }
+                valText = strVal;
               }
-
-              await conn.execute(`
-                INSERT INTO obs (person_id, concept_id, encounter_id, obs_datetime, location_id,
-                                 value_coded, value_datetime, value_numeric, value_text, creator, date_created, voided, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), 0, UUID())
-              `, [openmrsPatientId, conceptId, encounterId, encDatetime, locationId,
-                  valCoded, valDatetime, valNumeric, valText]);
-              obsInserted++;
+            } else if (!isNaN(Number(strVal)) && Number(strVal) > 100 && Number(strVal) < 200000) {
+              valCoded = Number(strVal);
+            } else {
+              valText = typeof obsVal === 'object' ? JSON.stringify(obsVal) : strVal;
             }
           }
+        }
+
+        const pathStr = namespacePath.slice(0, 250);
+        const useGroup = hasObsGroupIdCol && obsGroupId !== null;
+
+        let insertSql = `
+          INSERT INTO obs (person_id, concept_id, encounter_id, obs_datetime, location_id,
+                           value_coded, value_datetime, value_numeric, value_text,
+                           ${hasFormNamespaceCol ? 'form_namespace_and_path,' : ''}
+                           ${useGroup ? 'obs_group_id,' : ''}
+                           creator, date_created, voided, uuid)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ${hasFormNamespaceCol ? '?, ' : ''}
+                  ${useGroup ? '?, ' : ''}
+                  1, NOW(), 0, UUID())
+        `;
+        const params: any[] = [
+          openmrsPatientId, cId, encounterId, encDatetime, locationId,
+          valCoded, valDatetime, valNumeric, valText
+        ];
+        if (hasFormNamespaceCol) params.push(pathStr);
+        if (useGroup) params.push(obsGroupId);
+
+        const [res]: any = await conn.execute(insertSql, params);
+        obsInserted++;
+        return res.insertId;
+      };
+
+      // Extract all obsGroup definitions from schemaJson
+      interface ObsGroupMeta {
+        id: string;
+        concept: string;
+        isRepeating: boolean;
+        subQuestions: Array<{ id: string; concept: string }>;
+      }
+      const obsGroupDefs: ObsGroupMeta[] = [];
+      const extractObsGroups = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.type === 'obsGroup' && obj.id) {
+          const grpConcept = String(obj.concept || obj.questionOptions?.concept || '');
+          const isRepeating = obj.questionOptions?.rendering === 'repeating';
+          const subQuestions: Array<{ id: string; concept: string }> = [];
+          if (Array.isArray(obj.questions)) {
+            obj.questions.forEach((q: any) => {
+              if (q && q.id) {
+                subQuestions.push({
+                  id: String(q.id),
+                  concept: String(q.concept || q.questionOptions?.concept || '')
+                });
+              }
+            });
+          }
+          obsGroupDefs.push({
+            id: String(obj.id),
+            concept: grpConcept,
+            isRepeating,
+            subQuestions
+          });
+        }
+        for (const child of Object.values(obj)) {
+          if (typeof child === 'object') extractObsGroups(child);
+        }
+      };
+      if (encRecord.formSchema?.schemaJson) {
+        extractObsGroups(encRecord.formSchema.schemaJson);
+      }
+
+      const handledKeys = new Set<string>();
+
+      // A. Process Obs Groups (Repeating e.g. tb_prev, oi_prophylaxis; and Non-Repeating e.g. ARVDrug_1..5)
+      for (const grp of obsGroupDefs) {
+        const grpVal: any = formData[grp.id];
+        let groupConceptId = await resolveConceptId(grp.concept);
+        if (!groupConceptId) {
+          if (grp.id.startsWith('ARVDrug')) groupConceptId = 162240;
+          else groupConceptId = 162240;
+        }
+
+        if (grp.isRepeating) {
+          const rows = Array.isArray(grpVal) ? grpVal : (grpVal && typeof grpVal === 'object' ? [grpVal] : []);
+          handledKeys.add(grp.id);
+
+          for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            const validEntries = Object.entries(row).filter(([_, v]) => v !== undefined && v !== null && v !== '');
+            if (validEntries.length === 0) continue;
+
+            // 1. Create parent group observation
+            let parentObsId: number | null = null;
+            if (groupConceptId) {
+              parentObsId = await insertSingleObs(groupConceptId, null, `rfe^${grp.id}`, null);
+            }
+
+            // 2. Create group members with obs_group_id linking
+            for (const [colKey, colVal] of validEntries) {
+              const subQ = grp.subQuestions.find(sq => sq.id === colKey);
+              const colConcept = subQ?.concept || schemaConceptMap[colKey] || colKey;
+              const colConceptId = await resolveConceptId(colConcept);
+              if (colConceptId) {
+                await insertSingleObs(colConceptId, colVal, `rfe^${grp.id}/${colKey}`, parentObsId);
+              }
+            }
+          }
+        } else {
+          // Non-repeating obsGroup (e.g. ARVDrug_1, ARVDrug_2, etc.)
+          const subValues: Array<{ subId: string; conceptUuid: string; value: any }> = [];
+          for (const subQ of grp.subQuestions) {
+            const v = formData[subQ.id] !== undefined ? formData[subQ.id] : (grpVal && typeof grpVal === 'object' ? (grpVal as any)[subQ.id] : undefined);
+            if (v !== undefined && v !== null && v !== '') {
+              subValues.push({
+                subId: subQ.id,
+                conceptUuid: subQ.concept || schemaConceptMap[subQ.id] || subQ.id,
+                value: v
+              });
+              handledKeys.add(subQ.id);
+            }
+          }
+
+          if (subValues.length > 0) {
+            handledKeys.add(grp.id);
+            // 1. Create parent group observation
+            let parentObsId: number | null = null;
+            if (groupConceptId) {
+              parentObsId = await insertSingleObs(groupConceptId, null, `rfe^${grp.id}`, null);
+            }
+
+            // 2. Create group members with obs_group_id linking
+            for (const item of subValues) {
+              const itemConceptId = await resolveConceptId(item.conceptUuid);
+              if (itemConceptId) {
+                await insertSingleObs(itemConceptId, item.value, `rfe^${grp.id}/${item.subId}`, parentObsId);
+              }
+            }
+          }
+        }
+      }
+
+      // B. Process All Remaining Standalone Observations
+      const nonObsKeys = new Set([
+        'facilityName', 'facility_name', 'facilityDatimCode',
+        'clinicianName', 'clinician_name', 'pharmacist', 'pharmacistName',
+        'visitDate', 'encounterDate', 'dateOrdered', 'orderedDate', 'encounterDatetime',
+        'groups_count', 'active_regimen_info', 'id', 'uuid', 'patientId', 'patient_id',
+        'encounter_id', 'visit_id', 'visitId', 'location_id', 'provider_id', 'form_id',
+        'hospital_number', 'art_number', 'sex', 'age', 'dob', 'gender',
+        'refillMonths', 'quantityDispensed', 'currentRegimen', 'dispensedRegimen',
+        'calculated_next_appointment_date', 'next_appointment_date', 'returnVisitDate',
+        'oi_prophylaxis', 'tb_prev', 'prepdrug', 'others_prev',
+        'ARVDrug_1', 'ARVDrug_2', 'ARVDrug_3', 'ARVDrug_4', 'ARVDrug_5'
+      ]);
+
+      for (const [key, val] of Object.entries(formData)) {
+        if (handledKeys.has(key)) continue;
+        if (nonObsKeys.has(key)) continue;
+        if (val === undefined || val === null || val === '') continue;
+        if (Array.isArray(val)) continue; // Repeating arrays already handled
+
+        const conceptId = await resolveConceptId(key);
+        // Exclude concept 9 ("BLOOD SUGAR") fallback unless specifically requested
+        if (conceptId && (conceptId !== 9 || key.toLowerCase().includes('sugar') || key.toLowerCase().includes('glucose'))) {
+          await insertSingleObs(conceptId, val, `rfe^${key}`, null);
         }
       }
 

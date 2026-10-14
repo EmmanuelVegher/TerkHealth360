@@ -50,7 +50,7 @@ export class NmrsDataBridge {
     if (!config) {
       config = await prisma.nmrsConfig.create({
         data: {
-          openmrsBaseUrl: 'http://10.11.2.29:8080/openmrs',
+          openmrsBaseUrl: 'http://10.120.221.29:8080/openmrs',
           openmrsUsername: 'Chioma',
           openmrsPassword: 'Chioma123',
           facilityName: 'Im Ogwa General Hospital',
@@ -71,7 +71,7 @@ export class NmrsDataBridge {
    */
   public static async getFhirClient(timeoutMs = 6000): Promise<{ client: AxiosInstance; baseUrl: string }> {
     const config = await this.getConfig();
-    let rawUrl = (config.openmrsBaseUrl || 'http://10.11.2.29:8080/openmrs').trim().replace(/\/+$/, '');
+    let rawUrl = (config.openmrsBaseUrl || 'http://10.120.221.29:8080/openmrs').trim().replace(/\/+$/, '');
     if (!rawUrl.startsWith('http')) rawUrl = `http://${rawUrl}`;
     rawUrl = rawUrl.replace(/\/ws\/rest\/v1\/?$/, '').replace(/\/ws\/fhir2\/R4\/?$/, '');
 
@@ -96,7 +96,7 @@ export class NmrsDataBridge {
    */
   public static async getRestClient(timeoutMs = 6000): Promise<{ client: AxiosInstance; baseUrl: string }> {
     const config = await this.getConfig();
-    let rawUrl = (config.openmrsBaseUrl || 'http://10.11.2.29:8080/openmrs').trim().replace(/\/+$/, '');
+    let rawUrl = (config.openmrsBaseUrl || 'http://10.120.221.29:8080/openmrs').trim().replace(/\/+$/, '');
     if (!rawUrl.startsWith('http')) rawUrl = `http://${rawUrl}`;
     rawUrl = rawUrl.replace(/\/ws\/rest\/v1\/?$/, '').replace(/\/ws\/fhir2\/R4\/?$/, '');
 
@@ -638,7 +638,8 @@ export class NmrsDataBridge {
               obs: Object.entries(e.obs || {}).map(([k, v]) => ({
                 concept: { display: k },
                 value: v
-              }))
+              })),
+              obsDict: e.obs || {}
             });
           }
         }
@@ -844,8 +845,8 @@ export class NmrsDataBridge {
 
           const schema = await getOrCreateSchema(formName, enc.form?.uuid);
 
-          // Extract all observations from OpenMRS encounter
-          const obsDict: Record<string, any> = {};
+          // Extract all observations from OpenMRS encounter, keeping structured groups & field IDs
+          const obsDict: Record<string, any> = { ...(enc.obsDict || {}) };
           const obsList = enc.obs || [];
 
           for (const o of obsList) {
@@ -859,7 +860,7 @@ export class NmrsDataBridge {
             } else if (typeof val === 'string' && val.includes('T00:00:00')) {
               val = val.slice(0, 10);
             }
-            if (val !== undefined && val !== null) {
+            if (val !== undefined && val !== null && obsDict[conceptName] === undefined) {
               obsDict[conceptName] = val;
             }
           }
@@ -1052,11 +1053,22 @@ export class NmrsDataBridge {
     }
 
     const patient = encRecord.patient;
+
+    // 0. Primary: Direct MySQL push to OpenMRS database on laptop server
+    try {
+      const mysqlRes = await NmrsMySqlConnector.pushEncounterToMySql(recordId);
+      if (mysqlRes?.success) {
+        return mysqlRes;
+      }
+    } catch (err: any) {
+      console.warn(`[NMRS Push] Direct MySQL push failed (${err.message}), falling back to REST/FHIR`);
+    }
+
     const patientOpenmrsUuid = patient.openmrsUuid || patient.nmrsMapping?.openmrsUuid;
     if (!patientOpenmrsUuid) {
       return {
         success: false,
-        message: 'Patient does not have an OpenMRS UUID. Please sync patient demographics first.'
+        message: 'Patient does not have an OpenMRS UUID and direct MySQL sync was unavailable. Please ensure laptop is connected at 10.120.221.29.'
       };
     }
 
@@ -1081,23 +1093,42 @@ export class NmrsDataBridge {
       }
     }
 
-    // 0. Primary: Direct MySQL push to OpenMRS database on laptop server
-    try {
-      const mysqlRes = await NmrsMySqlConnector.pushEncounterToMySql(recordId);
-      if (mysqlRes?.success) {
-        return mysqlRes;
-      }
-    } catch (err: any) {
-      console.warn(`[NMRS Push] Direct MySQL push failed (${err.message}), falling back to REST/FHIR`);
-    }
-
     // 1. Attempt OpenMRS REST Web Services POST /ws/rest/v1/encounter
     try {
       const { client: restClient } = await this.getRestClient(8000);
+
+      // Find or create active/same-day visit for patient
+      let visitUuid: string | null = null;
+      try {
+        const visitSearch = await restClient.get(`/visit?patient=${patientOpenmrsUuid}&includeInactive=true&v=custom:(uuid,startDatetime,stopDatetime)`);
+        const vList = visitSearch.data?.results || [];
+        const targetDay = encDate.split('T')[0];
+        const match = vList.find((v: any) => v.startDatetime && v.startDatetime.startsWith(targetDay));
+        if (match) {
+          visitUuid = match.uuid;
+        } else {
+          const vtRes = await restClient.get('/visittype?v=custom:(uuid,name)');
+          const vtList = vtRes.data?.results || [];
+          const chosenVt = vtList.find((vt: any) => vt.name?.toLowerCase().includes('facility')) || vtList[0];
+          if (chosenVt) {
+            const createVRes = await restClient.post('/visit', {
+              patient: patientOpenmrsUuid,
+              visitType: chosenVt.uuid,
+              startDatetime: encDate,
+              stopDatetime: null
+            });
+            visitUuid = createVRes.data?.uuid || null;
+          }
+        }
+      } catch (vErr: any) {
+        console.warn(`[NMRS REST Push] Visit resolution skipped:`, vErr.message);
+      }
+
       const restPayload: any = {
         patient: patientOpenmrsUuid,
         encounterType: encRecord.encounterType || formName,
         encounterDatetime: encDate,
+        ...(visitUuid ? { visit: visitUuid } : {}),
         ...(formUuid ? { form: formUuid } : {}),
         ...(obsList.length > 0 ? { obs: obsList } : {})
       };

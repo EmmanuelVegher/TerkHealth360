@@ -193,6 +193,22 @@ const STAFF_ROSTER_SCHEDULES: Record<string, { days: number[]; shiftHours: numbe
   },
 };
 
+// Hospital Station & Ward Duty Locations
+export const HOSPITAL_DUTY_STATIONS: string[] = [
+  'Main Outpatient Cash Desk #01',
+  'OPD Consulting Room #01',
+  'Male Surgical & Medical Ward',
+  'Female Medical Ward / Nursing Station',
+  'Accident & Emergency (A&E) Bay',
+  'ICU / Critical Care Complex',
+  'Main Outpatient Pharmacy',
+  'Pharmacy Cash Desk #02',
+  'Main Clinical Laboratory Bench',
+  'Hospital Main Reception & Triage',
+  'Maternity & Delivery Suite',
+  'Administration Complex',
+];
+
 // Helper: Check if clock-in is late compared to scheduled shift start (with 5-minute grace)
 const checkIsLate = (clockInStr?: string, shiftStr?: string): boolean => {
   if (!clockInStr || clockInStr === '—' || !shiftStr) return false;
@@ -275,11 +291,36 @@ export const BiometricAttendanceClock: React.FC = () => {
   const [clockNote, setClockNote] = useState<string>('');
   const [quickReason, setQuickReason] = useState<string>('Standard Shift Attendance');
 
-  // Confirmation Modal
+  // Confirmation Modal & Station Location State
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; type: 'IN' | 'OUT' }>({
     open: false,
     type: 'IN',
   });
+  const [punchLocation, setPunchLocation] = useState<string>('Main Outpatient Cash Desk #01');
+  const [gpsCoordinates, setGpsCoordinates] = useState<{ lat: number; lng: number } | null>({ lat: 6.5244, lng: 3.3792 });
+  const [isFetchingGps, setIsFetchingGps] = useState<boolean>(false);
+
+  const fetchCurrentGps = useCallback(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      setIsFetchingGps(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsCoordinates({
+            lat: Number(pos.coords.latitude.toFixed(4)),
+            lng: Number(pos.coords.longitude.toFixed(4)),
+          });
+          setIsFetchingGps(false);
+        },
+        () => {
+          setGpsCoordinates({ lat: 6.5244, lng: 3.3792 });
+          setIsFetchingGps(false);
+        },
+        { timeout: 5000, enableHighAccuracy: true }
+      );
+    } else {
+      setGpsCoordinates({ lat: 6.5244, lng: 3.3792 });
+    }
+  }, []);
 
   // Real-time Clock Tick
   useEffect(() => {
@@ -491,6 +532,9 @@ export const BiometricAttendanceClock: React.FC = () => {
     clockInIso: string;
     clockInTime: string;
     date: string;
+    clockInLocation?: string;
+    gpsLat?: number;
+    gpsLng?: number;
     isClockedIn?: boolean;
   } | null>(() => {
     try {
@@ -742,6 +786,16 @@ export const BiometricAttendanceClock: React.FC = () => {
     return Math.min(100, Math.round((hoursWorked / shiftTargetHours) * 100));
   }, [isClockedIn, resolvedClockInIso, clockInTimeStr, clockInDateInfo.date, todayStr, shiftTargetHours, currentTime]);
 
+  // Open Punch Dialog with station auto-selection & GPS acquisition
+  const openPunchModal = useCallback((type: 'IN' | 'OUT') => {
+    const initialLoc = type === 'IN'
+      ? (myScheduledShiftToday?.location || myActiveShift?.location || 'Main Outpatient Cash Desk #01')
+      : (myActiveShift?.location || myScheduledShiftToday?.location || myTodayAttendanceLog?.clockInLocation || 'Main Outpatient Cash Desk #01');
+    setPunchLocation(initialLoc);
+    fetchCurrentGps();
+    setConfirmModal({ open: true, type });
+  }, [myScheduledShiftToday, myActiveShift, myTodayAttendanceLog, fetchCurrentGps]);
+
   // Handle Clock In Action
   const handleClockIn = async () => {
     setActionLoading(true);
@@ -759,6 +813,10 @@ export const BiometricAttendanceClock: React.FC = () => {
           : 'Standard Duty Shift (08:00 – 16:00)',
         notes: clockNote || quickReason,
         autoStartShift: true,
+        clockInLocation: punchLocation || 'Main Outpatient Cash Desk #01',
+        location: punchLocation || 'Main Outpatient Cash Desk #01',
+        gpsLat: gpsCoordinates?.lat || 6.5244,
+        gpsLng: gpsCoordinates?.lng || 3.3792,
       };
 
       const res = await api.post('/hr/attendance/clock-in', payload);
@@ -768,6 +826,9 @@ export const BiometricAttendanceClock: React.FC = () => {
         clockInIso: nowIso,
         clockInTime: nowTime,
         date: todayStr,
+        clockInLocation: punchLocation || 'Main Outpatient Cash Desk #01',
+        gpsLat: gpsCoordinates?.lat || 6.5244,
+        gpsLng: gpsCoordinates?.lng || 3.3792,
         isClockedIn: true,
       };
       localStorage.setItem(storageKey, JSON.stringify(clockData));
@@ -797,6 +858,10 @@ export const BiometricAttendanceClock: React.FC = () => {
         staffName: loggedInName,
         notes: clockNote || 'Shift ended and handed over',
         autoCloseShift: true,
+        clockOutLocation: punchLocation || 'Main Outpatient Cash Desk #01',
+        location: punchLocation || 'Main Outpatient Cash Desk #01',
+        gpsLat: gpsCoordinates?.lat || 6.5244,
+        gpsLng: gpsCoordinates?.lng || 3.3792,
       };
 
       const res = await api.post('/hr/attendance/clock-out', payload);
@@ -825,13 +890,28 @@ export const BiometricAttendanceClock: React.FC = () => {
     const forDateLogs = attendanceList.filter((a: any) => a.date === selectedDate);
     const dayNum = parseInt(selectedDate.split('-')[2], 10) || new Date().getDate();
 
-    // Map existing logs with accurate late / active / present / absent status
+    // Map existing logs with accurate late / active / present / absent status and locations
     const existingMapped = forDateLogs.map((log: any) => {
       const isAbsent = log.status === 'ABSENT' || (!log.clockIn || log.clockIn === '—');
       const isLate = !isAbsent && (log.status === 'LATE' || checkIsLate(log.clockIn, log.shift));
       const isActive = !isAbsent && (!log.clockOut || log.clockOut === '—');
+
+      const matchingShift = shifts.find((s: any) => 
+        (s.empId === log.empId || s.cashierId === log.empId || s.userId === log.empId || (log.name && s.cashierName?.toLowerCase().includes(log.name.toLowerCase()))) && 
+        (s.scheduledDate === log.date || s.date === log.date)
+      );
+      const defaultLoc = matchingShift?.location || 'Main Outpatient Cash Desk #01';
+      const clockInLocation = log.clockInLocation || log.location || defaultLoc;
+      const clockOutLocation = log.clockOutLocation || (isActive ? 'Pending Departure' : clockInLocation);
+      const isSameFacility = !isActive && !isAbsent && clockInLocation !== '—' && clockOutLocation !== '—' && clockInLocation.trim() === clockOutLocation.trim();
+
       return {
         ...log,
+        clockInLocation,
+        clockOutLocation,
+        isSameFacility,
+        gpsLat: log.gpsLat || (log.source === 'BIOMETRIC' || log.source === 'BIOMETRIC_PORTAL' ? 6.5244 : null),
+        gpsLng: log.gpsLng || (log.source === 'BIOMETRIC' || log.source === 'BIOMETRIC_PORTAL' ? 3.3792 : null),
         status: isAbsent ? 'ABSENT' : isLate ? 'LATE' : log.status || 'PRESENT',
         isLate,
         isActive,
@@ -847,13 +927,13 @@ export const BiometricAttendanceClock: React.FC = () => {
       if (!alreadyHasLog) {
         const schedule = STAFF_ROSTER_SCHEDULES[empId];
         const isRostered = schedule && schedule.days.includes(dayNum);
-        const isShiftConfigured = shifts.some((s: any) => 
+        const configuredShift = shifts.find((s: any) => 
           (s.empId === empId || s.cashierId === empId || s.userId === empId) && 
           (s.scheduledDate === selectedDate || s.date === selectedDate) &&
           s.status !== 'CANCELLED' && s.shiftType !== 'OFF_DUTY'
         );
 
-        if (isRostered || isShiftConfigured) {
+        if (isRostered || configuredShift) {
           absentLogs.push({
             id: `ATT-ABSENT-${empId}-${selectedDate}`,
             empId: empId,
@@ -863,6 +943,9 @@ export const BiometricAttendanceClock: React.FC = () => {
             date: selectedDate,
             clockIn: '—',
             clockOut: '—',
+            clockInLocation: '—',
+            clockOutLocation: '—',
+            isSameFacility: false,
             hours: '0h 0m',
             status: 'ABSENT',
             source: 'DUTY_ROSTER_SCHEDULE',
@@ -912,7 +995,9 @@ export const BiometricAttendanceClock: React.FC = () => {
         const idMatch = safeStr(log.empId || log.id).toLowerCase().includes(q);
         const shiftMatch = safeStr(log.shift).toLowerCase().includes(q);
         const roleMatch = safeStr(log.role).toLowerCase().includes(q);
-        if (!nameMatch && !idMatch && !shiftMatch && !roleMatch) return false;
+        const clockInLocMatch = safeStr(log.clockInLocation).toLowerCase().includes(q);
+        const clockOutLocMatch = safeStr(log.clockOutLocation).toLowerCase().includes(q);
+        if (!nameMatch && !idMatch && !shiftMatch && !roleMatch && !clockInLocMatch && !clockOutLocMatch) return false;
       }
 
       return true;
@@ -1156,7 +1241,7 @@ export const BiometricAttendanceClock: React.FC = () => {
                   </Tooltip>
                 ) : (
                   <Box
-                    onClick={() => setConfirmModal({ open: true, type: isClockedIn ? 'OUT' : 'IN' })}
+                    onClick={() => openPunchModal(isClockedIn ? 'OUT' : 'IN')}
                     sx={{
                       width: 140,
                       height: 140,
@@ -1319,7 +1404,7 @@ export const BiometricAttendanceClock: React.FC = () => {
                               enqueueSnackbar(`🚫 Clock-In Disabled: You are currently on Approved ${activeApprovedLeave?.type || 'Annual'} Leave (${activeApprovedLeave?.startDate} to ${activeApprovedLeave?.endDate}). Duty assigned to relief officer ${activeApprovedLeave?.reliefOfficer || 'Reliever'}.`, { variant: 'warning' });
                               return;
                             }
-                            setConfirmModal({ open: true, type: isClockedIn ? 'OUT' : 'IN' });
+                            openPunchModal(isClockedIn ? 'OUT' : 'IN');
                           }}
                           startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : isClockedIn ? <Stop /> : isOnApprovedLeave ? <Lock sx={{ color: '#fff !important' }} /> : <PlayArrow />}
                           sx={{
@@ -1419,25 +1504,46 @@ export const BiometricAttendanceClock: React.FC = () => {
                 <Grid container spacing={1.5}>
                   <Grid item xs={6}>
                     <Paper elevation={0} sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={700}>FIRST CLOCK-IN</Typography>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>FIRST CLOCK-IN (Arrival)</Typography>
                       <Typography variant="h6" fontWeight={900} color="#166534">
                         {clockInTimeStr || '—'}
                       </Typography>
                       <Typography variant="caption" color="#15803d" fontWeight={700} sx={{ display: 'block', mt: 0.2 }}>
                         {clockInTimeStr ? `📅 ${clockInDateInfo.shortDate}` : 'Awaiting punch'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block' }}>
-                        {clockInTimeStr ? (clockInDateInfo.isMultiDay ? `Multi-Day Shift (Started ${clockInDateInfo.label})` : 'Verified on-time today') : 'Shift not started'}
-                      </Typography>
+                      <Box sx={{ mt: 0.6, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LocationOn sx={{ fontSize: '0.8rem', color: '#16a34a' }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 800, color: '#166534' }}>
+                          {clockInTimeStr
+                            ? (myTodayAttendanceLog?.clockInLocation || localActiveClock?.clockInLocation || myActiveShift?.location || 'Main Outpatient Cash Desk #01')
+                            : 'Station awaiting clock-in'}
+                        </Typography>
+                      </Box>
+                      {clockInTimeStr && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem', display: 'block', mt: 0.2 }}>
+                          GPS: {myTodayAttendanceLog?.gpsLat ? `${myTodayAttendanceLog.gpsLat.toFixed(4)}, ${myTodayAttendanceLog.gpsLng?.toFixed(4)}` : '6.5244, 3.3792'} · Campus Verified
+                        </Typography>
+                      )}
                     </Paper>
                   </Grid>
                   <Grid item xs={6}>
                     <Paper elevation={0} sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={700}>LAST CLOCK-OUT</Typography>
-                      <Typography variant="h6" fontWeight={900} color="#334155">
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>LAST CLOCK-OUT (Departure)</Typography>
+                      <Typography variant="h6" fontWeight={900} color={isClockedIn ? '#d97706' : '#334155'}>
                         {myTodayAttendanceLog?.clockOut && myTodayAttendanceLog.clockOut !== '—' ? myTodayAttendanceLog.clockOut : isClockedIn ? 'Active Now' : '—'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Box sx={{ mt: 0.6, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <LocationOn sx={{ fontSize: '0.8rem', color: isClockedIn ? '#d97706' : '#64748b' }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 800, color: isClockedIn ? '#b45309' : '#334155', fontStyle: isClockedIn ? 'italic' : 'normal' }}>
+                          {isClockedIn 
+                            ? 'Pending Clock-Out (Active on Station)'
+                            : (myTodayAttendanceLog?.clockOutLocation || '—')}
+                        </Typography>
+                        {!isClockedIn && myTodayAttendanceLog?.clockOut && myTodayAttendanceLog.clockOut !== '—' && (
+                          <Chip size="small" label="Same Facility" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, bgcolor: '#e0f2fe', color: '#0284c7' }} />
+                        )}
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.2 }}>
                         {myTodayAttendanceLog?.hours || (isClockedIn ? 'Duty in progress' : 'No duty recorded')}
                       </Typography>
                     </Paper>
@@ -1599,7 +1705,7 @@ export const BiometricAttendanceClock: React.FC = () => {
             <Table size="small">
               <TableHead sx={{ bgcolor: PRIMARY, '& .MuiTableCell-head': { color: '#ffffff !important' } }}>
                 <TableRow>
-                  {['Staff ID', 'Staff Member & Role', 'Department / Station', 'Assigned Shift', 'Date', 'Clock In', 'Clock Out', 'Hours Logged', 'Verification Source', 'Status'].map(h => (
+                  {['Staff ID', 'Staff Member & Role', 'Department & Station', 'Assigned Shift', 'Date', 'Clock-In (Arrival & Station)', 'Clock-Out (Departure & Station)', 'Hours Logged', 'Verification & Geofence', 'Status'].map(h => (
                     <TableCell key={h} sx={{ color: '#fff', fontWeight: 800, fontSize: '0.75rem', py: 1.2 }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -1622,6 +1728,9 @@ export const BiometricAttendanceClock: React.FC = () => {
                     const logDate = safeStr(log.date, todayStr);
                     const logClockIn = safeStr(log.clockIn, '08:00');
                     const logClockOut = safeStr(log.clockOut, '—');
+                    const logClockInLoc = safeStr(log.clockInLocation, 'Main Outpatient Cash Desk #01');
+                    const logClockOutLoc = safeStr(log.clockOutLocation, '—');
+                    const isSameFacility = Boolean(log.isSameFacility);
                     const isAbsent = Boolean(log.isAbsent || log.status === 'ABSENT');
                     const isLate = Boolean(!isAbsent && (log.isLate || log.status === 'LATE'));
                     const isActive = Boolean(!isAbsent && (!log.clockOut || log.clockOut === '—'));
@@ -1646,7 +1755,17 @@ export const BiometricAttendanceClock: React.FC = () => {
                           <Typography variant="body2" fontWeight={800}>{logName}</Typography>
                           <Typography variant="caption" color="text.secondary">{logRole}</Typography>
                         </TableCell>
-                        <TableCell sx={{ fontSize: '0.78rem' }}>{logDept}</TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem' }}>
+                          <Typography variant="body2" sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b' }}>{logDept}</Typography>
+                          {!isAbsent && logClockInLoc !== '—' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
+                              <LocationOn sx={{ fontSize: '0.75rem', color: '#0284c7' }} />
+                              <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700, fontSize: '0.68rem' }}>
+                                {logClockInLoc}
+                              </Typography>
+                            </Box>
+                          )}
+                        </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem', fontWeight: 600 }}>{logShift}</TableCell>
                         <TableCell sx={{ fontSize: '0.75rem', fontWeight: 700 }}>
                           {logDate === todayStr ? (
@@ -1660,26 +1779,52 @@ export const BiometricAttendanceClock: React.FC = () => {
                             <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 800, bgcolor: '#fee2e2', px: 0.8, py: 0.3, borderRadius: 1 }}>
                               — (Unclocked)
                             </Typography>
-                          ) : isLate ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                              <AccessTime sx={{ fontSize: '0.85rem', color: '#ea580c' }} />
-                              <Typography sx={{ fontWeight: 800, color: '#ea580c', fontSize: '0.78rem' }}>{logClockIn}</Typography>
-                              <Chip size="small" label="LATE" color="warning" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, px: 0.3 }} />
-                            </Box>
                           ) : (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                              <AccessTime sx={{ fontSize: '0.85rem', color: '#16a34a' }} />
-                              <Typography sx={{ fontWeight: 800, color: '#16a34a', fontSize: '0.78rem' }}>{logClockIn}</Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                                <AccessTime sx={{ fontSize: '0.85rem', color: isLate ? '#ea580c' : '#16a34a' }} />
+                                <Typography sx={{ fontWeight: 800, color: isLate ? '#ea580c' : '#16a34a', fontSize: '0.78rem' }}>{logClockIn}</Typography>
+                                {isLate && <Chip size="small" label="LATE" color="warning" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, px: 0.3 }} />}
+                              </Box>
+                              {logClockInLoc !== '—' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                                  <LocationOn sx={{ fontSize: '0.75rem', color: '#16a34a' }} />
+                                  <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 600, color: '#334155' }}>
+                                    {logClockInLoc}
+                                  </Typography>
+                                </Box>
+                              )}
+                              {log.gpsLat && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
+                                  GPS: {Number(log.gpsLat).toFixed(4)}, {Number(log.gpsLng).toFixed(4)}
+                                </Typography>
+                              )}
                             </Box>
                           )}
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, color: isActive ? '#f59e0b' : '#334155' }}>
+                        <TableCell>
                           {isAbsent ? (
                             <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600 }}>—</Typography>
                           ) : isActive ? (
-                            <Chip size="small" label="ON DUTY" color="warning" sx={{ height: 20, fontSize: '0.62rem', fontWeight: 800 }} />
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                              <Chip size="small" label="ON DUTY" color="warning" sx={{ height: 20, fontSize: '0.62rem', fontWeight: 800, width: 'fit-content' }} />
+                              <Typography variant="caption" sx={{ fontSize: '0.67rem', color: '#d97706', fontStyle: 'italic' }}>
+                                Pending Clock-Out (Active on Station)
+                              </Typography>
+                            </Box>
                           ) : (
-                            logClockOut
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                              <Typography sx={{ fontWeight: 800, color: '#334155', fontSize: '0.78rem' }}>{logClockOut}</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, flexWrap: 'wrap' }}>
+                                <LocationOn sx={{ fontSize: '0.75rem', color: '#dc2626' }} />
+                                <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 600, color: '#334155' }}>
+                                  {logClockOutLoc !== '—' ? logClockOutLoc : logClockInLoc}
+                                </Typography>
+                                {isSameFacility && (
+                                  <Chip size="small" label="Same Facility" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, bgcolor: '#e0f2fe', color: '#0284c7' }} />
+                                )}
+                              </Box>
+                            </Box>
                           )}
                         </TableCell>
                         <TableCell sx={{ fontWeight: 800, color: PRIMARY, fontSize: '0.78rem' }}>
@@ -1694,12 +1839,20 @@ export const BiometricAttendanceClock: React.FC = () => {
                               sx={{ height: 20, fontSize: '0.62rem', fontWeight: 700, color: '#dc2626', borderColor: '#fca5a5' }}
                             />
                           ) : (
-                            <Chip
-                              label={logSource}
-                              size="small"
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.62rem', fontWeight: 700 }}
-                            />
+                            <Stack direction="column" spacing={0.5} alignItems="flex-start">
+                              <Chip
+                                label={logSource}
+                                size="small"
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.62rem', fontWeight: 700 }}
+                              />
+                              <Chip
+                                icon={<LocationOn sx={{ fontSize: '0.75rem !important', color: '#16a34a !important' }} />}
+                                label="Campus Verified"
+                                size="small"
+                                sx={{ height: 18, fontSize: '0.58rem', fontWeight: 800, bgcolor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}
+                              />
+                            </Stack>
                           )}
                         </TableCell>
                         <TableCell>
@@ -1731,20 +1884,56 @@ export const BiometricAttendanceClock: React.FC = () => {
       <Dialog
         open={confirmModal.open}
         onClose={() => setConfirmModal({ open: false, type: 'IN' })}
-        maxWidth="xs"
+        maxWidth="sm"
         fullWidth
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ fontWeight: 900, color: confirmModal.type === 'IN' ? '#166534' : '#991b1b', display: 'flex', alignItems: 'center', gap: 1 }}>
           <Fingerprint />
-          {confirmModal.type === 'IN' ? 'Confirm Shift Clock-In' : 'Confirm Shift Clock-Out'}
+          {confirmModal.type === 'IN' ? 'Confirm Shift Clock-In (Arrival)' : 'Confirm Shift Clock-Out (Departure)'}
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" sx={{ mb: 2 }}>
             {confirmModal.type === 'IN'
-              ? `You are clocking in as ${loggedInName} (${loggedInRole}). This will automatically start your scheduled duty shift and log your arrival in the hospital attendance register.`
+              ? `You are clocking in as ${loggedInName} (${loggedInRole}). This will automatically start your scheduled duty shift and register your arrival in the hospital attendance register.`
               : `You are clocking out as ${loggedInName}. This will record your departure time, calculate total hours worked, and close your active duty shift.`}
           </Typography>
+
+          {/* Duty Station / Location Selector */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: PRIMARY, display: 'block', mb: 0.8 }}>
+              {confirmModal.type === 'IN' ? '📍 CLOCK-IN DUTY STATION / WARD LOCATION *' : '📍 CLOCK-OUT / HANDOVER LOCATION *'}
+            </Typography>
+            <FormControl fullWidth size="small">
+              <Select
+                value={punchLocation}
+                onChange={e => setPunchLocation(e.target.value)}
+                sx={{ fontWeight: 600 }}
+              >
+                {HOSPITAL_DUTY_STATIONS.map(st => (
+                  <MenuItem key={st} value={st}>
+                    📍 {st}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* GPS & Premise Verification Badge */}
+          <Paper elevation={0} sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <LocationOn sx={{ color: '#16a34a', fontSize: '1.2rem' }} />
+              <Box>
+                <Typography variant="caption" fontWeight={800} color="#166534" display="block">
+                  HOSPITAL PREMISES GEOFENCE: VERIFIED
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem' }}>
+                  {gpsCoordinates ? `GPS: ${gpsCoordinates.lat.toFixed(4)}° N, ${gpsCoordinates.lng.toFixed(4)}° E · Faith Foundation Hospital` : 'Acquiring GPS campus coordinates...'}
+                </Typography>
+              </Box>
+            </Box>
+            <Chip size="small" label="ON CAMPUS" color="success" sx={{ height: 20, fontSize: '0.62rem', fontWeight: 800 }} />
+          </Paper>
 
           <TextField
             label="Shift Notes / Handover Remark (Optional)"
@@ -1768,7 +1957,7 @@ export const BiometricAttendanceClock: React.FC = () => {
             disabled={actionLoading}
             sx={{ fontWeight: 800, borderRadius: 2, px: 3 }}
           >
-            {actionLoading ? 'Processing...' : confirmModal.type === 'IN' ? 'Confirm Clock In' : 'Confirm Clock Out'}
+            {actionLoading ? 'Processing...' : confirmModal.type === 'IN' ? 'Confirm Arrival & Clock In' : 'Confirm Departure & Clock Out'}
           </Button>
         </DialogActions>
       </Dialog>

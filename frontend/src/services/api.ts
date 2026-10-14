@@ -43,13 +43,15 @@ api.interceptors.response.use(
     
     // Check if this endpoint should NEVER be intercepted into the offline queue:
     // 1. Authentication endpoints (login must always validate against database/server)
-    // 2. AI folder extraction / computer vision analysis (analytical query, not a syncable write)
-    // 3. Requests with explicit skipOfflineQueue flag
-    // 4. Request timeouts (ECONNABORTED)
+    // 2. Direct synchronization triggers (must report real connection/laptop status)
+    // 3. AI folder extraction / computer vision analysis (analytical query, not a syncable write)
+    // 4. Requests with explicit skipOfflineQueue flag
+    // 5. Request timeouts (ECONNABORTED)
     const url = (config?.url || '').toLowerCase();
     const isExcludedFromOfflineQueue =
       (config as any)?.skipOfflineQueue ||
       url.includes('/auth/') ||
+      url.includes('/sync') ||
       url.includes('/records-migration/extract-folder') ||
       url.includes('/records-migration/check-patient-match') ||
       url.includes('/medgemma') ||
@@ -183,6 +185,12 @@ export async function runBackgroundSync() {
   };
 
   for (const item of queue) {
+    // 0. Sync triggers must not be in offline queue
+    if (!item?.url || item.url.includes('/sync')) {
+      console.log(`[OfflineSync] Removing non-replayable sync item from offline queue:`, item?.url);
+      continue;
+    }
+
     try {
       // 1. Resolve any temporary IDs in the URL
       let resolvedUrl = item.url;
@@ -193,11 +201,23 @@ export async function runBackgroundSync() {
       // 2. Resolve any temporary IDs in the Payload
       const resolvedData = replaceTempIds(item.data, idMap);
 
-      // 3. Dispatch request to the server using basic axios to bypass interceptor queueing
+      // 3. Resolve target URL cleanly without duplicate /api
+      let targetUrl = resolvedUrl;
+      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        const base = (API_BASE_URL || '/api').replace(/\/$/, '');
+        const cleanPath = targetUrl.replace(/^\//, '');
+        if (cleanPath.startsWith('api/')) {
+          targetUrl = `${base.replace(/\/api$/, '')}/${cleanPath}`;
+        } else {
+          targetUrl = `${base}/${cleanPath}`;
+        }
+      }
+
+      // 4. Dispatch request to the server using basic axios to bypass interceptor queueing
       const token = localStorage.getItem('token');
       const response = await axios({
         method: item.method,
-        url: `/api${resolvedUrl.startsWith('/') ? '' : '/'}${resolvedUrl}`,
+        url: targetUrl,
         data: resolvedData,
         headers: {
           'Content-Type': 'application/json',
@@ -205,7 +225,7 @@ export async function runBackgroundSync() {
         },
       });
 
-      // 4. Map the tempId to the returned database ID
+      // 5. Map the tempId to the returned database ID
       const responseData = response.data?.data || response.data;
       const realId = responseData?.id;
       if (realId && item.id) {
@@ -214,8 +234,15 @@ export async function runBackgroundSync() {
       console.log(`[OfflineSync] Synced item ${item.url} successfully. Mapping: ${item.id} -> ${realId || 'none'}`);
 
     } catch (err: any) {
-      console.error(`[OfflineSync] Item sync failed for ${item.url}. Keeping in queue. Error:`, err.message);
-      remainingQueue.push(item);
+      const status = err.response?.status;
+      // If the server answered with 4xx client errors (400, 404, 409, 422),
+      // the server is online and rejected the payload. Evict from queue so it doesn't block sync forever.
+      if (status && status >= 400 && status < 500) {
+        console.warn(`[OfflineSync] Item ${item.url} permanently rejected with HTTP ${status}. Evicting from queue.`);
+      } else {
+        console.error(`[OfflineSync] Item sync failed for ${item.url}. Keeping in queue. Error:`, err.message);
+        remainingQueue.push(item);
+      }
     }
   }
 
@@ -226,7 +253,23 @@ export async function runBackgroundSync() {
   window.dispatchEvent(new CustomEvent('offline-sync-updated', { detail: { count: remainingQueue.length } }));
 }
 
+export function clearOfflineSyncQueue() {
+  localStorage.removeItem('offline_sync_queue');
+  localStorage.removeItem('offline_id_mappings');
+  window.dispatchEvent(new CustomEvent('offline-sync-updated', { detail: { count: 0 } }));
+}
+
+// Clean up any stale or invalid items in offline queue on load
 if (typeof window !== 'undefined') {
+  try {
+    const rawQ = JSON.parse(localStorage.getItem('offline_sync_queue') || '[]');
+    const cleanedQ = rawQ.filter((item: any) => item && item.url && !item.url.includes('/sync'));
+    if (cleanedQ.length !== rawQ.length) {
+      localStorage.setItem('offline_sync_queue', JSON.stringify(cleanedQ));
+      window.dispatchEvent(new CustomEvent('offline-sync-updated', { detail: { count: cleanedQ.length } }));
+    }
+  } catch (_) {}
+
   setInterval(runBackgroundSync, 10000);
   window.addEventListener('online', runBackgroundSync);
 }

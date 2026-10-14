@@ -485,15 +485,15 @@ const todayIso = new Date().toISOString().slice(0, 10);
 const yesterdayIso = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
 let attendanceLogs: any[] = [
-  { id: 'ATT-009', empId: 'EMP-009', userId: 'c1fd506d-d642-45bd-84c5-796c5ee31e1b', name: 'Chinedu Okafor', role: 'Chief Financial Officer (CFO)', department: 'Finance & Revenue', date: yesterdayIso, clockIn: '10:40', clockInIso: `${yesterdayIso}T10:40:00`, clockInTimestamp: new Date(`${yesterdayIso}T10:40:00`).getTime(), clockOut: '—', status: 'LATE', source: 'BIOMETRIC_PORTAL', shift: 'Standard Day Shift (07:00 – 15:00)', notes: 'Biometric shift clock-in at Main Outpatient Cash Desk / Finance Directorate' },
-  { id: 'ATT-001', empId: 'EMP-006', name: 'Mary Okon', role: 'Senior Cashier & Revenue Officer', department: 'Finance & Revenue', date: todayIso, clockIn: '—', clockOut: '—', status: 'ON_LEAVE', source: 'LEAVE_MANAGEMENT', shift: '07:00 – 15:00 (ON APPROVED ANNUAL LEAVE - RELIEVED BY BLESSING UGWU)' },
-  { id: 'ATT-002', empId: 'EMP-007', name: 'Blessing Ugwu', role: 'Cashier / Billing Desk', department: 'Finance & Revenue', date: todayIso, clockIn: '—', clockOut: '—', status: 'SCHEDULED', source: 'ROSTER_SCHEDULE', shift: '07:00 – 15:00 (CASHIER MORNING RELIEF FOR MARY OKON)' },
-  { id: 'ATT-003', empId: 'EMP-001', name: 'Dr. Emeka Okafor', role: 'Consultant Physician', department: 'Internal Medicine', date: todayIso, clockIn: '07:55', clockOut: '16:10', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL DAY 8H)' },
-  { id: 'ATT-004', empId: 'EMP-002', name: 'Ngozi Adeyemi', role: 'Chief Matron', department: 'Nursing & Inpatient', date: todayIso, clockIn: '07:50', clockOut: '16:00', status: 'PRESENT', source: 'QR_CODE', shift: '08:00 – 16:00 (NURSING MORNING 8H)' },
-  { id: 'ATT-005', empId: 'EMP-004', name: 'Dr. David Adeleke', role: 'Medical Officer', department: 'Surgery & Trauma', date: todayIso, clockIn: '08:00', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL DAY 8H)' },
-  { id: 'ATT-006', empId: 'EMP-008', name: 'Ibrahim Danladi', role: 'Pharmacy Cashier', department: 'Pharmacy & Billing', date: todayIso, clockIn: '08:05', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (FINANCE 8H)' },
-  { id: 'ATT-007', empId: 'EMP-013', name: 'Emmanuel Vegher', role: 'Chief Consultant Physician', department: 'Clinical & Medical Services', date: todayIso, clockIn: '07:58', clockOut: '16:02', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL CONSULTATION & WARD ROUNDS 8H)' },
-  { id: 'ATT-008', empId: 'EMP-005', name: 'Tunde Fashola', role: 'Hospital Administrator', department: 'Hospital Administration', date: todayIso, clockIn: '07:45', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 17:00 (EXECUTIVE ADMIN 9H)' }
+  { id: 'ATT-009', empId: 'EMP-009', userId: 'c1fd506d-d642-45bd-84c5-796c5ee31e1b', name: 'Chinedu Okafor', role: 'Chief Financial Officer (CFO)', department: 'Finance & Revenue', date: yesterdayIso, clockIn: '10:40', clockInIso: `${yesterdayIso}T10:40:00`, clockInTimestamp: new Date(`${yesterdayIso}T10:40:00`).getTime(), clockOut: '—', status: 'LATE', source: 'BIOMETRIC_PORTAL', shift: 'Standard Day Shift (07:00 – 15:00)', clockInLocation: 'Main Outpatient Cash Desk #01', clockOutLocation: '—', notes: 'Biometric shift clock-in at Main Outpatient Cash Desk / Finance Directorate' },
+  { id: 'ATT-001', empId: 'EMP-006', name: 'Mary Okon', role: 'Senior Cashier & Revenue Officer', department: 'Finance & Revenue', date: todayIso, clockIn: '—', clockOut: '—', status: 'ON_LEAVE', source: 'LEAVE_MANAGEMENT', shift: '07:00 – 15:00 (ON APPROVED ANNUAL LEAVE - RELIEVED BY BLESSING UGWU)', clockInLocation: '—', clockOutLocation: '—' },
+  { id: 'ATT-002', empId: 'EMP-007', name: 'Blessing Ugwu', role: 'Cashier / Billing Desk', department: 'Finance & Revenue', date: todayIso, clockIn: '—', clockOut: '—', status: 'SCHEDULED', source: 'ROSTER_SCHEDULE', shift: '07:00 – 15:00 (CASHIER MORNING RELIEF FOR MARY OKON)', clockInLocation: 'Main Outpatient Cash Desk #01', clockOutLocation: '—' },
+  { id: 'ATT-003', empId: 'EMP-001', name: 'Dr. Emeka Okafor', role: 'Consultant Physician', department: 'Internal Medicine', date: todayIso, clockIn: '07:55', clockOut: '16:10', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL DAY 8H)', clockInLocation: 'OPD Consulting Room #01', clockOutLocation: 'OPD Consulting Room #01', gpsLat: 6.5244, gpsLng: 3.3792 },
+  { id: 'ATT-004', empId: 'EMP-002', name: 'Ngozi Adeyemi', role: 'Chief Matron', department: 'Nursing & Inpatient', date: todayIso, clockIn: '07:50', clockOut: '16:00', status: 'PRESENT', source: 'QR_CODE', shift: '08:00 – 16:00 (NURSING MORNING 8H)', clockInLocation: 'Female Medical Ward / Nursing Station', clockOutLocation: 'Female Medical Ward / Nursing Station', gpsLat: 6.5246, gpsLng: 3.3790 },
+  { id: 'ATT-005', empId: 'EMP-004', name: 'Dr. David Adeleke', role: 'Medical Officer', department: 'Surgery & Trauma', date: todayIso, clockIn: '08:00', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL DAY 8H)', clockInLocation: 'Accident & Emergency (A&E) Bay', clockOutLocation: '—', gpsLat: 6.5245, gpsLng: 3.3791 },
+  { id: 'ATT-006', empId: 'EMP-008', name: 'Ibrahim Danladi', role: 'Pharmacy Cashier', department: 'Pharmacy & Billing', date: todayIso, clockIn: '08:05', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (FINANCE 8H)', clockInLocation: 'Pharmacy Dispensary #1', clockOutLocation: '—' },
+  { id: 'ATT-007', empId: 'EMP-013', name: 'Emmanuel Vegher', role: 'Chief Consultant Physician', department: 'Clinical & Medical Services', date: todayIso, clockIn: '07:58', clockOut: '16:02', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 16:00 (CLINICAL CONSULTATION & WARD ROUNDS 8H)', clockInLocation: 'ICU / Critical Care Complex', clockOutLocation: 'ICU / Critical Care Complex', gpsLat: 6.5243, gpsLng: 3.3795 },
+  { id: 'ATT-008', empId: 'EMP-005', name: 'Tunde Fashola', role: 'Hospital Administrator', department: 'Hospital Administration', date: todayIso, clockIn: '07:45', clockOut: '—', status: 'PRESENT', source: 'BIOMETRIC', shift: '08:00 – 17:00 (EXECUTIVE ADMIN 9H)', clockInLocation: 'Administration Complex', clockOutLocation: '—' }
 ];
 
 let leaveRequests: any[] = [
@@ -2027,7 +2027,7 @@ router.get('/attendance/status/:empId', handleAttendanceStatus);
 // POST /hr/attendance/clock-in — Direct Biometric / Web Clock-In
 router.post('/attendance/clock-in', async (req: Request, res: Response) => {
   try {
-    const { empId, staffName, role, department, shift, notes, autoStartShift } = req.body;
+    const { empId, staffName, role, department, shift, notes, autoStartShift, location, clockInLocation, gpsLat, gpsLng } = req.body;
     const todayStr = new Date().toISOString().slice(0, 10);
     const nowIso = new Date().toISOString();
     const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -2081,25 +2081,6 @@ router.post('/attendance/clock-in', async (req: Request, res: Response) => {
     const assignedShift = shift || 'Standard Day Shift (08:00 – 16:00)';
     const isLate = isClockInLate(nowTime, assignedShift);
 
-    const newLog = {
-      id: `ATT-${Date.now()}`,
-      empId: empId || emp?.id || (isMary ? 'EMP-006' : 'EMP-001'),
-      name: resolvedName,
-      role: resolvedRole,
-      department: resolvedDept,
-      date: todayStr,
-      clockIn: nowTime,
-      clockInIso: nowIso,
-      clockInTimestamp: Date.now(),
-      clockOut: '—',
-      status: isLate ? 'LATE' : 'PRESENT',
-      source: 'BIOMETRIC_PORTAL',
-      shift: assignedShift,
-      notes: notes || (isLate ? 'Clocked in after shift scheduled start (Late Arrival)' : 'Clocked in via Biometric Attendance Portal')
-    };
-
-    attendanceLogs.unshift(newLog);
-
     // Auto-start matching scheduled shift for today if requested or exists
     let startedShift: any = null;
     const scheduledShift = cashierShifts.find(s => 
@@ -2115,6 +2096,32 @@ router.post('/attendance/clock-in', async (req: Request, res: Response) => {
       syncShiftBalances();
     }
 
+    const assignedLocation = clockInLocation || location || (startedShift?.location) || 'Main Outpatient Cash Desk #01';
+
+    const newLog = {
+      id: `ATT-${Date.now()}`,
+      empId: empId || emp?.id || (isMary ? 'EMP-006' : 'EMP-001'),
+      name: resolvedName,
+      role: resolvedRole,
+      department: resolvedDept,
+      date: todayStr,
+      clockIn: nowTime,
+      clockInIso: nowIso,
+      clockInTimestamp: Date.now(),
+      clockInLocation: assignedLocation,
+      clockOut: '—',
+      clockOutLocation: '—',
+      gpsLat: typeof gpsLat === 'number' ? gpsLat : null,
+      gpsLng: typeof gpsLng === 'number' ? gpsLng : null,
+      geofenceStatus: typeof gpsLat === 'number' ? 'WITHIN_PREMISES' : 'VERIFIED_STATION',
+      status: isLate ? 'LATE' : 'PRESENT',
+      source: 'BIOMETRIC_PORTAL',
+      shift: assignedShift,
+      notes: notes || (isLate ? 'Clocked in after shift scheduled start (Late Arrival)' : 'Clocked in via Biometric Attendance Portal')
+    };
+
+    attendanceLogs.unshift(newLog);
+
     res.status(201).json({ 
       success: true, 
       message: `Clock-In registered successfully for ${resolvedName} at ${nowTime}!`, 
@@ -2129,7 +2136,7 @@ router.post('/attendance/clock-in', async (req: Request, res: Response) => {
 // POST /hr/attendance/clock-out — Direct Biometric / Web Clock-Out
 router.post('/attendance/clock-out', async (req: Request, res: Response) => {
   try {
-    const { empId, staffName, notes, autoCloseShift } = req.body;
+    const { empId, staffName, notes, autoCloseShift, location, clockOutLocation, gpsLat, gpsLng } = req.body;
     const todayStr = new Date().toISOString().slice(0, 10);
     const nowIso = new Date().toISOString();
     const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -2153,9 +2160,16 @@ router.post('/attendance/clock-out', async (req: Request, res: Response) => {
       );
     }
 
+    const resolvedOutLocation = clockOutLocation || location || todayLog?.clockInLocation || 'Main Outpatient Cash Desk #01';
+
     if (todayLog) {
       todayLog.clockOut = nowTime;
       todayLog.clockOutIso = nowIso;
+      todayLog.clockOutLocation = resolvedOutLocation;
+      if (typeof gpsLat === 'number') {
+        todayLog.clockOutGpsLat = gpsLat;
+        todayLog.clockOutGpsLng = gpsLng;
+      }
       if (notes) todayLog.notes = (todayLog.notes ? `${todayLog.notes} · ` : '') + notes;
       todayLog.hours = computeAttendanceHours(todayLog);
     } else {
@@ -2169,8 +2183,12 @@ router.post('/attendance/clock-out', async (req: Request, res: Response) => {
         date: todayStr,
         clockIn: '08:00',
         clockInIso: todayStr + 'T08:00:00.000Z',
+        clockInLocation: resolvedOutLocation,
         clockOut: nowTime,
         clockOutIso: nowIso,
+        clockOutLocation: resolvedOutLocation,
+        gpsLat: typeof gpsLat === 'number' ? gpsLat : null,
+        gpsLng: typeof gpsLng === 'number' ? gpsLng : null,
         status: 'PRESENT',
         source: 'BIOMETRIC_PORTAL',
         shift: 'Day Shift',

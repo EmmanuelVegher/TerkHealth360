@@ -71,7 +71,7 @@ import medgemmaRoutes from './routes/medgemma.js';
 import recordsMigrationRoutes from './routes/recordsMigration.js';
 import dentalRoutes from './routes/dental.js';
 import ophthalmologyRoutes from './routes/ophthalmology.js';
-import nmrsRoutes from './routes/nmrs.js';
+import nmrsRoutes, { handleNmrsEncounterSavedWebhook } from './routes/nmrs.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -119,7 +119,7 @@ if (frontendDist) {
 }
 
 // Health check (public — no auth required)
-app.get('/health', (_req, res) => {
+app.get(['/health', '/api/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -249,6 +249,11 @@ app.use('/api/medgemma', authMiddleware, medgemmaRoutes);
 app.use('/api/records-migration', authMiddleware, recordsMigrationRoutes);
 app.use('/api/dental', authMiddleware, dentalRoutes);
 app.use('/api/ophthalmology', authMiddleware, ophthalmologyRoutes);
+
+// ── OpenMRS / NMRS AI Real-Time Webhook (External Event-Driven Sync) ─────────
+app.post('/api/v1/nmrs/webhook/encounter-saved', handleNmrsEncounterSavedWebhook);
+app.post('/api/nmrs/webhook/encounter-saved', handleNmrsEncounterSavedWebhook);
+
 app.use('/api/nmrs', authMiddleware, nmrsRoutes);
 
 

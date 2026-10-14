@@ -5,7 +5,7 @@ import { WifiOff, OfflinePin } from '@mui/icons-material';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { SIDEBAR_W } from './Sidebar';
-import { runBackgroundSync } from '../services/api';
+import { runBackgroundSync, clearOfflineSyncQueue } from '../services/api';
 import { OpenMedFloatingChatWidget } from './OpenMedFloatingChatWidget';
 import { GlobalUrgentMessageAlert } from './GlobalUrgentMessageAlert';
 import { useAuth } from '../contexts/AuthContext';
@@ -173,26 +173,50 @@ const Layout = () => {
               </Typography>
             </Box>
           </Box>
-          <Button
-            size="small"
-            variant="contained"
-            onClick={() => runBackgroundSync()}
-            startIcon={<OfflinePin sx={{ fontSize: 16 }} />}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              borderRadius: '8px',
-              px: 2,
-              textTransform: 'none',
-              '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.3)',
-              },
-            }}
-          >
-            Retry Sync
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => runBackgroundSync()}
+              startIcon={<OfflinePin sx={{ fontSize: 16 }} />}
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.2)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                borderRadius: '8px',
+                px: 2,
+                textTransform: 'none',
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.3)',
+                },
+              }}
+            >
+              Retry Sync
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => {
+                clearOfflineSyncQueue();
+                setOfflineCount(0);
+              }}
+              sx={{
+                color: 'rgba(255,255,255,0.85)',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                borderRadius: '8px',
+                px: 1.5,
+                textTransform: 'none',
+                '&:hover': {
+                  color: '#fff',
+                  bgcolor: 'rgba(255,255,255,0.15)',
+                },
+              }}
+            >
+              Dismiss
+            </Button>
+          </Box>
         </Paper>
       )}
 

@@ -172,7 +172,7 @@ router.get('/schemas', async (req: Request, res: Response) => {
 
     const schemas = await prisma.nmrsFormSchema.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { formName: 'asc' }
     });
 
     return res.json({ success: true, data: schemas, schemas });
@@ -369,6 +369,52 @@ router.get('/patients/:patientId/summary', async (req: Request, res: Response) =
       });
     }
 
+    // Enrich encounter formData with linked observations if available
+    let enrichedEncounters = nmrsEncounters;
+    try {
+      const patientObs = await prisma.observation.findMany({
+        where: { patientId: patient.id },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (patientObs.length > 0) {
+        enrichedEncounters = nmrsEncounters.map((ne) => {
+          const neData = (ne.formData && typeof ne.formData === 'object') ? { ...(ne.formData as any) } : {};
+
+          // Fallback encounter date
+          if (ne.encounterDate && !neData.visitDate && !neData.encounterDatetime) {
+            const dStr = ne.encounterDate.toISOString().slice(0, 10);
+            neData.visitDate = dStr;
+            neData.encounterDatetime = dStr;
+            neData.encounterDate = dStr;
+          }
+
+          // Match observations for this encounter
+          const encPrefix = ne.encounterNumber?.replace('NMRS-ENC-', '').toLowerCase();
+          const matchingObs = patientObs.filter((o) => {
+            if (!o.encounterId) return false;
+            const lowEnc = o.encounterId.toLowerCase();
+            return (encPrefix && lowEnc.includes(encPrefix)) || lowEnc === ne.id.toLowerCase();
+          });
+
+          matchingObs.forEach((o) => {
+            const key = o.code || o.display;
+            const val = o.valueString || (o.valueQuantity !== null ? o.valueQuantity : null);
+            if (key && val !== null && val !== undefined && val !== '' && neData[key] === undefined) {
+              neData[key] = val;
+            }
+          });
+
+          return {
+            ...ne,
+            formData: neData
+          };
+        });
+      }
+    } catch {
+      // Continue with original nmrsEncounters if observation enrichment fails
+    }
+
     return res.json({
       success: true,
       data: {
@@ -383,7 +429,7 @@ router.get('/patients/:patientId/summary', async (req: Request, res: Response) =
         },
         mapping,
         visits: patient.visits || [],
-        encounters: nmrsEncounters
+        encounters: enrichedEncounters
       }
     });
   } catch (err: any) {
@@ -917,18 +963,21 @@ router.post('/encounters', async (req: Request, res: Response) => {
     const clinicianName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : 'Dr. Optometrist / Medical Officer';
     const clinicianId = user?.id || 'STAFF-SYSTEM';
 
+    const rawEncDate = encounterDate || formData?.visitDate || formData?.encounterDate || formData?.encounter_date || formData?.encounterDatetime;
+    const resolvedEncounterDate = rawEncDate ? new Date(rawEncDate) : new Date();
+
     const encounter = await prisma.nmrsEncounterRecord.create({
       data: {
         encounterNumber: encNumber,
         patientId,
         formSchemaId,
         encounterType: encounterType || formSchema.formCode,
-        encounterDate: encounterDate ? new Date(encounterDate) : new Date(),
+        encounterDate: resolvedEncounterDate,
         clinicianName,
         clinicianId,
         formData: formData || {},
-        syncStatus: 'SYNCED',
-        syncedAt: new Date()
+        syncStatus: 'PENDING',
+        syncedAt: null
       },
       include: { formSchema: true }
     });
@@ -968,14 +1017,35 @@ router.post('/encounters', async (req: Request, res: Response) => {
     }
 
     // Live push to OpenMRS on the laptop server
-    NmrsDataBridge.pushNmrsEncounterRecord(encounter.id).catch(err => {
-      console.warn(`[NMRS Live Push Background] Encounter ${encounter.id} push deferred:`, err.message);
-    });
+    let pushResult: any = null;
+    try {
+      pushResult = await NmrsDataBridge.pushNmrsEncounterRecord(encounter.id);
+    } catch (err: any) {
+      console.warn(`[NMRS Live Push] Encounter ${encounter.id} push error:`, err.message);
+      pushResult = { success: false, message: err.message };
+    }
+
+    let finalEncounter = encounter;
+    if (pushResult?.success) {
+      finalEncounter = await prisma.nmrsEncounterRecord.update({
+        where: { id: encounter.id },
+        data: {
+          syncStatus: 'SYNCED',
+          syncedAt: new Date(),
+          openmrsEncounterUuid: pushResult.openmrsEncounterUuid || encounter.openmrsEncounterUuid
+        },
+        include: { formSchema: true }
+      });
+    }
 
     return res.status(201).json({
       success: true,
-      data: encounter,
-      message: `${formSchema.formName} saved to PostgreSQL and synchronized with OpenMRS`
+      data: finalEncounter,
+      remoteSynced: pushResult?.success === true,
+      remoteMessage: pushResult?.message,
+      message: pushResult?.success
+        ? `${formSchema.formName} saved to PostgreSQL and successfully synchronized with OpenMRS`
+        : `${formSchema.formName} saved to PostgreSQL. OpenMRS sync pending: ${pushResult?.message || 'Remote laptop unreachable'}`
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -996,15 +1066,15 @@ router.put('/encounters/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Encounter record not found' });
     }
 
-    const updated = await prisma.nmrsEncounterRecord.update({
+    let updated = await prisma.nmrsEncounterRecord.update({
       where: { id },
       data: {
         formData: formData || existing.formData,
         encounterDate: encounterDate ? new Date(encounterDate) : existing.encounterDate,
         clinicianName: clinicianName || existing.clinicianName,
-        syncStatus: 'SYNCED',
-        syncedAt: new Date()
-      }
+        syncStatus: 'PENDING'
+      },
+      include: { formSchema: true }
     });
 
     const encPrefix = existing.encounterNumber?.startsWith('NMRS-ENC-')
@@ -1059,7 +1129,6 @@ router.put('/encounters/:id', async (req: Request, res: Response) => {
             const normalizedKey = key.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().slice(0, 30);
             const baseFhirId = `obs_${enc.id.slice(0, 8)}_${normalizedKey}`;
 
-            // Check if observation exists with baseFhirId
             const existingByFhir = await prisma.observation.findUnique({
               where: { fhirId: baseFhirId }
             });
@@ -1076,7 +1145,6 @@ router.put('/encounters/:id', async (req: Request, res: Response) => {
                 }
               });
             } else {
-              // Create brand new with collision-proof unique fhirId
               const uniqueFhirId = `${baseFhirId}_${Math.random().toString(36).slice(2, 7)}`;
               await prisma.observation.create({
                 data: {
@@ -1100,15 +1168,77 @@ router.put('/encounters/:id', async (req: Request, res: Response) => {
     }
 
     // Live push updated encounter and observations to OpenMRS
-    NmrsDataBridge.pushNmrsEncounterRecord(id).catch(err => {
-      console.warn(`[NMRS Live Push Background] Updated encounter ${id} push deferred:`, err.message);
-    });
+    let pushResult: any = null;
+    try {
+      pushResult = await NmrsDataBridge.pushNmrsEncounterRecord(id);
+    } catch (err: any) {
+      console.warn(`[NMRS Live Push] Updated encounter ${id} push error:`, err.message);
+      pushResult = { success: false, message: err.message };
+    }
+
+    if (pushResult?.success) {
+      updated = await prisma.nmrsEncounterRecord.update({
+        where: { id },
+        data: {
+          syncStatus: 'SYNCED',
+          syncedAt: new Date(),
+          openmrsEncounterUuid: pushResult.openmrsEncounterUuid || existing.openmrsEncounterUuid
+        },
+        include: { formSchema: true }
+      });
+    }
 
     return res.json({
       success: true,
       data: updated,
-      message: `${existing.formSchema?.formName || 'Encounter'} form updated successfully in PostgreSQL and synchronized with OpenMRS`
+      remoteSynced: pushResult?.success === true,
+      message: pushResult?.success
+        ? `${existing.formSchema?.formName || 'Encounter'} form updated and successfully synchronized with OpenMRS`
+        : `${existing.formSchema?.formName || 'Encounter'} form updated in PostgreSQL. OpenMRS sync pending: ${pushResult?.message || 'Remote laptop unreachable'}`
     });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/encounters/:id/sync', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.nmrsEncounterRecord.findUnique({
+      where: { id },
+      include: { formSchema: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Encounter record not found' });
+    }
+
+    const pushResult = await NmrsDataBridge.pushNmrsEncounterRecord(id);
+    if (pushResult?.success) {
+      const updated = await prisma.nmrsEncounterRecord.update({
+        where: { id },
+        data: {
+          syncStatus: 'SYNCED',
+          syncedAt: new Date(),
+          openmrsEncounterUuid: pushResult.openmrsEncounterUuid || existing.openmrsEncounterUuid
+        },
+        include: { formSchema: true }
+      });
+      return res.json({
+        success: true,
+        data: updated,
+        message: `Successfully synchronized encounter to OpenMRS on laptop server (Encounter ID: ${pushResult.encounterId || pushResult.openmrsEncounterUuid})`
+      });
+    } else {
+      await prisma.nmrsEncounterRecord.update({
+        where: { id },
+        data: { syncStatus: 'PENDING' }
+      });
+      return res.status(502).json({
+        success: false,
+        message: pushResult?.message || 'Failed to sync with OpenMRS server on laptop'
+      });
+    }
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1225,5 +1355,141 @@ router.post('/patients/:id/sync-full', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// ── 8. Webhook: Real-Time OpenMRS / NMRS Encounter Saved Trigger ─────────────
+export async function handleNmrsEncounterSavedWebhook(req: Request, res: Response) {
+  try {
+    const {
+      event,
+      encounterId,
+      encounterUuid,
+      patientUuid,
+      patientIdentifier,
+      encounterType,
+      encounterDatetime
+    } = req.body || {};
+
+    console.log(`[NMRS Webhook] Received ${event || 'ENCOUNTER_SAVED'} event: encounter #${encounterId} (${encounterType}) for patientUuid: ${patientUuid}, identifier: ${patientIdentifier}`);
+
+    let patient: any = null;
+
+    if (patientUuid) {
+      patient = await prisma.patient.findFirst({
+        where: {
+          OR: [
+            { openmrsUuid: patientUuid },
+            { nmrsMapping: { openmrsUuid: patientUuid } }
+          ]
+        },
+        include: { nmrsMapping: true }
+      });
+    }
+
+    if (!patient && patientIdentifier) {
+      const cleanIdent = String(patientIdentifier).trim();
+      patient = await prisma.patient.findFirst({
+        where: {
+          OR: [
+            { patientNumber: cleanIdent },
+            { identification: cleanIdent },
+            { nmrsMapping: { pepfarId: cleanIdent } },
+            { nmrsMapping: { hospitalNumber: cleanIdent } }
+          ]
+        },
+        include: { nmrsMapping: true }
+      });
+    }
+
+    if (!patient) {
+      // If patient is not yet in TerkHealth360, pull demographics from NMRS and insert record
+      try {
+        const pulled = await NmrsDataBridge.pullPatientDemographics({
+          uuid: patientUuid || undefined,
+          artNumber: patientIdentifier || undefined
+        });
+
+        if (pulled && (pulled.openmrsUuid || pulled.artNumber)) {
+          const targetMrn = pulled.artNumber || patientIdentifier || `NMRS-${Date.now()}`;
+          const randomSuffix = Math.random().toString(36).substring(2, 7) + Date.now().toString().slice(-3);
+          const username = `nmrs_${targetMrn.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${randomSuffix}`;
+          
+          const user = await prisma.user.create({
+            data: {
+              username,
+              email: `${username}@terkhealth.org`,
+              passwordHash: '$2a$10$abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqr',
+              role: 'PATIENT',
+              isActive: true
+            }
+          });
+
+          patient = await prisma.patient.create({
+            data: {
+              userId: user.id,
+              openmrsUuid: pulled.openmrsUuid || patientUuid,
+              patientNumber: targetMrn,
+              firstName: pulled.firstName || 'Unknown',
+              lastName: pulled.lastName || 'Patient',
+              gender: (pulled.gender === 'MALE' ? 'MALE' : 'FEMALE') as any,
+              birthDate: pulled.birthDate || new Date('1990-01-01'),
+              identification: pulled.hospitalNumber,
+              stateOfOrigin: pulled.state,
+              lga: pulled.lga,
+              status: 'ACTIVE',
+              isActive: true
+            },
+            include: { nmrsMapping: true }
+          });
+
+          await prisma.nmrsPatientMapping.upsert({
+            where: { patientId: patient.id },
+            create: {
+              patientId: patient.id,
+              openmrsUuid: pulled.openmrsUuid || patientUuid,
+              pepfarId: targetMrn,
+              hospitalNumber: pulled.hospitalNumber,
+              syncStatus: 'SYNCED',
+              lastSyncedAt: new Date()
+            },
+            update: {
+              openmrsUuid: pulled.openmrsUuid || patientUuid,
+              pepfarId: targetMrn,
+              hospitalNumber: pulled.hospitalNumber,
+              syncStatus: 'SYNCED',
+              lastSyncedAt: new Date()
+            }
+          });
+
+          console.log(`[NMRS Webhook] Created new patient record ${patient.id} (${patient.patientNumber}) in TerkHealth360 from NMRS demographics.`);
+        }
+      } catch (createErr: any) {
+        console.warn(`[NMRS Webhook] Could not auto-create patient from demographics: ${createErr.message}`);
+      }
+    }
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: `Patient not found in TerkHealth360 (uuid: ${patientUuid}, identifier: ${patientIdentifier}) and could not be fetched from NMRS.`
+      });
+    }
+
+    // Trigger full exact sync of demographics, visits, and all clinical encounters
+    const refreshed = await NmrsDataBridge.syncPatientExactNmrsRecord(patient.id);
+
+    return res.json({
+      success: true,
+      message: `Encounter #${encounterId} (${encounterType}) processed. Patient ${patient.firstName} ${patient.lastName} (${patient.patientNumber}) synced successfully.`,
+      patientId: patient.id,
+      patientNumber: patient.patientNumber,
+      data: refreshed
+    });
+  } catch (err: any) {
+    console.error(`[NMRS Webhook] Error processing encounter webhook:`, err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+router.post('/webhook/encounter-saved', handleNmrsEncounterSavedWebhook);
 
 export default router;

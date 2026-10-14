@@ -16,6 +16,7 @@ import {
 import { Add as AddIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
 import { FormField, PatientContext } from './types';
 import { EsmFieldRenderer } from './EsmFieldRenderer';
+import { resolveFieldValue } from './legacyFormNormalizer';
 
 interface EsmObsGroupRendererProps {
   field: FormField;
@@ -63,7 +64,7 @@ export const EsmObsGroupRenderer: React.FC<EsmObsGroupRendererProps> = ({
               <Grid item xs={12} sm={nestedQ.questionOptions?.rendering === 'textarea' ? 12 : 6} key={nestedQ.id}>
                 <EsmFieldRenderer
                   field={nestedQ}
-                  value={formValues[nestedQ.id]}
+                  value={resolveFieldValue(nestedQ, formValues)}
                   onChange={onChange}
                   formValues={formValues}
                   patientContext={patientContext}
@@ -161,7 +162,7 @@ export const EsmObsGroupRenderer: React.FC<EsmObsGroupRendererProps> = ({
                 <Grid item xs={12} sm={nestedQ.questionOptions?.rendering === 'textarea' ? 12 : 6} key={nestedQ.id}>
                   <EsmFieldRenderer
                     field={nestedQ}
-                    value={rowObj[nestedQ.id]}
+                    value={rowObj[nestedQ.id] !== undefined ? rowObj[nestedQ.id] : resolveFieldValue(nestedQ, rowObj)}
                     onChange={(_, val) => handleRowFieldChange(rowIdx, nestedQ.id, val)}
                     formValues={rowObj}
                     patientContext={patientContext}

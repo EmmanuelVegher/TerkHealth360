@@ -49,20 +49,35 @@ export class CommonExpressionHelpers {
   };
 
   lookupArvStrength = (drug: any): string => {
+    if (!drug) return '300/300/50mg';
+    const str = String(drug).toLowerCase();
     const strengths: Record<string, string> = {
-      'TDF-3TC-DTG': '300/300/50mg',
-      'TDF-3TC-EFV': '300/300/600mg',
-      'AZT-3TC-NVP': '300/150/200mg',
-      'ABC-3TC-DTG': '600/300/50mg',
-      'ABC-3TC-EFV': '600/300/600mg',
-      'TDF': '300mg',
-      '3TC': '300mg',
-      'DTG': '50mg',
-      'EFV': '600mg',
-      'AZT': '300mg',
-      'NVP': '200mg',
+      'tdf-3tc-dtg': '300/300/50mg',
+      'tdf-3tc-efv': '300/300/600mg',
+      'azt-3tc-nvp': '300/150/200mg',
+      'abc-3tc-dtg': '600/300/50mg',
+      'abc-3tc-efv': '600/300/600mg',
+      'tdf': '300mg',
+      '3tc': '300mg',
+      'dtg': '50mg',
+      'efv': '600mg',
+      'azt': '300mg',
+      'nvp': '200mg',
+      // Common Concept UUIDs
+      '8a343013-0216-44e0-aefe-53909ffd5631': '300/300/50mg',
+      '165681aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/300/50mg',
+      '164505aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/300/600mg',
+      '165682aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/300/600mg',
+      '1652aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/150/200mg',
+      '165686aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/150/200mg',
+      '14c41615-9c0e-4254-b4b1-770956d390e9': '600/300/50mg',
+      '165692aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '600/300/50mg',
     };
-    return strengths[drug] || 'Standard Adult Dose';
+    if (strengths[str]) return strengths[str];
+    if (str.includes('dtg') || str.includes('dolutegravir') || str.includes('tdf')) return '300/300/50mg';
+    if (str.includes('efv') || str.includes('efavirenz')) return '300/300/600mg';
+    if (str.includes('nvp') || str.includes('nevirapine')) return '300/150/200mg';
+    return '300/300/50mg';
   };
 
   includesAny = (collection: any[], values: any[]): boolean => {
