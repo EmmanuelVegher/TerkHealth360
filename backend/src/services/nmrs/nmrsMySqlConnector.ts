@@ -12,6 +12,133 @@ export interface MySqlConfig {
   database: string;
 }
 
+export interface LiveConceptInfo {
+  conceptId: number;
+  uuid: string;
+  datatypeId?: number;
+  datatypeName?: string;
+  classId?: number;
+  className?: string;
+  isSet?: boolean;
+  preferredName?: string;
+}
+
+// Canonical drug strength lookup mapping UUIDs, numeric concept IDs, and variations to human-readable strings
+export const DRUG_STRENGTH_LOOKUP: Record<string, string> = {
+  // 25/300/50mg (TAF/3TC/DTG)
+  'ffaaa42a-0c41-4e3f-a85a-7378f1c2efaf': '25/300/50mg',
+  '167522': '25/300/50mg',
+  'd0623bd6-525d-4aac-bfb5-d97184e29067': '25/300/50mg',
+  '167303': '25/300/50mg',
+  '25_300_50mg': '25/300/50mg',
+  '25/300/50mg': '25/300/50mg',
+  '25/300/50Mg': '25/300/50mg',
+
+  // 300/300/50mg (TDF/3TC/DTG)
+  '0cd9c98e-7f52-48b9-a987-404ec90cc5fe': '300/300/50mg',
+  '166044': '300/300/50mg',
+  '300_300_50mg': '300/300/50mg',
+  '300/300/50mg': '300/300/50mg',
+  '300/300/50Mg': '300/300/50mg',
+
+  // 300/300/600mg (TDF/3TC/EFV)
+  '4db3bbfd-2e59-48af-ba55-1b6deed9ec32': '300/300/600mg',
+  '165618': '300/300/600mg',
+  '166046AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300/300/600mg',
+  '300_300_600mg': '300/300/600mg',
+  '300/300/600mg': '300/300/600mg',
+
+  // 300/150/200mg (AZT/3TC/NVP)
+  'd1359cec-4457-4699-b050-7b65a25c1ca3': '300/150/200mg',
+  '165620': '300/150/200mg',
+  '166047AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300/150/200mg',
+  '300_150_200mg': '300/150/200mg',
+  '300/150/200mg': '300/150/200mg',
+  '150/300/200mg': '300/150/200mg',
+
+  // 600/300/50mg (ABC/3TC/DTG)
+  '166048AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '600/300/50mg',
+  '600_300_50mg': '600/300/50mg',
+  '600/300/50mg': '600/300/50mg',
+
+  // 600/300/600mg (ABC/3TC/EFV)
+  '166049AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '600/300/600mg',
+  '600_300_600mg': '600/300/600mg',
+  '600/300/600mg': '600/300/600mg',
+
+  // 300/300mg (TDF/3TC)
+  'fcd74eb9-c917-42b1-969a-696b15a5627c': '300/300mg',
+  '165621': '300/300mg',
+  '166050AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300/300mg',
+  '300_300mg': '300/300mg',
+  '300/300mg': '300/300mg',
+
+  // 300/150mg (AZT/3TC)
+  '6717b4c6-4cf3-4ef1-9734-f2da5300003f': '300/150mg',
+  '165622': '300/150mg',
+  '166051AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300/150mg',
+  '300_150mg': '300/150mg',
+  '300/150mg': '300/150mg',
+
+  // 300/100mg (ATV/r)
+  'ddd236eb-b5af-465f-9c37-862741ca75a6': '300/100mg',
+  '165624': '300/100mg',
+  '166052AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300/100mg',
+  '300_100mg': '300/100mg',
+  '300/100mg': '300/100mg',
+
+  // 200/50mg (LPV/r)
+  '9339100a-1fe3-4978-9af1-a6ee868840ac': '200/50mg',
+  '165625': '200/50mg',
+  '166053AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '200/50mg',
+  '200_50mg': '200/50mg',
+  '200/50mg': '200/50mg',
+
+  // Single Strengths
+  'abbb66b8-61c9-4b58-bad6-edf1efa546e1': '300mg',
+  '165074': '300mg',
+  '1679': '300mg',
+  '166054AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '300mg',
+  '300mg': '300mg',
+
+  'c543792b-6225-4a70-8e1f-04ea5be06212': '50mg',
+  '165617': '50mg',
+  '166055AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '50mg',
+  '50mg': '50mg',
+
+  'da318ab9-efce-47a9-a975-468a718d4ef6': '200mg',
+  '165635': '200mg',
+  '200mg': '200mg',
+
+  '409fccb1-a7de-412f-9ee6-1e96d4b0b65a': '150mg',
+  '165075': '150mg',
+  '150mg': '150mg',
+
+  '27f5a185-9791-45b2-89e8-89df69fdac71': '100mg',
+  '165076': '100mg',
+  '100mg': '100mg',
+
+  '3620ba59-4313-45b4-897f-764f0609512c': '25mg',
+  '165706': '25mg',
+  '25mg': '25mg',
+
+  'd6a11b94-efe5-415e-8071-29d75356bac0': '600mg',
+  '165616': '600mg',
+  '600mg': '600mg',
+
+  '7c844c65-b960-4ac7-8642-69b618db3602': '400/50mg',
+  '165705': '400/50mg',
+  '400/50mg': '400/50mg',
+
+  'c03561ed-1402-4bfe-b95d-9547fe6b9bf7': '960mg',
+  '165062': '960mg',
+  '960mg': '960mg',
+
+  '106d9ce8-92d4-4549-9735-9ddaad20136a': '480mg',
+  '165060': '480mg',
+  '480mg': '480mg'
+};
+
 export class NmrsMySqlConnector {
   /**
    * Resolve MySQL connection settings.
@@ -144,7 +271,7 @@ export class NmrsMySqlConnector {
 
       // 4. Fetch actual encounters
       const [encounters]: any = await conn.execute(
-        `SELECT e.encounter_id, e.encounter_datetime, e.visit_id,
+        `SELECT e.encounter_id, e.uuid as encounter_uuid, e.uuid, e.encounter_datetime, e.visit_id,
                 et.name as encounter_type_name,
                 f.name as form_name, f.uuid as form_uuid
          FROM encounter e
@@ -224,16 +351,66 @@ export class NmrsMySqlConnector {
           const fieldId = path.split('/').pop() || path;
           const conceptLabel = o.concept_name || CIEL_CONCEPT_ID_MAP[o.concept_id] || `Concept #${o.concept_id}`;
 
-          let val: any = o.coded_uuid || o.coded_value_name || o.value_numeric || o.value_text;
+          const isNumericField =
+            [160856, 159368, 1443, 5089, 5090, 856, 5497, 1343].includes(o.concept_id) ||
+            fieldId.toLowerCase().includes('qty') ||
+            fieldId.toLowerCase().includes('duration') ||
+            fieldId.toLowerCase().includes('dispensed') ||
+            fieldId.toLowerCase().includes('prescribed') ||
+            fieldId.toLowerCase().includes('days');
+
+          let val: any;
+          if (isNumericField) {
+            val = o.value_numeric !== null && o.value_numeric !== undefined
+              ? o.value_numeric
+              : (o.coded_uuid === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' || o.value_coded === 180 ? 180 : (!isNaN(Number(o.value_text)) ? Number(o.value_text) : o.value_numeric));
+          } else {
+            val = o.coded_uuid || o.coded_value_name || o.value_numeric || o.value_text;
+          }
           if (o.value_datetime) val = new Date(o.value_datetime).toISOString().split('T')[0];
 
-          // Normalize ARV drug strength 166044 / 300/300/50Mg to standard value
-          if (
+          // Normalize corrupted shoulder dislocation concept (180) in numeric fields
+          if (isNumericField && (val === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' || val === 180 || o.value_coded === 180)) {
+            val = 180;
+          }
+
+          // Normalize OI Drugs concept 165727 when erroneously mapped to group construct concept 165726
+          if (o.concept_id === 165727 || fieldId.includes('drugs_Cotrim')) {
+            if (val === '99577a67-24b2-448f-aeab-6f1b67f265d6' || o.value_coded === 165726) {
+              val = 'dbf8a287-3c82-440b-bfc3-a4b9432f9183'; // Cotrimoxazole
+            }
+          }
+
+          // Normalize ARV and TB drug strengths to authentic human-readable names instead of raw concept UUIDs
+          const isStrengthField =
+            o.concept_id === 165725 ||
+            (o.concept_name && o.concept_name.toLowerCase().includes('strength')) ||
+            fieldId.toLowerCase().includes('strength');
+
+          if (isStrengthField) {
+            if (o.coded_uuid && DRUG_STRENGTH_LOOKUP[o.coded_uuid]) {
+              val = DRUG_STRENGTH_LOOKUP[o.coded_uuid];
+            } else if (o.value_coded && DRUG_STRENGTH_LOOKUP[String(o.value_coded)]) {
+              val = DRUG_STRENGTH_LOOKUP[String(o.value_coded)];
+            } else if (o.coded_value_name && DRUG_STRENGTH_LOOKUP[o.coded_value_name.toLowerCase()]) {
+              val = DRUG_STRENGTH_LOOKUP[o.coded_value_name.toLowerCase()];
+            } else if (o.coded_value_name) {
+              val = o.coded_value_name;
+            } else if (val && DRUG_STRENGTH_LOOKUP[String(val)]) {
+              val = DRUG_STRENGTH_LOOKUP[String(val)];
+            }
+          } else if (
             o.value_coded === 166044 ||
             o.coded_uuid === '0cd9c98e-7f52-48b9-a987-404ec90cc5fe' ||
             String(val).toLowerCase() === '300/300/50mg'
           ) {
             val = '300/300/50mg';
+          } else if (
+            o.value_coded === 167522 ||
+            o.coded_uuid === 'ffaaa42a-0c41-4e3f-a85a-7378f1c2efaf' ||
+            String(val).toLowerCase() === '25/300/50mg'
+          ) {
+            val = '25/300/50mg';
           }
 
           if (val === undefined || val === null) continue;
@@ -247,6 +424,20 @@ export class NmrsMySqlConnector {
             if (conceptLabel && !dict[conceptLabel]) dict[conceptLabel] = val;
           }
         }
+
+        const deduplicateList = (items: any[]) => {
+          const unique: any[] = [];
+          const seen = new Set<string>();
+          for (const item of items) {
+            if (!item || typeof item !== 'object') continue;
+            const sig = JSON.stringify(item);
+            if (!seen.has(sig)) {
+              seen.add(sig);
+              unique.push(item);
+            }
+          }
+          return unique;
+        };
 
         for (const [_, grp] of groups.entries()) {
           if (grp.groupType === 'oi_prophylaxis') {
@@ -262,10 +453,10 @@ export class NmrsMySqlConnector {
           }
         }
 
-        dict.oi_prophylaxis = repeating.oi_prophylaxis;
-        dict.tb_prev = repeating.tb_prev;
-        dict.prepdrug = repeating.prepdrug;
-        dict.others_prev = repeating.others_prev;
+        dict.oi_prophylaxis = deduplicateList(repeating.oi_prophylaxis);
+        dict.tb_prev = deduplicateList(repeating.tb_prev);
+        dict.prepdrug = deduplicateList(repeating.prepdrug);
+        dict.others_prev = deduplicateList(repeating.others_prev);
 
         obsByEnc.set(encId, dict);
       }
@@ -410,6 +601,189 @@ export class NmrsMySqlConnector {
       await conn.end();
       throw err;
     }
+  }
+
+  /**
+   * Fetch live concept metadata directly from the OpenMRS MySQL 'concept' table by UUID or concept_id.
+   * Joins concept_datatype, concept_class, and preferred concept_name.
+   */
+  public static async getLiveConcept(
+    uuidOrId: string | number,
+    customConfig?: Partial<MySqlConfig>
+  ): Promise<LiveConceptInfo | null> {
+    if (!uuidOrId) return null;
+    const key = String(uuidOrId).trim();
+    if (!key) return null;
+
+    let conn: any = null;
+    try {
+      const base = await this.getConnectionConfig();
+      const config = { ...base, ...customConfig };
+
+      conn = await mysql.createConnection({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+        connectTimeout: 4000
+      });
+
+      const isUuid = key.length >= 30;
+      const isNum = !isNaN(Number(key));
+
+      let sql = `
+        SELECT 
+          c.concept_id, 
+          c.uuid, 
+          c.datatype_id, 
+          cd.name AS datatype_name,
+          c.class_id, 
+          cc.name AS class_name, 
+          c.is_set,
+          (
+            SELECT cn.name 
+            FROM concept_name cn 
+            WHERE cn.concept_id = c.concept_id AND cn.voided = 0 
+            ORDER BY cn.locale_preferred DESC, (cn.concept_name_type = 'FULLY_SPECIFIED') DESC 
+            LIMIT 1
+          ) AS preferred_name
+        FROM concept c
+        LEFT JOIN concept_datatype cd ON c.datatype_id = cd.concept_datatype_id
+        LEFT JOIN concept_class cc ON c.class_id = cc.concept_class_id
+        WHERE `;
+
+      const params: any[] = [];
+      if (isUuid) {
+        sql += `c.uuid = ? LIMIT 1`;
+        params.push(key);
+      } else if (isNum) {
+        sql += `c.concept_id = ? LIMIT 1`;
+        params.push(Number(key));
+      } else {
+        sql += `c.uuid = ? OR c.concept_id = ? LIMIT 1`;
+        params.push(key, key);
+      }
+
+      const [rows]: any = await conn.execute(sql, params);
+      await conn.end();
+
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return {
+          conceptId: r.concept_id,
+          uuid: r.uuid,
+          datatypeId: r.datatype_id,
+          datatypeName: r.datatype_name,
+          classId: r.class_id,
+          className: r.class_name,
+          isSet: Boolean(r.is_set),
+          preferredName: r.preferred_name
+        };
+      }
+      return null;
+    } catch (err: any) {
+      if (conn) {
+        try { await conn.end(); } catch {}
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Batch fetch live concepts by UUIDs/IDs from OpenMRS MySQL 'concept' table.
+   */
+  public static async getLiveConcepts(
+    keys: string[],
+    customConfig?: Partial<MySqlConfig>
+  ): Promise<Map<string, LiveConceptInfo>> {
+    const results = new Map<string, LiveConceptInfo>();
+    if (!keys || keys.length === 0) return results;
+
+    const validKeys = Array.from(new Set(keys.map(k => String(k).trim()).filter(Boolean)));
+    if (validKeys.length === 0) return results;
+
+    let conn: any = null;
+    try {
+      const base = await this.getConnectionConfig();
+      const config = { ...base, ...customConfig };
+
+      conn = await mysql.createConnection({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+        connectTimeout: 4000
+      });
+
+      const uuids = validKeys.filter(k => k.length >= 30);
+      const numIds = validKeys.filter(k => !isNaN(Number(k))).map(Number);
+
+      const conditions: string[] = [];
+      const params: any[] = [];
+
+      if (uuids.length > 0) {
+        conditions.push(`c.uuid IN (${uuids.map(() => '?').join(',')})`);
+        params.push(...uuids);
+      }
+      if (numIds.length > 0) {
+        conditions.push(`c.concept_id IN (${numIds.map(() => '?').join(',')})`);
+        params.push(...numIds);
+      }
+
+      if (conditions.length === 0) {
+        await conn.end();
+        return results;
+      }
+
+      const sql = `
+        SELECT 
+          c.concept_id, 
+          c.uuid, 
+          c.datatype_id, 
+          cd.name AS datatype_name,
+          c.class_id, 
+          cc.name AS class_name, 
+          c.is_set,
+          (
+            SELECT cn.name 
+            FROM concept_name cn 
+            WHERE cn.concept_id = c.concept_id AND cn.voided = 0 
+            ORDER BY cn.locale_preferred DESC, (cn.concept_name_type = 'FULLY_SPECIFIED') DESC 
+            LIMIT 1
+          ) AS preferred_name
+        FROM concept c
+        LEFT JOIN concept_datatype cd ON c.datatype_id = cd.concept_datatype_id
+        LEFT JOIN concept_class cc ON c.class_id = cc.concept_class_id
+        WHERE ${conditions.join(' OR ')}
+      `;
+
+      const [rows]: any = await conn.execute(sql, params);
+      await conn.end();
+
+      if (rows && Array.isArray(rows)) {
+        for (const r of rows) {
+          const info: LiveConceptInfo = {
+            conceptId: r.concept_id,
+            uuid: r.uuid,
+            datatypeId: r.datatype_id,
+            datatypeName: r.datatype_name,
+            classId: r.class_id,
+            className: r.class_name,
+            isSet: Boolean(r.is_set),
+            preferredName: r.preferred_name
+          };
+          results.set(r.uuid, info);
+          results.set(String(r.concept_id), info);
+        }
+      }
+    } catch (err: any) {
+      if (conn) {
+        try { await conn.end(); } catch {}
+      }
+    }
+    return results;
   }
 
   /**
@@ -625,12 +999,15 @@ export class NmrsMySqlConnector {
 
       // 3. Resolve Form ID
       let formId: number | null = null;
-      const formUuid = encRecord.formSchema?.openmrsFormUuid || (encRecord.formSchema?.schemaJson as any)?.uuid || '';
+      const formUuid = encRecord.formSchema?.openmrsFormUuid ||
+        (encRecord.formSchema?.schemaJson as any)?.uuid ||
+        (formName.toLowerCase().includes('pharmacy') ? '4a238dc4-a76b-4c0f-a100-229d98fd5758' : '');
       const [forms]: any = await conn.execute(`
         SELECT form_id FROM form
-        WHERE retired = 0 AND (uuid = ? OR name LIKE ?)
+        WHERE retired = 0 AND (uuid = ? OR uuid = '4a238dc4-a76b-4c0f-a100-229d98fd5758' OR name LIKE ? OR name LIKE '%Pharmacy%')
+        ORDER BY (CASE WHEN uuid = ? THEN 1 WHEN uuid = '4a238dc4-a76b-4c0f-a100-229d98fd5758' THEN 2 ELSE 3 END)
         LIMIT 1
-      `, [formUuid, `%${formName.slice(0, 10)}%`]);
+      `, [formUuid, `%${formName.slice(0, 10)}%`, formUuid]);
 
       if (forms && forms.length > 0) {
         formId = forms[0].form_id;
@@ -731,21 +1108,23 @@ export class NmrsMySqlConnector {
       let openmrsUuid = encRecord.openmrsEncounterUuid;
 
       if (openmrsUuid) {
+        const numericEncId = openmrsUuid.startsWith('myenc-') ? parseInt(openmrsUuid.replace('myenc-', ''), 10) : (Number.isInteger(Number(openmrsUuid)) ? Number(openmrsUuid) : 0);
         const [existingEnc]: any = await conn.execute(
-          `SELECT encounter_id, visit_id FROM encounter WHERE uuid = ? LIMIT 1`,
-          [openmrsUuid]
+          `SELECT encounter_id, uuid, visit_id FROM encounter WHERE uuid = ? OR (encounter_id = ? AND ? > 0) LIMIT 1`,
+          [openmrsUuid, numericEncId, numericEncId]
         );
         if (existingEnc && existingEnc.length > 0) {
           encounterId = existingEnc[0].encounter_id;
+          openmrsUuid = existingEnc[0].uuid;
           const targetVisitId = existingEnc[0].visit_id || visitId;
           if (hasVisitIdCol) {
             await conn.execute(
-              `UPDATE encounter SET encounter_datetime = ?, form_id = ?, encounter_type = ?, visit_id = ? WHERE encounter_id = ?`,
+              `UPDATE encounter SET voided = 0, date_voided = NULL, voided_by = NULL, void_reason = NULL, encounter_datetime = ?, form_id = ?, encounter_type = ?, visit_id = ? WHERE encounter_id = ?`,
               [encDatetime, formId, encounterTypeId, targetVisitId, encounterId]
             );
           } else {
             await conn.execute(
-              `UPDATE encounter SET encounter_datetime = ?, form_id = ?, encounter_type = ? WHERE encounter_id = ?`,
+              `UPDATE encounter SET voided = 0, date_voided = NULL, voided_by = NULL, void_reason = NULL, encounter_datetime = ?, form_id = ?, encounter_type = ? WHERE encounter_id = ?`,
               [encDatetime, formId, encounterTypeId, encounterId]
             );
           }
@@ -836,18 +1215,169 @@ export class NmrsMySqlConnector {
         hasObsGroupIdCol = false;
       }
 
+      let hasStatusCol = false;
+      try {
+        const [stCols]: any = await conn.execute(`
+          SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'obs' AND COLUMN_NAME = 'status'
+          LIMIT 1
+        `);
+        hasStatusCol = Boolean(stCols && stCols.length > 0);
+      } catch {
+        hasStatusCol = false;
+      }
+
+      // Exact national schema concept ID mappings (CIEL integer equivalents)
+      const SCHEMA_CONCEPT_FALLBACK_MAP: Record<string, number> = {
+        // TPT / TB Preventive Therapy construct
+        'f3772dae-fc93-4428-baa7-268f83462e3f': 167469,
+        'tb_prev': 167469,
+        '167469': 167469,
+        'b04e1799-87fa-476c-bd43-c05a7de70a69': 165727, // tb_prev_drugs / oi drugs
+        '21ea74ee-f6fa-4c55-be36-6337a8f4086c': 165725, // tb_prev_drugs_strength / drug strength
+        '4919b76b-81e6-41c7-a5b5-cb383ff4b2fa': 165723, // tb_prev_drugs_frequency / frequency
+        '640de6fb-a670-43e6-8e6c-c3d33582e1a8': 159368, // tb_prevDispensedInDays
+        '160856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 160856, // qty_prescribed_tb_prev
+        '160856': 160856,
+        '159368AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 159368, // tb_prev_drugs_duration_Pres
+        '159368': 159368,
+        '1443AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 1443,
+        '1443': 1443,
+
+        // TPT Answer Concepts
+        'abbb66b8-61c9-4b58-bad6-edf1efa546e1': 1679,   // 300mg
+        '27f5a185-9791-45b2-89e8-89df69fdac71': 165060, // 100mg
+        'cd94a1ed-2812-4170-8bc7-90abded1beab': 165062, // 150Mg/75mg
+        '550b250c-fcc8-4176-b833-2b1355982597': 165063, // 150Mg/75mg/40mg
+        '6717b4c6-4cf3-4ef1-9734-f2da5300003f': 165064, // 300/150mg
+        'fcd74eb9-c917-42b1-969a-696b15a5627c': 165065, // 300/300mg
+        '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 656,    // Isoniazid
+        '656': 656,
+        '1675AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 1675,   // RHZE
+        '768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 768,    // RHZ
+        '1108AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 1108,   // EH
+        '1194': 1194,                                   // RH
+        '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 160862, // Once daily
+        '160862': 160862,
+        '160858AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 160858, // Twice daily
+        '160858': 160858,
+        '6f973a60-16a5-49bc-9278-300a9e998646': 165721, // 2 BD
+
+        // OI Prophylaxis construct & answers
+        '99577a67-24b2-448f-aeab-6f1b67f265d6': 165726,
+        'oi_prophylaxis': 165726,
+        '165726': 165726,
+        'drugs_Cotrim': 165727,
+        '165727': 165727,
+        'dbf8a287-3c82-440b-bfc3-a4b9432f9183': 165257, // Cotrimoxazole drug answer concept
+        '165257': 165257,
+        'Cotrimoxazole': 165257,
+        'CTX': 165257,
+        'c03561ed-1402-4bfe-b95d-9547fe6b9bf7': 165062, // 960mg
+        '960mg': 165062,
+
+        // PrEP construct
+        '9734f48e-5089-4b1d-bade-eae45a86670f': 167468,
+        'c83188a1-f411-49f5-a1b6-19881a0354a2': 167468,
+        'prepdrug': 167468,
+        '167468': 167468,
+        'd6a11b94-efe5-415e-8071-29d75356bac0': 165616, // 600mg
+        '161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 161364,
+        '161364': 161364,
+
+        // ARV construct & fields
+        '162240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 162240,
+        '162240': 162240,
+        'c50dc847-e37e-40b1-92b9-408d9c93b858': 165724, // ARV Medication question concept
+        '165724': 165724,
+        'Drugs_ART_1': 165724,
+        'Drugs_ART_2': 165724,
+        'Drugs_ART_3': 165724,
+        'Drugs_ART_4': 165724,
+        'Drugs_ART_5': 165724,
+        'Drug_Strength_ART_1': 165725,
+        'Drug_Strength_ART_2': 165725,
+        'Drug_Strength_ART_3': 165725,
+        'Drug_Strength_ART_4': 165725,
+        'Drug_Strength_ART_5': 165725,
+        'Drug_Frequency_ART_1': 165723,
+        'Drug_Frequency_ART_2': 165723,
+        'Drug_Frequency_ART_3': 165723,
+        'Drug_Frequency_ART_4': 165723,
+        'Drug_Frequency_ART_5': 165723,
+        'duration_pharm_ART_1': 159368,
+        'duration_pharm_ART_2': 159368,
+        'duration_pharm_ART_3': 159368,
+        'duration_pharm_ART_4': 159368,
+        'duration_pharm_ART_5': 159368,
+        'qty_prescribed_pharm_ART_1': 160856,
+        'qty_prescribed_pharm_ART_2': 160856,
+        'qty_prescribed_pharm_ART_3': 160856,
+        'qty_prescribed_pharm_ART_4': 160856,
+        'qty_prescribed_pharm_ART_5': 160856,
+        'arvDispensedInDays_ART_1': 159368,
+        'arvDispensedInDays_ART_2': 159368,
+        'arvDispensedInDays_ART_3': 159368,
+        'arvDispensedInDays_ART_4': 159368,
+        'arvDispensedInDays_ART_5': 159368,
+        'qty_dispensed_pharm_ART_1': 1443,
+        'qty_dispensed_pharm_ART_2': 1443,
+        'qty_dispensed_pharm_ART_3': 1443,
+        'qty_dispensed_pharm_ART_4': 1443,
+        'qty_dispensed_pharm_ART_5': 1443,
+
+        // ARV Drug Answers & Regimens
+        '8a343013-0216-44e0-aefe-53909ffd5631': 165681, // TDF-3TC-DTG
+        '165681': 165681,
+        '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 164505, // TDF-3TC-EFV
+        '164505': 164505,
+        'TDF-3TC-EFV': 164505,
+        'Tenofovir / Lamivudine / Efavirenz (TDF/3TC/EFV)': 164505,
+        '164506AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 164506, // Adult 1st Line ARV Regimen
+        '164506': 164506,
+        'Adult_1st_Line_Regimens': 164506,
+
+        '0cd9c98e-7f52-48b9-a987-404ec90cc5fe': 166044, // 300/300/50mg
+        '300/300/50mg': 166044,
+        'ffaaa42a-0c41-4e3f-a85a-7378f1c2efaf': 167522, // 25/300/50mg
+        '25/300/50mg': 167522,
+        '25/300/50Mg': 167522,
+        '25_300_50mg': 167522,
+        '6c32f10b-e26d-4299-97af-41b797a8253e': 167517, // TAF-3TC-DTG
+        'TAF-3TC-DTG': 167517,
+        '2893350f-6710-40c6-b963-ff2d9789567d': 167520, // Tenofovir-alafenamide/Lamivudine/Dolutegravir
+        '167520': 167520,
+        'Tenofovir-alafenamide/Lamivudine/Dolutegravir': 167520,
+        'Tenofovir Alafenamide / Lamivudine / Dolutegravir (TAF/3TC/DTG)': 167520,
+        '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 1652,
+        '1652': 1652,
+        'AZT-3TC-NVP': 1652,
+      };
+
       // Helper: Resolve concept ID from UUID, numeric ID, CIEL map, or name
       const resolveConceptId = async (conceptKeyOrUuid: string): Promise<number | null> => {
         if (!conceptKeyOrUuid) return null;
         const mapped = schemaConceptMap[conceptKeyOrUuid] || conceptKeyOrUuid;
 
-        if (mapped.length >= 30) {
+        // 1. Live Query: Check live OpenMRS 'concept' table by UUID first!
+        const candidateUuid = mapped.length >= 30 ? mapped : (conceptKeyOrUuid.length >= 30 ? conceptKeyOrUuid : null);
+        if (candidateUuid) {
           const [cRows]: any = await conn.execute(
             `SELECT concept_id FROM concept WHERE uuid = ? LIMIT 1`,
-            [mapped]
+            [candidateUuid]
           );
           if (cRows && cRows.length > 0) return cRows[0].concept_id;
-        } else if (!isNaN(Number(mapped))) {
+        }
+
+        // 2. Schema concept fallbacks
+        if (SCHEMA_CONCEPT_FALLBACK_MAP[conceptKeyOrUuid]) {
+          return SCHEMA_CONCEPT_FALLBACK_MAP[conceptKeyOrUuid];
+        }
+        if (SCHEMA_CONCEPT_FALLBACK_MAP[mapped]) {
+          return SCHEMA_CONCEPT_FALLBACK_MAP[mapped];
+        }
+
+        if (!isNaN(Number(mapped))) {
           const [cRows]: any = await conn.execute(
             `SELECT concept_id FROM concept WHERE concept_id = ? LIMIT 1`,
             [Number(mapped)]
@@ -887,8 +1417,49 @@ export class NmrsMySqlConnector {
         let valCoded: number | null = null;
         let valText: string | null = null;
 
+        // Query the live concept table to check datatype directly from the database!
+        let liveDatatype: string | null = null;
+        try {
+          const [dtRows]: any = await conn.execute(
+            `SELECT cd.name AS datatype_name FROM concept c
+             JOIN concept_datatype cd ON c.datatype_id = cd.concept_datatype_id
+             WHERE c.concept_id = ? LIMIT 1`,
+            [cId]
+          );
+          if (dtRows && dtRows.length > 0) {
+            liveDatatype = dtRows[0].datatype_name;
+          }
+        } catch {}
+
+        const NUMERIC_CONCEPTS = new Set([
+          160856, // Quantity Prescribed
+          159368, // Medication duration in days / Dispensed in days
+          1443,   // Quantity Dispensed
+          5089,   // Weight (kg)
+          5090,   // Height (cm)
+          856,    // HIV Viral Load
+          5497,   // CD4 Count
+          1343    // CD4 Count
+        ]);
+
+        const pathStr = namespacePath.slice(0, 250);
+        const isNumeric =
+          liveDatatype === 'Numeric' ||
+          NUMERIC_CONCEPTS.has(cId) ||
+          pathStr.toLowerCase().includes('duration') ||
+          pathStr.toLowerCase().includes('qty') ||
+          pathStr.toLowerCase().includes('prescribed') ||
+          pathStr.toLowerCase().includes('dispensed') ||
+          pathStr.toLowerCase().includes('days') ||
+          pathStr.toLowerCase().includes('weight') ||
+          pathStr.toLowerCase().includes('height');
+
         if (obsVal !== null && obsVal !== undefined) {
-          if (typeof obsVal === 'number') {
+          if (isNumeric) {
+            valNumeric = Number(obsVal);
+            valCoded = null;
+            valText = null;
+          } else if (typeof obsVal === 'number') {
             valNumeric = obsVal;
           } else if (typeof obsVal === 'boolean') {
             valCoded = obsVal ? 1065 : 1066;
@@ -896,25 +1467,25 @@ export class NmrsMySqlConnector {
             valDatetime = new Date(String(obsVal));
           } else {
             const strVal = String(obsVal);
-            if (strVal.includes('AAAA') || strVal.length >= 30) {
+            if (SCHEMA_CONCEPT_FALLBACK_MAP[strVal]) {
+              valCoded = SCHEMA_CONCEPT_FALLBACK_MAP[strVal];
+            } else if (strVal.includes('AAAA') || strVal.length >= 30) {
               const [codedRows]: any = await conn.execute(
                 `SELECT concept_id FROM concept WHERE uuid = ? LIMIT 1`,
                 [strVal]
               );
               if (codedRows && codedRows.length > 0) {
                 valCoded = codedRows[0].concept_id;
+              } else if (SCHEMA_CONCEPT_FALLBACK_MAP[strVal]) {
+                valCoded = SCHEMA_CONCEPT_FALLBACK_MAP[strVal];
               } else {
                 valText = strVal;
               }
-            } else if (!isNaN(Number(strVal)) && Number(strVal) > 100 && Number(strVal) < 200000) {
-              valCoded = Number(strVal);
             } else {
               valText = typeof obsVal === 'object' ? JSON.stringify(obsVal) : strVal;
             }
           }
         }
-
-        const pathStr = namespacePath.slice(0, 250);
         const useGroup = hasObsGroupIdCol && obsGroupId !== null;
 
         let insertSql = `
@@ -922,10 +1493,12 @@ export class NmrsMySqlConnector {
                            value_coded, value_datetime, value_numeric, value_text,
                            ${hasFormNamespaceCol ? 'form_namespace_and_path,' : ''}
                            ${useGroup ? 'obs_group_id,' : ''}
+                           ${hasStatusCol ? 'status,' : ''}
                            creator, date_created, voided, uuid)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
                   ${hasFormNamespaceCol ? '?, ' : ''}
                   ${useGroup ? '?, ' : ''}
+                  ${hasStatusCol ? "'FINAL', " : ''}
                   1, NOW(), 0, UUID())
         `;
         const params: any[] = [
@@ -985,8 +1558,12 @@ export class NmrsMySqlConnector {
       for (const grp of obsGroupDefs) {
         const grpVal: any = formData[grp.id];
         let groupConceptId = await resolveConceptId(grp.concept);
-        if (!groupConceptId) {
-          if (grp.id.startsWith('ARVDrug')) groupConceptId = 162240;
+        if (grp.id === 'tb_prev' || grp.id.includes('tb_prev') || grp.concept === 'f3772dae-fc93-4428-baa7-268f83462e3f') {
+          groupConceptId = 167469; // National TPT container concept
+        } else if (!groupConceptId) {
+          if (grp.id.includes('oi_prophylaxis')) groupConceptId = 165726;
+          else if (grp.id.includes('prep')) groupConceptId = 167468;
+          else if (grp.id.startsWith('ARVDrug')) groupConceptId = 162240;
           else groupConceptId = 162240;
         }
 
@@ -996,27 +1573,42 @@ export class NmrsMySqlConnector {
 
           for (const row of rows) {
             if (!row || typeof row !== 'object') continue;
-            const validEntries = Object.entries(row).filter(([_, v]) => v !== undefined && v !== null && v !== '');
-            if (validEntries.length === 0) continue;
+            
+            // Skip rows without an actual drug selected to avoid phantom entries
+            const drugKey = grp.id.includes('oi_prophylaxis') ? 'drugs_Cotrim'
+              : grp.id.includes('tb_prev') ? 'tb_prev_drugs'
+              : grp.id.includes('prep') ? 'prev_drugs'
+              : grp.id.includes('others') ? 'other_prev_drugs'
+              : null;
+            if (drugKey && (!row[drugKey] || row[drugKey] === '')) {
+              continue;
+            }
 
             // 1. Create parent group observation
             let parentObsId: number | null = null;
             if (groupConceptId) {
-              parentObsId = await insertSingleObs(groupConceptId, null, `rfe^${grp.id}`, null);
+              parentObsId = await insertSingleObs(groupConceptId, null, `rfe-forms^rfe-forms-${grp.id}`, null);
             }
 
-            // 2. Create group members with obs_group_id linking
-            for (const [colKey, colVal] of validEntries) {
-              const subQ = grp.subQuestions.find(sq => sq.id === colKey);
-              const colConcept = subQ?.concept || schemaConceptMap[colKey] || colKey;
+            // 2. Create group members with obs_group_id linking - strictly iterate over official subQuestions
+            for (const subQ of grp.subQuestions) {
+              const colVal = row[subQ.id];
+              if (colVal === undefined || colVal === null || colVal === '') continue;
+
+              const colConcept = subQ?.concept || schemaConceptMap[subQ.id] || subQ.id;
               const colConceptId = await resolveConceptId(colConcept);
               if (colConceptId) {
-                await insertSingleObs(colConceptId, colVal, `rfe^${grp.id}/${colKey}`, parentObsId);
+                await insertSingleObs(colConceptId, colVal, `rfe-forms^rfe-forms-${subQ.id}`, parentObsId);
               }
             }
           }
         } else {
           // Non-repeating obsGroup (e.g. ARVDrug_1, ARVDrug_2, etc.)
+          // Mark all subquestion IDs so they cannot leak into root observations
+          for (const subQ of grp.subQuestions) {
+            handledKeys.add(subQ.id);
+          }
+
           const subValues: Array<{ subId: string; conceptUuid: string; value: any }> = [];
           for (const subQ of grp.subQuestions) {
             const v = formData[subQ.id] !== undefined ? formData[subQ.id] : (grpVal && typeof grpVal === 'object' ? (grpVal as any)[subQ.id] : undefined);
@@ -1026,8 +1618,13 @@ export class NmrsMySqlConnector {
                 conceptUuid: subQ.concept || schemaConceptMap[subQ.id] || subQ.id,
                 value: v
               });
-              handledKeys.add(subQ.id);
             }
+          }
+
+          // Filter out orphan ARVDrug rows where no actual drug is selected
+          if (grp.id.startsWith('ARVDrug_')) {
+            const hasDrug = subValues.some(sv => sv.subId.startsWith('Drugs_ART_') && sv.value);
+            if (!hasDrug) continue;
           }
 
           if (subValues.length > 0) {
@@ -1035,14 +1632,14 @@ export class NmrsMySqlConnector {
             // 1. Create parent group observation
             let parentObsId: number | null = null;
             if (groupConceptId) {
-              parentObsId = await insertSingleObs(groupConceptId, null, `rfe^${grp.id}`, null);
+              parentObsId = await insertSingleObs(groupConceptId, null, `rfe-forms^rfe-forms-${grp.id}`, null);
             }
 
             // 2. Create group members with obs_group_id linking
             for (const item of subValues) {
               const itemConceptId = await resolveConceptId(item.conceptUuid);
               if (itemConceptId) {
-                await insertSingleObs(itemConceptId, item.value, `rfe^${grp.id}/${item.subId}`, parentObsId);
+                await insertSingleObs(itemConceptId, item.value, `rfe-forms^rfe-forms-${item.subId}`, parentObsId);
               }
             }
           }
@@ -1050,29 +1647,44 @@ export class NmrsMySqlConnector {
       }
 
       // B. Process All Remaining Standalone Observations
-      const nonObsKeys = new Set([
-        'facilityName', 'facility_name', 'facilityDatimCode',
-        'clinicianName', 'clinician_name', 'pharmacist', 'pharmacistName',
-        'visitDate', 'encounterDate', 'dateOrdered', 'orderedDate', 'encounterDatetime',
-        'groups_count', 'active_regimen_info', 'id', 'uuid', 'patientId', 'patient_id',
-        'encounter_id', 'visit_id', 'visitId', 'location_id', 'provider_id', 'form_id',
-        'hospital_number', 'art_number', 'sex', 'age', 'dob', 'gender',
-        'refillMonths', 'quantityDispensed', 'currentRegimen', 'dispensedRegimen',
-        'calculated_next_appointment_date', 'next_appointment_date', 'returnVisitDate',
-        'oi_prophylaxis', 'tb_prev', 'prepdrug', 'others_prev',
-        'ARVDrug_1', 'ARVDrug_2', 'ARVDrug_3', 'ARVDrug_4', 'ARVDrug_5'
+      // STRICT ROOT-LEVEL WHITELIST: Only genuine top-level schema questions can be standalone observations.
+      // Drug quantities, durations, strengths, frequencies, and aliases MUST NEVER be root observations!
+      const ROOT_LEVEL_WHITELIST = new Set([
+        'Treatment_type', 'treatment_type',
+        'visit_type_pharm', 'Visit type',
+        'Pregnancy_Status', 'pregnant',
+        'refill', 'Refill',
+        'pick_up_reason_pharm',
+        'Dispensing_Modality', 'dispensing_modality',
+        'eacSessions',
+        'latestWeight', 'latest_weight', 'Weight', 'weight',
+        'latestHeight', 'latest_height', 'Height', 'height',
+        'Treatment_age_group', 'treatment_age_group',
+        'regimen_line', 'Regimen Line',
+        'Adult_1st_Line_Regimens',
+        'Adult_2nd_line_ARV_regimen',
+        'Adult_3rd_Line_ARV_Regimens',
+        'Child_1st_line_ARV_regimen',
+        'Child_2nd_line_ARV_regimen',
+        'Child_3rd_Line_ARV_Regimens',
+        'calculated_next_appointment_date',
+        'dateOrdered',
+        'name_of_drug_pharm',
+        'name_of_arv_error_pharm',
+        'consequence(S)OfTheError',
+        'signature'
       ]);
 
       for (const [key, val] of Object.entries(formData)) {
         if (handledKeys.has(key)) continue;
-        if (nonObsKeys.has(key)) continue;
+        if (!ROOT_LEVEL_WHITELIST.has(key)) continue;
         if (val === undefined || val === null || val === '') continue;
         if (Array.isArray(val)) continue; // Repeating arrays already handled
 
         const conceptId = await resolveConceptId(key);
         // Exclude concept 9 ("BLOOD SUGAR") fallback unless specifically requested
         if (conceptId && (conceptId !== 9 || key.toLowerCase().includes('sugar') || key.toLowerCase().includes('glucose'))) {
-          await insertSingleObs(conceptId, val, `rfe^${key}`, null);
+          await insertSingleObs(conceptId, val, `rfe-forms^rfe-forms-${key}`, null);
         }
       }
 

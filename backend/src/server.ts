@@ -68,10 +68,15 @@ import monnifyRoutes from './routes/monnify.js';
 import openmedRoutes from './routes/openmed.js';
 import terminologyRoutes from './routes/terminology.js';
 import medgemmaRoutes from './routes/medgemma.js';
+import { ensureSchemaSync } from './utils/ensureSchemaSync.js';
 import recordsMigrationRoutes from './routes/recordsMigration.js';
 import dentalRoutes from './routes/dental.js';
 import ophthalmologyRoutes from './routes/ophthalmology.js';
 import nmrsRoutes, { handleNmrsEncounterSavedWebhook } from './routes/nmrs.js';
+import interopRoutes from './routes/interop.js';
+import dhis2Routes from './routes/dhis2.js';
+import privacyRoutes from './routes/privacy.js';
+import diseaseClinicsRoutes from './routes/diseaseClinics.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -206,8 +211,48 @@ app.use('/api/emr', authMiddleware, emrRoutes);
 app.use('/api/reports', authMiddleware, reportsRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);
 app.use('/api/queues', authMiddleware, queuesRoutes);
+// Public SMART on FHIR Discovery (NHTDAO / NDHA)
+app.get([
+  '/.well-known/smart-configuration',
+  '/api/fhir/.well-known/smart-configuration',
+  '/api/fhir/smart-configuration'
+], (req, res) => {
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+  res.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
+    token_endpoint: `${baseUrl}/api/auth/token`,
+    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
+    grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
+    registration_endpoint: `${baseUrl}/api/auth/register`,
+    scopes_supported: [
+      'openid', 'profile', 'launch', 'launch/patient', 'patient/*.read', 'patient/*.write',
+      'user/*.read', 'user/*.write', 'offline_access'
+    ],
+    response_types_supported: ['code'],
+    management_endpoint: `${baseUrl}/api/auth/manage`,
+    introspection_endpoint: `${baseUrl}/api/auth/introspect`,
+    revocation_endpoint: `${baseUrl}/api/auth/revoke`,
+    capabilities: [
+      'launch-standalone',
+      'launch-ehr',
+      'client-public',
+      'client-confidential-symmetric',
+      'context-ehr-patient',
+      'context-standalone-patient',
+      'permission-patient',
+      'permission-user'
+    ]
+  });
+});
+
 app.use('/api/portal', portalRoutes);
-app.use('/api/fhir', authMiddleware, fhirRoutes);
+app.use('/api/fhir', (req, res, next) => {
+  if (req.path === '/metadata' || req.path === '/.well-known/smart-configuration' || req.path === '/smart-configuration') {
+    return next();
+  }
+  return authMiddleware(req, res, next);
+}, fhirRoutes);
 app.use('/api/terminology', terminologyRoutes);
 app.use('/api/nursing', authMiddleware, nursingRoutes);
 app.use('/api/triage', authMiddleware, triageRoutes);
@@ -249,12 +294,25 @@ app.use('/api/medgemma', authMiddleware, medgemmaRoutes);
 app.use('/api/records-migration', authMiddleware, recordsMigrationRoutes);
 app.use('/api/dental', authMiddleware, dentalRoutes);
 app.use('/api/ophthalmology', authMiddleware, ophthalmologyRoutes);
+app.use('/api/disease-clinics', authMiddleware, diseaseClinicsRoutes);
 
 // ── OpenMRS / NMRS AI Real-Time Webhook (External Event-Driven Sync) ─────────
 app.post('/api/v1/nmrs/webhook/encounter-saved', handleNmrsEncounterSavedWebhook);
 app.post('/api/nmrs/webhook/encounter-saved', handleNmrsEncounterSavedWebhook);
 
 app.use('/api/nmrs', authMiddleware, nmrsRoutes);
+app.use('/api/interop', interopRoutes);
+
+// NHTDAO Layer 4: DHIS2 / OpenHEXA Public Health Reporting
+app.get('/api/dhis2/openhexa/feed', (req, res, next) => {
+  if (req.query.apiKey || req.headers['x-openhexa-key']) {
+    return dhis2Routes(req, res, next);
+  }
+  return authMiddleware(req, res, () => dhis2Routes(req, res, next));
+});
+app.use('/api/dhis2', authMiddleware, dhis2Routes);
+// NHTDAO Layer 5: Privacy-by-Design & NDPC Compliance Auditing
+app.use('/api/privacy', authMiddleware, privacyRoutes);
 
 
 // ── SPA catch-all: return index.html for any non-API route ──────────────────
@@ -307,6 +365,8 @@ async function bootstrap() {
 
   // Background initialization
   try {
+    await ensureSchemaSync().catch((e) => console.warn('[SchemaSync] Non-fatal check error:', e.message));
+
     setPhase('banks', 'running');
     await prepopulateBanks().catch(() => {});
     setPhase('banks', 'done');

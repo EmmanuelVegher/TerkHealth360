@@ -64,7 +64,7 @@ export const EsmObsGroupRenderer: React.FC<EsmObsGroupRendererProps> = ({
               <Grid item xs={12} sm={nestedQ.questionOptions?.rendering === 'textarea' ? 12 : 6} key={nestedQ.id}>
                 <EsmFieldRenderer
                   field={nestedQ}
-                  value={resolveFieldValue(nestedQ, formValues)}
+                  value={formValues[nestedQ.id] !== undefined ? formValues[nestedQ.id] : resolveFieldValue(nestedQ, formValues)}
                   onChange={onChange}
                   formValues={formValues}
                   patientContext={patientContext}
@@ -164,7 +164,7 @@ export const EsmObsGroupRenderer: React.FC<EsmObsGroupRendererProps> = ({
                     field={nestedQ}
                     value={rowObj[nestedQ.id] !== undefined ? rowObj[nestedQ.id] : resolveFieldValue(nestedQ, rowObj)}
                     onChange={(_, val) => handleRowFieldChange(rowIdx, nestedQ.id, val)}
-                    formValues={rowObj}
+                    formValues={{ ...formValues, ...rowObj }}
                     patientContext={patientContext}
                     error={errors[`${id}_${rowIdx}_${nestedQ.id}`]}
                     isReadonly={isReadonly}

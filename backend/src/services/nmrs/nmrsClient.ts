@@ -834,9 +834,55 @@ export class NmrsClient {
         else if (nameLower.includes('hts') || nameLower.includes('testing') || nameLower.includes('index contact') || nameLower.includes('risk')) category = 'HTS_TESTING';
         else if (nameLower.includes('eac') || nameLower.includes('counselling') || nameLower.includes('tracking') || nameLower.includes('otz')) category = 'CARE_SUPPORT';
 
-        // Check if this form has a CLOB JSON schema resource
+        // Check if NMRS AI module has introspected this form live
         let clobSchema: any = null;
-        const jsonResource = rf.resources?.find((r: any) => r.name === 'JSON schema' || r.dataType === 'AmpathJsonSchema') || rf.resources?.[0];
+        try {
+          const aiRes = await client.get(`/nmrsai/schema/profile?uuid=${rf.uuid}`, { timeout: 4000 });
+          if (aiRes.data && (aiRes.data.success || aiRes.data.fields)) {
+            const profile = aiRes.data;
+            const fields = profile.fields || {};
+            const liveQuestions: any[] = [];
+            for (const [fKey, fVal] of Object.entries(fields)) {
+              const f = fVal as any;
+              const qAnswers = (f.answers || []).map((a: any) => ({
+                label: a.label,
+                concept: a.conceptId || a.conceptUuid || a.concept,
+                value: String(a.conceptId || a.conceptUuid || a.concept || a.label)
+              }));
+              liveQuestions.push({
+                id: f.id || fKey,
+                label: f.label || fKey,
+                type: f.rendering || "text",
+                conceptId: f.conceptId,
+                concept: f.conceptUuid || f.conceptId,
+                required: Boolean(f.required),
+                options: qAnswers,
+                questionOptions: {
+                  rendering: f.rendering || "text",
+                  concept: f.conceptUuid || f.conceptId,
+                  answers: qAnswers
+                }
+              });
+            }
+            if (liveQuestions.length > 0) {
+              clobSchema = {
+                formCode,
+                formName: profile.formName || rf.name,
+                description: profile.description || rf.description || `${rf.name} live introspected schema`,
+                category,
+                version: profile.formVersion || rf.version || "1.0",
+                openmrsFormUuid: rf.uuid,
+                pages: [{ label: `${rf.name} (Live Form)`, sections: [{ id: "sec_live", title: "Clinical Observations", questions: liveQuestions }] }],
+                sections: [{ id: "sec_live", title: "Clinical Observations", questions: liveQuestions }]
+              };
+            }
+          }
+        } catch {
+          // NMRS AI endpoint unreachable or non-200, proceed to standard CLOB / default
+        }
+
+        // Check if this form has a CLOB JSON schema resource
+        const jsonResource = !clobSchema ? (rf.resources?.find((r: any) => r.name === 'JSON schema' || r.dataType === 'AmpathJsonSchema') || rf.resources?.[0]) : null;
 
         if (jsonResource?.valueReference) {
           try {

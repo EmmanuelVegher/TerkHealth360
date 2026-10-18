@@ -1184,6 +1184,7 @@ router.post('/inventory', async (req, res, next) => {
       itemCode, genericName, brandName, dosageForm, strength,
       manufacturer, supplierPreferred, storageRequirements, unitOfMeasure,
       classification, price, requiresFasting, loincCode,
+      atcCode, atcName, therapeuticClass,
     } = req.body;
 
     let finalItemCode = itemCode || `MED-${Date.now().toString().slice(-6)}`;
@@ -1210,6 +1211,9 @@ router.post('/inventory', async (req, res, next) => {
         price: price ? Number(price) : 0,
         requiresFasting: Boolean(requiresFasting),
         loincCode,
+        atcCode,
+        atcName,
+        therapeuticClass,
       },
     });
     res.status(201).json(item);
@@ -1684,6 +1688,9 @@ router.put('/inventory/:id', authMiddleware, async (req, res, next) => {
       requiresFasting,
       isActive,
       loincCode,
+      atcCode,
+      atcName,
+      therapeuticClass,
       moniepointProductId,
     } = req.body;
 
@@ -1702,6 +1709,9 @@ router.put('/inventory/:id', authMiddleware, async (req, res, next) => {
     if (requiresFasting !== undefined) data.requiresFasting = Boolean(requiresFasting);
     if (isActive !== undefined) data.isActive = Boolean(isActive);
     if (loincCode !== undefined) data.loincCode = loincCode;
+    if (atcCode !== undefined) data.atcCode = atcCode;
+    if (atcName !== undefined) data.atcName = atcName;
+    if (therapeuticClass !== undefined) data.therapeuticClass = therapeuticClass;
     if (moniepointProductId !== undefined) data.moniepointProductId = moniepointProductId;
 
     const item = await prisma.pharmacyInventoryItem.update({

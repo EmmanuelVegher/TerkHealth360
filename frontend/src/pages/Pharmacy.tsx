@@ -289,6 +289,9 @@ interface PharmacyInventoryItem {
   dosageForm: string;
   strength: string;
   classification: string;
+  atcCode?: string;
+  atcName?: string;
+  therapeuticClass?: string;
   price: number;
   storageRequirements?: string;
   unitOfMeasure: string;
@@ -974,6 +977,7 @@ export default function Pharmacy() {
   const [medForm, setMedForm] = useState({
     itemCode: '', genericName: '', brandName: '', dosageForm: 'Tablet', strength: '',
     manufacturer: '', storageRequirements: '', unitOfMeasure: 'Tablet', classification: 'PRESCRIPTION', price: 0, loincCode: '',
+    atcCode: '', atcName: '', therapeuticClass: '',
   });
   const [batchForm, setBatchForm] = useState({
     inventoryItemId: '', batchNumber: '', expiryDate: '', manufacturerDate: '',
@@ -1408,6 +1412,9 @@ export default function Pharmacy() {
         classification: medForm.classification,
         price: Number(medForm.price),
         loincCode: medForm.loincCode,
+        atcCode: medForm.atcCode || null,
+        atcName: medForm.atcName || null,
+        therapeuticClass: medForm.therapeuticClass || null,
       };
 
       let newItemId = (medForm as any).id;
@@ -1444,6 +1451,7 @@ export default function Pharmacy() {
       setMedForm({
         itemCode: '', genericName: '', brandName: '', dosageForm: 'Tablet', strength: '',
         manufacturer: '', storageRequirements: '', unitOfMeasure: 'Tablet', classification: 'PRESCRIPTION', price: 0, loincCode: '',
+        atcCode: '', atcName: '', therapeuticClass: '',
       });
       fetchInventory();
     } catch (err: any) {
@@ -1465,6 +1473,9 @@ export default function Pharmacy() {
       classification: item.classification || 'PRESCRIPTION',
       price: Number(item.price || 0),
       loincCode: item.loincCode || '',
+      atcCode: item.atcCode || '',
+      atcName: item.atcName || '',
+      therapeuticClass: item.therapeuticClass || '',
     } as any);
     setAddInventoryOpen(true);
   };
@@ -2857,7 +2868,7 @@ export default function Pharmacy() {
         <Button variant="outlined" startIcon={<Refresh />} onClick={fetchInventory}>Refresh</Button>
         <Button variant="outlined" startIcon={<Add />} onClick={() => setAddBatchOpen(true)}>Add Stock Batch</Button>
         <Button variant="contained" startIcon={<Add />} onClick={() => {
-          setMedForm({ itemCode: '', genericName: '', brandName: '', dosageForm: '', strength: '', manufacturer: '', storageRequirements: '', classification: 'General', price: 0, unitOfMeasure: 'Pack', loincCode: '' });
+          setMedForm({ itemCode: '', genericName: '', brandName: '', dosageForm: '', strength: '', manufacturer: '', storageRequirements: '', classification: 'General', price: 0, unitOfMeasure: 'Pack', loincCode: '', atcCode: '', atcName: '', therapeuticClass: '' });
           setAddInventoryOpen(true);
         }}>New Medication</Button>
       </Box>
@@ -2899,6 +2910,17 @@ export default function Pharmacy() {
                   <TableCell><Typography variant="body2" color="text.secondary">{item.dosageForm} · {item.strength}</Typography></TableCell>
                   <TableCell>
                     <Chip label={item.classification} size="small" color={item.classification === 'CONTROLLED' ? 'error' : 'default'} sx={{ fontWeight: 700, fontSize: '0.65rem' }} />
+                    {item.atcCode && (
+                      <Tooltip title={`WHO ATC: ${item.atcName || ''} (${item.therapeuticClass || 'NHTDAO Harmonized Standard'})`}>
+                        <Chip
+                          label={`ATC: ${item.atcCode}`}
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          sx={{ fontWeight: 700, fontSize: '0.62rem', mt: 0.5, display: 'flex' }}
+                        />
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell><Typography variant="body2" fontWeight={700}>₦{Number(item.price).toLocaleString()}</Typography></TableCell>
                   <TableCell>
@@ -3079,6 +3101,34 @@ export default function Pharmacy() {
                     genericName: p.genericName || display || code,
                   }));
                 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TerminologyAutocomplete
+                system="ATC"
+                label="WHO ATC Drug Classification (NHTDAO Standard)"
+                placeholder="Search WHO ATC drug classification (e.g., P01BF01, N02BE01, J01CA04)..."
+                value={medForm.atcCode ? `${medForm.atcCode} — ${medForm.atcName || ''}` : ''}
+                onChange={(code, display, concept) => {
+                  const pureCode = concept?.code || (typeof code === 'string' ? code.split(' — ')[0] : '');
+                  const pureName = display || concept?.display || (typeof code === 'string' ? code.split(' — ')[1] : '') || '';
+                  setMedForm(p => ({
+                    ...p,
+                    atcCode: pureCode,
+                    atcName: pureName,
+                    therapeuticClass: concept?.description || p.therapeuticClass || '',
+                  }));
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="ATC Chemical / Therapeutic Subgroup"
+                fullWidth
+                value={medForm.therapeuticClass || ''}
+                onChange={e => setMedForm(p => ({ ...p, therapeuticClass: e.target.value }))}
+                placeholder="e.g. Anilides, Cephalosporins, Artemisinin combinations"
+                helperText="National Health Technology & Data Analytics Office formulary class"
               />
             </Grid>
             <Grid item xs={12} sm={6}>

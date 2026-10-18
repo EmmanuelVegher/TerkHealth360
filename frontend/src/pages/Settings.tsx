@@ -20,6 +20,7 @@ import { api } from '../services/api';
 import { WorkflowBuilder } from '../components/WorkflowBuilder';
 import { ModuleConfig } from '../components/ModuleConfig';
 import { PrintTemplateConfig } from '../components/PrintTemplateConfig';
+import UniversalInteropStudio from '../components/UniversalInteropStudio';
 
 const Settings = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -130,6 +131,9 @@ const Settings = () => {
     openmrsPassword: 'Admin123',
     facilityName: 'Faith Foundation Specialist Hospital',
     facilityDATIMCode: 'DATIM-NIG-7821',
+    facilityDhprsCode: 'DHPRS-FCT-0482',
+    facilityNhfrCode: 'NHFR-2489-01',
+    nhtdaoRegistered: true,
     stateName: 'Benue',
     lgaName: 'Makurdi',
     autoSyncEnabled: true,
@@ -1064,6 +1068,30 @@ const Settings = () => {
                         <TextField
                           fullWidth
                           size="small"
+                          label="DHPRS Facility Code (National Health Architecture)"
+                          placeholder="e.g. DHPRS-FCT-0482"
+                          value={nmrsConfig.facilityDhprsCode || ''}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, facilityDhprsCode: e.target.value })}
+                          helperText="Mandatory for NHTDAO National Health Interoperability"
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="NHFR Master Facility Code"
+                          placeholder="e.g. NHFR-2489-01"
+                          value={nmrsConfig.facilityNhfrCode || ''}
+                          onChange={e => setNmrsConfig({ ...nmrsConfig, facilityNhfrCode: e.target.value })}
+                          helperText="National Health Facility Registry unique index"
+                        />
+                      </Grid>
+                    </Grid>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
                           label="State"
                           value={nmrsConfig.stateName}
                           onChange={e => setNmrsConfig({ ...nmrsConfig, stateName: e.target.value })}
@@ -1241,6 +1269,11 @@ const Settings = () => {
               </Grid>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Universal Database & Application Interoperability Studio */}
+        <Grid item xs={12}>
+          <UniversalInteropStudio />
         </Grid>
 
         <Grid item xs={12} md={6}>

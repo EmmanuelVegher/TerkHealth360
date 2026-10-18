@@ -59,10 +59,12 @@ import {
   Close,
   HealthAndSafety,
   Science,
-  Send
+  Send,
+  Public
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { api } from '../services/api';
+import Dhis2PublicHealthStudio from '../components/Dhis2PublicHealthStudio';
 
 interface Patient {
   id: string;
@@ -116,6 +118,7 @@ export default function NMRSInteroperability() {
     if (path.includes('/nmrs-interop/queue')) return 'queue';
     if (path.includes('/nmrs-interop/ndr')) return 'ndr';
     if (path.includes('/nmrs-interop/settings')) return 'settings';
+    if (path.includes('/nmrs-interop/dhis2')) return 'dhis2';
     return 'passport';
   };
 
@@ -135,6 +138,9 @@ export default function NMRSInteroperability() {
     openmrsPassword: 'Admin123',
     facilityName: 'Faith Foundation Specialist Hospital',
     facilityDATIMCode: 'DATIM-NIG-7821',
+    facilityDhprsCode: 'DHPRS-FCT-0482',
+    facilityNhfrCode: 'NHFR-2489-01',
+    nhtdaoRegistered: true,
     stateName: 'Benue',
     lgaName: 'Makurdi',
     autoSyncEnabled: true,
@@ -499,6 +505,7 @@ export default function NMRSInteroperability() {
           <Tab value="queue" label={`3. Bi-Directional Sync Queue (${syncQueue.filter(q => q.status === 'PENDING').length})`} icon={<SyncAlt fontSize="small" />} iconPosition="start" />
           <Tab value="ndr" label="4. FMoH NDR XML Exporter" icon={<CloudDownload fontSize="small" />} iconPosition="start" />
           <Tab value="settings" label="5. Network Gateway & CIEL Mappings" icon={<Settings fontSize="small" />} iconPosition="start" />
+          <Tab value="dhis2" label="6. NHMIS / IDSR (DHIS2 & OpenHEXA)" icon={<Public fontSize="small" sx={{ color: '#059669' }} />} iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -707,17 +714,26 @@ export default function NMRSInteroperability() {
                           return null;
                         }
 
+                        const rendering = q.questionOptions?.rendering || (q.type !== "obs" && q.type !== "control" && q.type !== "patientIdentifier" ? q.type : "text");
+                        const rawOpts = (q.options && q.options.length > 0)
+                          ? q.options
+                          : (q.questionOptions?.answers || q.answers || []);
+                        const options = rawOpts.map((opt: any) => ({
+                          label: opt.label || opt.name || String(opt.value || opt.concept || ""),
+                          value: opt.value !== undefined ? String(opt.value) : (opt.concept !== undefined ? String(opt.concept) : (opt.conceptUuid || opt.label))
+                        }));
+
                         return (
-                          <Grid item xs={12} sm={q.type === 'textarea' ? 12 : 6} md={q.type === 'textarea' ? 12 : 4} key={q.id}>
+                          <Grid item xs={12} sm={rendering === "textarea" ? 12 : 6} md={rendering === "textarea" ? 12 : 4} key={q.id}>
                             {/* Date Field */}
-                            {q.type === 'date' && (
+                            {rendering === "date" && (
                               <TextField
                                 fullWidth
                                 size="small"
                                 type="date"
                                 label={q.label}
                                 InputLabelProps={{ shrink: true }}
-                                value={formData[q.id] || ''}
+                                value={formData[q.id] || ""}
                                 onChange={(e) => handleDynamicFieldChange(q.id, e.target.value)}
                                 helperText={q.helperText}
                                 required={q.required}
@@ -725,13 +741,13 @@ export default function NMRSInteroperability() {
                             )}
 
                             {/* Text / Number Field */}
-                            {(q.type === 'text' || q.type === 'number') && (
+                            {(rendering === "text" || rendering === "number") && (
                               <TextField
                                 fullWidth
                                 size="small"
-                                type={q.type}
+                                type={rendering}
                                 label={q.label}
-                                value={formData[q.id] || ''}
+                                value={formData[q.id] || ""}
                                 onChange={(e) => handleDynamicFieldChange(q.id, e.target.value)}
                                 helperText={q.helperText}
                                 required={q.required}
@@ -739,15 +755,15 @@ export default function NMRSInteroperability() {
                             )}
 
                             {/* Select Field */}
-                            {q.type === 'select' && (
+                            {(rendering === "select" || rendering === "dropdown") && (
                               <FormControl fullWidth size="small" required={q.required}>
                                 <InputLabel>{q.label}</InputLabel>
                                 <Select
-                                  value={formData[q.id] || ''}
+                                  value={formData[q.id] || ""}
                                   label={q.label}
                                   onChange={(e) => handleDynamicFieldChange(q.id, e.target.value)}
                                 >
-                                  {q.options?.map((opt: any) => (
+                                  {options.map((opt: any) => (
                                     <MenuItem key={String(opt.value)} value={opt.value}>
                                       {opt.label}
                                     </MenuItem>
@@ -758,16 +774,16 @@ export default function NMRSInteroperability() {
                             )}
 
                             {/* Radio Field */}
-                            {q.type === 'radio' && (
-                              <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#334155', display: 'block', mb: 0.5 }}>
-                                  {q.label} {q.required && '*'}
+                            {rendering === "radio" && (
+                              <Box sx={{ p: 1.5, bgcolor: "#f8fafc", borderRadius: 2, border: "1px solid #e2e8f0" }}>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: "#334155", display: "block", mb: 0.5 }}>
+                                  {q.label} {q.required && "*"}
                                 </Typography>
                                 <RadioGroup
-                                  value={formData[q.id] || ''}
+                                  value={formData[q.id] || ""}
                                   onChange={(e) => handleDynamicFieldChange(q.id, e.target.value)}
                                 >
-                                  {q.options?.map((opt: any) => (
+                                  {options.map((opt: any) => (
                                     <FormControlLabel
                                       key={String(opt.value)}
                                       value={opt.value}
@@ -780,14 +796,14 @@ export default function NMRSInteroperability() {
                             )}
 
                             {/* Textarea Field */}
-                            {q.type === 'textarea' && (
+                            {rendering === "textarea" && (
                               <TextField
                                 fullWidth
                                 size="small"
                                 multiline
                                 rows={3}
                                 label={q.label}
-                                value={formData[q.id] || ''}
+                                value={formData[q.id] || ""}
                                 onChange={(e) => handleDynamicFieldChange(q.id, e.target.value)}
                                 helperText={q.helperText}
                                 required={q.required}
@@ -1048,6 +1064,31 @@ export default function NMRSInteroperability() {
                       <TextField
                         fullWidth
                         size="small"
+                        label="DHPRS Facility Code (National Health Architecture)"
+                        placeholder="e.g. DHPRS-FCT-0482"
+                        value={config.facilityDhprsCode || ''}
+                        onChange={(e) => setConfig({ ...config, facilityDhprsCode: e.target.value })}
+                        helperText="Mandatory for NHTDAO National Health Interoperability"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="NHFR Master Facility Code"
+                        placeholder="e.g. NHFR-2489-01"
+                        value={config.facilityNhfrCode || ''}
+                        onChange={(e) => setConfig({ ...config, facilityNhfrCode: e.target.value })}
+                        helperText="National Health Facility Registry unique index"
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
                         label="State"
                         value={config.stateName}
                         onChange={(e) => setConfig({ ...config, stateName: e.target.value })}
@@ -1121,6 +1162,13 @@ export default function NMRSInteroperability() {
               </Card>
             </Grid>
           </Grid>
+        </Box>
+      )}
+
+      {/* ── TAB 6: NHMIS & IDSR Aggregate Reporting (DHIS2 & OpenHEXA) ──────── */}
+      {activeTab === 'dhis2' && (
+        <Box sx={{ mt: 1 }}>
+          <Dhis2PublicHealthStudio />
         </Box>
       )}
 

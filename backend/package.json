@@ -10,6 +10,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:terminologies": "tsx prisma/seed_scraped_terminologies.ts",
+    "seed:local": "tsx prisma/seed_scraped_terminologies.ts --local",
+    "seed:atc:local": "tsx prisma/seed_scraped_terminologies.ts --local --standard=atc",
+    "seed:loinc:local": "tsx prisma/seed_scraped_terminologies.ts --local --standard=loinc",
+    "seed:icd10:local": "tsx prisma/seed_local_icd10.ts",
+    "seed:rxnorm:local": "tsx prisma/seed_local_rxnorm.ts",
     "stt:download": "node scripts/downloadWhisperModel.js"
   },
   "prisma": {
@@ -29,6 +35,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "mssql": "^12.7.6",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.24.5",
     "pg": "^8.22.0",
@@ -45,6 +52,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
+    "@types/mssql": "^12.3.0",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.5",
     "@types/qrcode": "^1.5.5",

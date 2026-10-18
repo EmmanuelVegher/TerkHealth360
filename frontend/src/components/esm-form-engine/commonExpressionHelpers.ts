@@ -3,6 +3,8 @@
  * Replicated from @openmrs/esm-form-engine-lib/src/utils/common-expression-helpers.ts
  */
 
+import { ALL_ARV_DRUGS } from './arvDatasource';
+
 export class CommonExpressionHelpers {
   patient: any;
   formValues: Record<string, any>;
@@ -49,21 +51,43 @@ export class CommonExpressionHelpers {
   };
 
   lookupArvStrength = (drug: any): string => {
-    if (!drug) return '300/300/50mg';
-    const str = String(drug).toLowerCase();
+    if (!drug || drug === '' || drug === 'null' || drug === 'undefined') return '';
+    const str = String(drug).toLowerCase().trim();
+    if (!str) return '';
+
+    // 1. Direct match against official ARV drugs catalog
+    const matched = ALL_ARV_DRUGS.find(
+      (d) =>
+        d.concept.toLowerCase() === str ||
+        d.value.toLowerCase() === str ||
+        d.label.toLowerCase() === str ||
+        str.includes(d.concept.toLowerCase())
+    );
+    if (matched) return matched.strength;
+
     const strengths: Record<string, string> = {
       'tdf-3tc-dtg': '300/300/50mg',
       'tdf-3tc-efv': '300/300/600mg',
       'azt-3tc-nvp': '300/150/200mg',
+      'azt-3tc-efv': '300/150/600mg',
       'abc-3tc-dtg': '600/300/50mg',
       'abc-3tc-efv': '600/300/600mg',
+      'abc-3tc-nvp': '600/300/200mg',
+      'tdf/3tc': '300/300mg',
+      'azt/3tc': '300/150mg',
+      'abc/3tc': '600/300mg',
+      'tdf/ftc': '300/200mg',
+      'atv/r': '300/100mg',
+      'lpv/r': '200/50mg',
+      'drv/r': '600/100mg',
+      'ral': '400mg',
       'tdf': '300mg',
       '3tc': '300mg',
       'dtg': '50mg',
       'efv': '600mg',
       'azt': '300mg',
       'nvp': '200mg',
-      // Common Concept UUIDs
+      'ftc': '200mg',
       '8a343013-0216-44e0-aefe-53909ffd5631': '300/300/50mg',
       '165681aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/300/50mg',
       '164505aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/300/600mg',
@@ -72,12 +96,22 @@ export class CommonExpressionHelpers {
       '165686aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '300/150/200mg',
       '14c41615-9c0e-4254-b4b1-770956d390e9': '600/300/50mg',
       '165692aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': '600/300/50mg',
+      'taf-3tc-dtg': '25/300/50mg',
+      'taf/3tc/dtg': '25/300/50mg',
+      'taf-ftc-dtg': '25/200/50mg',
+      'taf/ftc/dtg': '25/200/50mg',
+      '6c32f10b-e26d-4299-97af-41b797a8253e': '25/300/50mg',
+      '2893350f-6710-40c6-b963-ff2d9789567d': '25/300/50mg',
+      '167517': '25/300/50mg',
+      '167520': '25/300/50mg',
+      'taf': '25mg',
     };
     if (strengths[str]) return strengths[str];
+    if (str.includes('taf') || str.includes('alafenamide')) return '25/300/50mg';
     if (str.includes('dtg') || str.includes('dolutegravir') || str.includes('tdf')) return '300/300/50mg';
     if (str.includes('efv') || str.includes('efavirenz')) return '300/300/600mg';
     if (str.includes('nvp') || str.includes('nevirapine')) return '300/150/200mg';
-    return '300/300/50mg';
+    return '';
   };
 
   includesAny = (collection: any[], values: any[]): boolean => {
@@ -165,3 +199,7 @@ export class CommonExpressionHelpers {
     return `${yyyy}-${mm}-${dd}`;
   };
 }
+
+export const defaultExpressionHelpers = new CommonExpressionHelpers();
+export const lookupArvStrength = defaultExpressionHelpers.lookupArvStrength;
+

@@ -1800,16 +1800,16 @@ const PatientDetail = () => {
               
               if (isBasicStub && nmrsSchemas.length > 0) {
                 const targetName = (editingEncounter.formSchema?.formName || editingEncounter.encounterType || '').toLowerCase().trim();
-                const matched = nmrsSchemas.find((s: any) => {
+                const matched = nmrsSchemas.filter((s: any) => {
                   const sName = (s.formName || '').toLowerCase().trim();
                   return sName === targetName || sName.includes(targetName) || targetName.includes(sName) ||
                     (targetName.includes('intake') && (s.formCode === 'CLIENT_INTAKE_FORM' || s.formCode === 'HTS_REGISTER')) ||
                     (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM')) ||
-                    (targetName.includes('pharmacy') && s.formCode === 'PHARMACY_ORDER') ||
-                    (targetName.includes('lab') && s.formCode === 'INTEGRATED_LAB_ORDER') ||
+                    (targetName.includes('pharmacy') && (s.formCode === 'PHARMACY_ORDER_FORM' || s.formCode === 'PHARMACY_ORDER' || sName.includes('pharmacy'))) ||
+                    (targetName.includes('lab') && (s.formCode === 'INTEGRATED_LAB_ORDER' || sName.includes('laboratory'))) ||
                     (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
                     (targetName.includes('adult') && s.formCode === 'CARE_CARD_4B');
-                });
+                }).sort((a: any, b: any) => (b.schemaJson?.pages?.length || 0) - (a.schemaJson?.pages?.length || 0))[0];
                 if (matched?.schemaJson) {
                   rawSchema = matched.schemaJson;
                 }
@@ -1858,11 +1858,12 @@ const PatientDetail = () => {
             mode="edit"
             isSubmitting={savingEncounter}
             onCancel={() => setEditingEncounter(null)}
-            onSubmit={async (formData) => {
+            onSubmit={async (formData, encounterPayload) => {
               setSavingEncounter(true);
               try {
                 const res = await api.put(`/nmrs/encounters/${editingEncounter.id}`, {
-                  formData
+                  formData,
+                  encounterPayload
                 });
                 alertMsg(res.data?.message || 'Encounter form updated successfully', { variant: 'success' });
                 setEditingEncounter(null);

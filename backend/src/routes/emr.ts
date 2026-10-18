@@ -8,6 +8,7 @@ import { notifyVisitsChange } from './visits.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
+import { ClinicalIntegrationService } from '../services/clinicalIntegrationService.js';
 
 const medicalHistorySchema = z.object({
   lmp: z.string().optional().nullable(),
@@ -68,6 +69,13 @@ router.get('/summary/:patientId', authMiddleware, async (req, res, next) => {
   try {
     const patientId = req.params.patientId;
 
+    // Automatically integrate past specialty clinic encounters if any
+    try {
+      await ClinicalIntegrationService.backfillPatientEncounters(patientId);
+    } catch (bfErr: any) {
+      console.warn('[EMR] Backfill warning:', bfErr.message);
+    }
+
     const [patient, history, allergies, alerts, recentVitals, activeProblems, recentMeds, recentInvoices, activeAdmission, triageRecords, consultationNotesRaw, surgicalBookings] = await Promise.all([
       prisma.patient.findUnique({
         where: { id: patientId },
@@ -85,9 +93,9 @@ router.get('/summary/:patientId', authMiddleware, async (req, res, next) => {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.medicationRequest.findMany({
-        where: { patientId, status: 'ACTIVE' },
+        where: { patientId },
         orderBy: { createdAt: 'desc' },
-        take: 5,
+        take: 50,
       }),
       prisma.invoice.findMany({
         where: { patientId, status: 'ISSUED' },

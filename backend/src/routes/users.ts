@@ -50,6 +50,12 @@ const createUserSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   employeeId: z.string().optional(), // required for staff
+  mdcnFolioNumber: z.string().optional(),
+  nmcnNumber: z.string().optional(),
+  pcnNumber: z.string().optional(),
+  mlscnNumber: z.string().optional(),
+  nationalProviderId: z.string().optional(),
+  regulatoryCouncil: z.string().optional(),
 });
 
 const updateUserSchema = z.object({
@@ -63,6 +69,12 @@ const updateUserSchema = z.object({
   specialization: z.string().optional(),
   licenseNumber: z.string().optional(),
   employeeId: z.string().optional(),
+  mdcnFolioNumber: z.string().optional(),
+  nmcnNumber: z.string().optional(),
+  pcnNumber: z.string().optional(),
+  mlscnNumber: z.string().optional(),
+  nationalProviderId: z.string().optional(),
+  regulatoryCouncil: z.string().optional(),
 });
 
 // PATCH /me/password - Change current user's password
@@ -478,6 +490,12 @@ router.post('/', authMiddleware, async (req: any, res, next) => {
           employeeId: data.employeeId || `EMP-${Date.now().toString().substring(6)}`,
           firstName: data.firstName,
           lastName: data.lastName,
+          mdcnFolioNumber: data.mdcnFolioNumber || undefined,
+          nmcnNumber: data.nmcnNumber || undefined,
+          pcnNumber: data.pcnNumber || undefined,
+          mlscnNumber: data.mlscnNumber || undefined,
+          nationalProviderId: data.nationalProviderId || undefined,
+          regulatoryCouncil: data.regulatoryCouncil || undefined,
           isActive: true,
         },
       });
@@ -570,6 +588,12 @@ router.put('/:id', authMiddleware, async (req: any, res, next) => {
             specialization: data.specialization,
             licenseNumber: data.licenseNumber,
             employeeId: data.employeeId || undefined,
+            mdcnFolioNumber: data.mdcnFolioNumber !== undefined ? data.mdcnFolioNumber : undefined,
+            nmcnNumber: data.nmcnNumber !== undefined ? data.nmcnNumber : undefined,
+            pcnNumber: data.pcnNumber !== undefined ? data.pcnNumber : undefined,
+            mlscnNumber: data.mlscnNumber !== undefined ? data.mlscnNumber : undefined,
+            nationalProviderId: data.nationalProviderId !== undefined ? data.nationalProviderId : undefined,
+            regulatoryCouncil: data.regulatoryCouncil !== undefined ? data.regulatoryCouncil : undefined,
           },
         });
       }

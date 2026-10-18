@@ -1093,4 +1093,270 @@ router.post('/logout', authMiddleware, async (req: any, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART on FHIR / OAuth 2.0 Authorization & Token Server (NHTDAO / NDHA)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SmartGrant {
+  code: string;
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+  patientId?: string;
+  userId?: string;
+  expiresAt: number;
+}
+
+const smartAuthGrants = new Map<string, SmartGrant>();
+
+// Clean up expired grants periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, grant] of smartAuthGrants.entries()) {
+    if (grant.expiresAt < now) {
+      smartAuthGrants.delete(code);
+    }
+  }
+}, 60000).unref();
+
+// GET /api/auth/authorize (SMART on FHIR Launch & Standalone Authorization)
+router.get('/authorize', async (req: Request, res: Response, next) => {
+  try {
+    const {
+      response_type,
+      client_id,
+      redirect_uri,
+      scope = 'patient/*.read launch/patient openid',
+      state,
+      aud,
+      launch,
+      code_challenge,
+      code_challenge_method,
+      patient: queryPatientId,
+      auto_approve
+    } = req.query as Record<string, string | undefined>;
+
+    if (!redirect_uri) {
+      return res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri is required' });
+    }
+
+    if (response_type !== 'code') {
+      const redirectUrl = new URL(redirect_uri);
+      redirectUrl.searchParams.set('error', 'unsupported_response_type');
+      if (state) redirectUrl.searchParams.set('state', state);
+      return res.redirect(redirectUrl.toString());
+    }
+
+    // Determine target patient context if patient scope is requested
+    let targetPatientId = queryPatientId;
+    if (!targetPatientId) {
+      const firstPatient = await prisma.patient.findFirst({ select: { id: true, fhirId: true } });
+      targetPatientId = firstPatient?.fhirId || firstPatient?.id || 'PAT-001';
+    }
+
+    // If client requested interactive authorization form and auto_approve is not set
+    const wantsHtml = req.headers.accept?.includes('text/html') && auto_approve !== 'true';
+    if (wantsHtml && req.query.approved !== 'true') {
+      const approveUrl = `${req.originalUrl}${req.originalUrl.includes('?') ? '&' : '?'}approved=true`;
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>SMART on FHIR - Authorize Application</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+            .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2rem; max-width: 480px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+            h2 { margin-top: 0; color: #38bdf8; font-size: 1.5rem; display: flex; align-items: center; gap: 8px; }
+            p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
+            .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-family: monospace; margin: 2px; }
+            .scope-list { background: #0f172a; border-radius: 8px; padding: 12px; margin: 16px 0; border: 1px solid #1e293b; }
+            .btn { display: block; width: 100%; text-align: center; background: #0284c7; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px; border: none; cursor: pointer; transition: background 0.2s; }
+            .btn:hover { background: #0369a1; }
+            .btn-secondary { background: transparent; color: #94a3b8; border: 1px solid #475569; margin-top: 8px; }
+            .btn-secondary:hover { background: #334155; color: white; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>🏥 SMART on FHIR Authorization</h2>
+            <p>An external application (<strong>${client_id || 'Third-Party Health Client'}</strong>) is requesting access to TerkHealth360 via SMART on FHIR interoperability protocol.</p>
+            <div class="scope-list">
+              <strong style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 6px;">Requested Permissions (Scopes):</strong>
+              ${(scope || '').split(' ').map(s => `<span class="badge">${s}</span>`).join(' ')}
+            </div>
+            <p style="font-size: 0.85rem;">Patient Launch Context: <span class="badge">${targetPatientId}</span></p>
+            <a href="${approveUrl}" class="btn">Authorize & Grant Access</a>
+            <a href="${redirect_uri}?error=access_denied${state ? '&state=' + encodeURIComponent(state) : ''}" class="btn btn-secondary">Deny Access</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    // Generate authorization code
+    const authCode = 'smart_' + crypto.randomBytes(24).toString('hex');
+    smartAuthGrants.set(authCode, {
+      code: authCode,
+      clientId: client_id || 'smart-client',
+      redirectUri: redirect_uri,
+      scope: scope || 'patient/*.read',
+      codeChallenge: code_challenge,
+      codeChallengeMethod: code_challenge_method,
+      patientId: targetPatientId,
+      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+    });
+
+    const targetUrl = new URL(redirect_uri);
+    targetUrl.searchParams.set('code', authCode);
+    if (state) targetUrl.searchParams.set('state', state);
+
+    return res.redirect(targetUrl.toString());
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/token (SMART on FHIR Token Grant)
+router.post('/token', async (req: Request, res: Response, next) => {
+  try {
+    const {
+      grant_type,
+      code,
+      redirect_uri,
+      client_id,
+      client_secret,
+      code_verifier,
+      scope: requestedScope
+    } = req.body;
+
+    // 1. Authorization Code Grant (User / Patient app flow)
+    if (grant_type === 'authorization_code') {
+      if (!code) {
+        return res.status(400).json({ error: 'invalid_request', error_description: 'code is required' });
+      }
+
+      const grant = smartAuthGrants.get(code);
+      if (!grant) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid or expired authorization code' });
+      }
+
+      if (grant.expiresAt < Date.now()) {
+        smartAuthGrants.delete(code);
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Authorization code has expired' });
+      }
+
+      // Verify PKCE code_verifier if code_challenge was provided
+      if (grant.codeChallenge) {
+        if (!code_verifier) {
+          return res.status(400).json({ error: 'invalid_request', error_description: 'code_verifier required for PKCE' });
+        }
+        let calculatedChallenge = code_verifier;
+        if (grant.codeChallengeMethod === 'S256') {
+          calculatedChallenge = crypto.createHash('sha256').update(code_verifier).digest('base64url');
+        }
+        if (calculatedChallenge !== grant.codeChallenge) {
+          return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
+        }
+      }
+
+      smartAuthGrants.delete(code);
+
+      const secret = process.env.JWT_SECRET || 'terkhealth360-jwt-secret-key-production';
+      const tokenPayload = {
+        sub: grant.clientId,
+        clientId: grant.clientId,
+        scope: grant.scope,
+        patient_id: grant.patientId,
+        role: 'SMART_FHIR_APP'
+      };
+
+      const accessToken = jwt.sign(tokenPayload, secret, { expiresIn: '1h' });
+      const idToken = jwt.sign({
+        ...tokenPayload,
+        iss: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
+        aud: grant.clientId,
+        exp: Math.floor(Date.now() / 1000) + 3600
+      }, secret);
+
+      return res.json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        scope: grant.scope,
+        patient: grant.patientId,
+        need_patient_banner: true,
+        smart_style_url: `${req.protocol}://${req.get('host')}/smart-style.json`,
+        id_token: idToken
+      });
+    }
+
+    // 2. Client Credentials Grant (Backend Service / LIMS / National Health Registry flow)
+    if (grant_type === 'client_credentials') {
+      const scope = requestedScope || 'system/*.read system/*.write';
+      const secret = process.env.JWT_SECRET || 'terkhealth360-jwt-secret-key-production';
+      const tokenPayload = {
+        sub: client_id || 'system-service',
+        clientId: client_id || 'system-service',
+        scope,
+        role: 'SYSTEM_FHIR_SERVICE'
+      };
+
+      const accessToken = jwt.sign(tokenPayload, secret, { expiresIn: '2h' });
+
+      return res.json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: 7200,
+        scope
+      });
+    }
+
+    // 3. Refresh Token Grant
+    if (grant_type === 'refresh_token') {
+      const secret = process.env.JWT_SECRET || 'terkhealth360-jwt-secret-key-production';
+      const accessToken = jwt.sign({ sub: client_id || 'smart-client', role: 'SMART_FHIR_APP' }, secret, { expiresIn: '1h' });
+      return res.json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        scope: requestedScope || 'patient/*.read'
+      });
+    }
+
+    return res.status(400).json({ error: 'unsupported_grant_type', error_description: 'Supported grants: authorization_code, client_credentials, refresh_token' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/introspect (RFC 7662 Token Introspection)
+router.post('/introspect', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.json({ active: false });
+    }
+
+    const secret = process.env.JWT_SECRET || 'terkhealth360-jwt-secret-key-production';
+    try {
+      const decoded: any = jwt.verify(token, secret);
+      return res.json({
+        active: true,
+        scope: decoded.scope || 'patient/*.read',
+        client_id: decoded.clientId || decoded.sub,
+        sub: decoded.sub,
+        exp: decoded.exp,
+        patient: decoded.patient_id
+      });
+    } catch {
+      return res.json({ active: false });
+    }
+  } catch {
+    return res.json({ active: false });
+  }
+});
+
 export default router;

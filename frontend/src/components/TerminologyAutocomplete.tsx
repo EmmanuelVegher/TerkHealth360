@@ -15,7 +15,7 @@ export interface TerminologyConceptOption {
 }
 
 interface TerminologyAutocompleteProps {
-  system: 'ICD10' | 'LOINC' | 'RXNORM' | 'CPT' | 'SNOMED' | 'ALL';
+  system: 'ICD10' | 'ICD11' | 'LOINC' | 'RXNORM' | 'ATC' | 'CPT' | 'ISBT128' | 'SNOMED' | 'ALL';
   label: string;
   placeholder?: string;
   value: any; // string or string[]
@@ -28,6 +28,36 @@ interface TerminologyAutocompleteProps {
 }
 
 const BUILTIN_OFFLINE_DICTIONARY: TerminologyConceptOption[] = [
+  // WHO ICD-11 MMS Diagnoses (NHTDAO Harmonization Standard)
+  { code: '1F40', display: 'Malaria (Plasmodium falciparum)', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Severe falciparum malaria with cerebral/pulmonary involvement' },
+  { code: '3A51', display: 'Sickle cell disorders and crisis', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Sickle cell anaemia with vaso-occlusive crisis' },
+  { code: 'BA00', display: 'Essential hypertension', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Primary systemic hypertension' },
+  { code: '5A11', display: 'Type 2 diabetes mellitus', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Non-insulin-dependent diabetes mellitus' },
+  { code: 'CA23', display: 'Asthma', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Bronchial asthma with exacerbation' },
+  { code: 'JA24', display: 'Pre-eclampsia', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Gestational hypertensive disorder with proteinuria' },
+  { code: '1B10', display: 'Tuberculosis of respiratory system', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Pulmonary tuberculosis bacteriologically confirmed' },
+  { code: '1A07', display: 'Typhoid fever', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Salmonella enterica serovar Typhi infection' },
+  { code: '1C62', display: 'HIV disease clinical stage 3', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Human immunodeficiency virus disease (1C60-1C62 by clinical stage)' },
+  { code: '1A00', display: 'Cholera', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Acute diarrhoeal infection caused by Vibrio cholerae' },
+  { code: '1D61.2', display: 'Lassa fever', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Acute viral haemorrhagic fever endemic in West Africa' },
+  { code: '1D01', display: 'Bacterial meningitis', system: 'ICD11', category: 'DIAGNOSIS', description: 'WHO ICD-11 MMS: Includes Neisseria meningitidis meningitis' },
+
+  // WHO ATC Classification (NHTDAO Harmonization Standard)
+  { code: 'P01BF01', display: 'Artemether and lumefantrine', system: 'ATC', category: 'PHARMACY', description: 'Antimalarials / Artemisinin and derivatives combinations' },
+  { code: 'N02BE01', display: 'Paracetamol', system: 'ATC', category: 'PHARMACY', description: 'Analgesics / Other analgesics and antipyretics / Anilides' },
+  { code: 'J01CA04', display: 'Amoxicillin', system: 'ATC', category: 'PHARMACY', description: 'Antibacterials for systemic use / Penicillins with extended spectrum' },
+  { code: 'J01CR02', display: 'Amoxicillin and beta-lactamase inhibitor (Augmentin)', system: 'ATC', category: 'PHARMACY', description: 'Combinations of penicillins, incl. beta-lactamase inhibitors' },
+  { code: 'J01DD04', display: 'Ceftriaxone', system: 'ATC', category: 'PHARMACY', description: 'Third-generation cephalosporins' },
+  { code: 'A10BA02', display: 'Metformin', system: 'ATC', category: 'PHARMACY', description: 'Drugs used in diabetes / Biguanides' },
+  { code: 'C08CA01', display: 'Amlodipine', system: 'ATC', category: 'PHARMACY', description: 'Calcium channel blockers / Dihydropyridine derivatives' },
+  { code: 'C09CA01', display: 'Losartan', system: 'ATC', category: 'PHARMACY', description: 'Angiotensin II receptor blockers (ARBs)' },
+  { code: 'N02AJ13', display: 'Tramadol and paracetamol', system: 'ATC', category: 'PHARMACY', description: 'Opioids in combination with non-opioid analgesics' },
+  { code: 'H02AB09', display: 'Hydrocortisone', system: 'ATC', category: 'PHARMACY', description: 'Corticosteroids for systemic use / Glucocorticoids' },
+  { code: 'C03CA01', display: 'Furosemide', system: 'ATC', category: 'PHARMACY', description: 'High-ceiling diuretics / Sulfonamides' },
+  { code: 'B01AB05', display: 'Enoxaparin', system: 'ATC', category: 'PHARMACY', description: 'Antithrombotic agents / Heparin group' },
+  { code: 'A02BC01', display: 'Omeprazole', system: 'ATC', category: 'PHARMACY', description: 'Drugs for peptic ulcer / Proton pump inhibitors' },
+  { code: 'C10AA05', display: 'Atorvastatin', system: 'ATC', category: 'PHARMACY', description: 'Lipid modifying agents / HMG-CoA reductase inhibitors' },
+
   // ICD10 Diagnoses
   { code: 'B50.9', display: 'Plasmodium falciparum malaria, unspecified (Severe Malaria)', system: 'ICD10', category: 'DIAGNOSIS' },
   { code: 'B54', display: 'Unspecified malaria (Malaria Fever)', system: 'ICD10', category: 'DIAGNOSIS' },

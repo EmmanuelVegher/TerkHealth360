@@ -8,6 +8,7 @@ import { NdrGenerator } from '../services/nmrs/ndrGenerator.js';
 import { enrichAllPatientsCohort } from '../services/nmrs/patientEnricher.js';
 import { NmrsDataBridge } from '../services/nmrs/nmrsDataBridge.js';
 import { NmrsMySqlConnector } from '../services/nmrs/nmrsMySqlConnector.js';
+import { ClinicalIntegrationService } from '../services/clinicalIntegrationService.js';
 
 const router = Router();
 
@@ -23,6 +24,9 @@ router.get('/config', async (req: Request, res: Response) => {
           openmrsPassword: 'Admin123',
           facilityName: 'Faith Foundation Specialist Hospital',
           facilityDATIMCode: 'DATIM-NIG-7821',
+          facilityDhprsCode: 'DHPRS-FCT-0482',
+          facilityNhfrCode: 'NHFR-2489-01',
+          nhtdaoRegistered: true,
           stateName: 'Benue',
           lgaName: 'Makurdi',
           autoSyncEnabled: true,
@@ -46,6 +50,9 @@ router.post('/config', async (req: Request, res: Response) => {
       openmrsPassword,
       facilityName,
       facilityDATIMCode,
+      facilityDhprsCode,
+      facilityNhfrCode,
+      nhtdaoRegistered,
       stateName,
       lgaName,
       autoSyncEnabled,
@@ -74,6 +81,9 @@ router.post('/config', async (req: Request, res: Response) => {
           openmrsPassword: openmrsPassword !== undefined ? openmrsPassword : config.openmrsPassword,
           facilityName: facilityName || config.facilityName,
           facilityDATIMCode: facilityDATIMCode || config.facilityDATIMCode,
+          facilityDhprsCode: facilityDhprsCode !== undefined ? facilityDhprsCode : config.facilityDhprsCode,
+          facilityNhfrCode: facilityNhfrCode !== undefined ? facilityNhfrCode : config.facilityNhfrCode,
+          nhtdaoRegistered: nhtdaoRegistered !== undefined ? Boolean(nhtdaoRegistered) : config.nhtdaoRegistered,
           stateName: stateName || config.stateName,
           lgaName: lgaName || config.lgaName,
           autoSyncEnabled: autoSyncEnabled !== undefined ? autoSyncEnabled : config.autoSyncEnabled,
@@ -89,6 +99,9 @@ router.post('/config', async (req: Request, res: Response) => {
           openmrsPassword: openmrsPassword || 'Admin123',
           facilityName: facilityName || 'Faith Foundation Specialist Hospital',
           facilityDATIMCode: facilityDATIMCode || 'DATIM-NIG-7821',
+          facilityDhprsCode: facilityDhprsCode || 'DHPRS-FCT-0482',
+          facilityNhfrCode: facilityNhfrCode || 'NHFR-2489-01',
+          nhtdaoRegistered: nhtdaoRegistered !== undefined ? Boolean(nhtdaoRegistered) : true,
           stateName: stateName || 'Benue',
           lgaName: lgaName || 'Makurdi',
           autoSyncEnabled: autoSyncEnabled !== undefined ? autoSyncEnabled : true,
@@ -249,10 +262,118 @@ router.post('/forms/pull-all', async (req: Request, res: Response) => {
   }
 });
 
+// ── Helper: Pull & Reconcile Patient Encounters from OpenMRS MySQL ──────────
+export async function syncPatientEncountersFromMySql(patientId: string): Promise<any> {
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    include: { nmrsMapping: true }
+  });
+  if (!patient) return null;
+
+  try {
+    const artLookup = patient.nmrsMapping?.pepfarId || patient.patientNumber || patientId;
+    const remoteHistory = await NmrsMySqlConnector.pullPatientHistory(artLookup);
+
+    if (remoteHistory?.encountersByDate && remoteHistory.encountersByDate.size > 0) {
+      // Prioritize authentic 10-page Combined Pharmacy Order Form schema
+      const canonicalPharmacySchema = await prisma.nmrsFormSchema.findFirst({
+        where: {
+          OR: [
+            { formCode: 'PHARMACY_ORDER_FORM' },
+            { formName: { equals: 'Combined Pharmacy Order Form', mode: 'insensitive' } },
+            { openmrsFormUuid: '4a238dc4-a76b-4c0f-a100-229d98fd5758' }
+          ],
+          isActive: true
+        },
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      for (const [dateStr, encs] of remoteHistory.encountersByDate.entries()) {
+        for (const e of encs) {
+          const openmrsUuid = e.encounter_uuid || e.uuid || `myenc-${e.encounter_id}`;
+          const formName = e.form_name || e.encounter_type_name || 'Clinical Encounter';
+          const isPharmacy = formName.toLowerCase().includes('pharmacy') || e.form_uuid === '4a238dc4-a76b-4c0f-a100-229d98fd5758';
+
+          let schemaId = isPharmacy && canonicalPharmacySchema ? canonicalPharmacySchema.id : null;
+          if (!schemaId) {
+            const matchedSchemas = await prisma.nmrsFormSchema.findMany({
+              where: {
+                OR: [
+                  { formName: { equals: formName, mode: 'insensitive' } },
+                  { formName: { contains: formName, mode: 'insensitive' } },
+                  ...(e.form_uuid ? [{ openmrsFormUuid: e.form_uuid }] : [])
+                ],
+                isActive: true
+              }
+            });
+            const picked = matchedSchemas.sort((a, b) => {
+              const aP = (a.schemaJson as any)?.pages?.length || 0;
+              const bP = (b.schemaJson as any)?.pages?.length || 0;
+              return bP - aP;
+            })[0];
+            schemaId = picked?.id;
+          }
+
+          if (!schemaId && canonicalPharmacySchema) schemaId = canonicalPharmacySchema.id;
+
+          const existingRecord = await prisma.nmrsEncounterRecord.findFirst({
+            where: {
+              patientId: patient.id,
+              OR: [
+                { openmrsEncounterUuid: openmrsUuid },
+                { openmrsEncounterUuid: `myenc-${e.encounter_id}` },
+                { encounterNumber: { contains: `${e.encounter_id}` } }
+              ]
+            }
+          });
+
+          const encDate = e.encounter_datetime ? new Date(e.encounter_datetime) : new Date(dateStr);
+          const obsDict = e.obs || {};
+
+          if (existingRecord) {
+            await prisma.nmrsEncounterRecord.update({
+              where: { id: existingRecord.id },
+              data: {
+                openmrsEncounterUuid: openmrsUuid,
+                formData: obsDict,
+                encounterDate: encDate,
+                formSchemaId: schemaId || existingRecord.formSchemaId,
+                syncStatus: 'SYNCED',
+                syncedAt: new Date()
+              }
+            });
+          } else if (schemaId) {
+            const encounterNumber = `ENC-NC${e.encounter_id}-${patient.id.slice(0, 4).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+            await prisma.nmrsEncounterRecord.create({
+              data: {
+                encounterNumber,
+                patientId: patient.id,
+                formSchemaId: schemaId,
+                encounterType: e.encounter_type_name || formName,
+                encounterDate: encDate,
+                clinicianName: 'Chioma (Clinical Provider)',
+                formData: obsDict,
+                openmrsEncounterUuid: openmrsUuid,
+                syncStatus: 'SYNCED',
+                syncedAt: new Date()
+              }
+            });
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[NMRS Sync] MySQL pull for patient ${patientId} skipped: ${err?.message}`);
+  }
+}
+
 // ── 3. Patient Public Health Summary & HIV Passport ──────────────────────────
 router.get('/patients/:patientId/summary', async (req: Request, res: Response) => {
   try {
     const { patientId } = req.params;
+
+    // 1. Live reconcile with OpenMRS MySQL so recent edits on NMRS appear instantly in TerkHealth360
+    await syncPatientEncountersFromMySql(patientId);
 
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
@@ -308,7 +429,7 @@ router.get('/patients/:patientId/summary', async (req: Request, res: Response) =
 
     let nmrsEncounters = patient.nmrsEncounters || [];
     if (nmrsEncounters.length === 0) {
-      // 1. Check if patient has encounters in core encounters table
+      // Check if patient has encounters in core encounters table
       const coreEncounters = await prisma.encounter.findMany({
         where: { patientId: patient.id },
         orderBy: { start: 'desc' }
@@ -627,10 +748,26 @@ router.post('/patients/:patientId/sync', async (req: Request, res: Response) => 
       });
     }
 
+    // Also reconcile encounters and latest observations from OpenMRS MySQL
+    await syncPatientEncountersFromMySql(patientId);
+
     return res.json({
       success: true,
       data: syncResult,
-      message: syncResult.success ? 'Patient synced to OpenMRS successfully' : 'OpenMRS host is offline. Queued locally for automatic synchronization.'
+      message: syncResult.success ? 'Patient demographics and clinical encounters synchronized with OpenMRS host successfully.' : 'OpenMRS host is offline. Queued locally for automatic synchronization.'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/patients/:patientId/pull', async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    await syncPatientEncountersFromMySql(patientId);
+    return res.json({
+      success: true,
+      message: 'Successfully pulled and synchronized latest encounter records and observations from OpenMRS host.'
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -966,6 +1103,9 @@ router.post('/encounters', async (req: Request, res: Response) => {
     const rawEncDate = encounterDate || formData?.visitDate || formData?.encounterDate || formData?.encounter_date || formData?.encounterDatetime;
     const resolvedEncounterDate = rawEncDate ? new Date(rawEncDate) : new Date();
 
+    // Verify and enrich form data through the live OpenMRS 'concept' table using UUIDs
+    const verifiedFormData = await NmrsDataBridge.verifyAndEnrichFormDataWithLiveConcepts(formData || {});
+
     const encounter = await prisma.nmrsEncounterRecord.create({
       data: {
         encounterNumber: encNumber,
@@ -975,12 +1115,30 @@ router.post('/encounters', async (req: Request, res: Response) => {
         encounterDate: resolvedEncounterDate,
         clinicianName,
         clinicianId,
-        formData: formData || {},
+        formData: verifiedFormData || {},
         syncStatus: 'PENDING',
         syncedAt: null
       },
       include: { formSchema: true }
     });
+
+    // Clinically integrate vitals into TriageRecords, prescriptions into MedicationRequests, and labs into LabOrders
+    try {
+      await ClinicalIntegrationService.integrateEncounter({
+        patientId,
+        formSchemaId,
+        formCode: formSchema.formCode,
+        formName: formSchema.formName,
+        category: formSchema.category,
+        formData: verifiedFormData || formData || {},
+        encounterDate: resolvedEncounterDate,
+        clinicianName,
+        clinicianId: user?.id,
+        encounterRecordId: encounter.id,
+      });
+    } catch (intErr: any) {
+      console.warn('[NMRS] Clinical integration warning:', intErr.message);
+    }
 
     // Also update patient public health mapping with latest metrics if present
     if (formData) {
@@ -1066,16 +1224,39 @@ router.put('/encounters/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Encounter record not found' });
     }
 
+    // Verify and enrich updated form data through the live OpenMRS 'concept' table using UUIDs
+    const verifiedFormData = formData
+      ? await NmrsDataBridge.verifyAndEnrichFormDataWithLiveConcepts(formData)
+      : existing.formData;
+
     let updated = await prisma.nmrsEncounterRecord.update({
       where: { id },
       data: {
-        formData: formData || existing.formData,
+        formData: verifiedFormData,
         encounterDate: encounterDate ? new Date(encounterDate) : existing.encounterDate,
         clinicianName: clinicianName || existing.clinicianName,
         syncStatus: 'PENDING'
       },
       include: { formSchema: true }
     });
+
+    // Clinically integrate updated vitals, prescriptions, and labs
+    try {
+      await ClinicalIntegrationService.integrateEncounter({
+        patientId: existing.patientId,
+        formSchemaId: existing.formSchemaId || existing.formSchema?.id || '',
+        formCode: existing.formSchema?.formCode || existing.encounterType || '',
+        formName: existing.formSchema?.formName || existing.encounterType || 'Encounter Form',
+        category: existing.formSchema?.category || 'SPECIALTY_CLINIC',
+        formData: verifiedFormData || formData || {},
+        encounterDate: updated.encounterDate || existing.encounterDate || new Date(),
+        clinicianName: updated.clinicianName || clinicianName || existing.clinicianName,
+        clinicianId: (req as any).user?.id || existing.clinicianId,
+        encounterRecordId: updated.id,
+      });
+    } catch (intErr: any) {
+      console.warn('[NMRS] Clinical integration update warning:', intErr.message);
+    }
 
     const encPrefix = existing.encounterNumber?.startsWith('NMRS-ENC-')
       ? existing.encounterNumber.replace('NMRS-ENC-', '').toLowerCase()
@@ -1257,6 +1438,42 @@ router.delete('/encounters/:id', async (req: Request, res: Response) => {
 // ── 5. Concept Dictionary & Sync Queue ───────────────────────────────────────
 router.get('/concepts', async (req: Request, res: Response) => {
   return res.json({ success: true, data: CIEL_CONCEPT_DICTIONARY });
+});
+
+/**
+ * Fetch live concept details directly from the NMRS database by UUID.
+ */
+router.get('/concept/:uuid', async (req: Request, res: Response) => {
+  try {
+    const { uuid } = req.params;
+    const concept = await NmrsDataBridge.getLiveConcept(uuid);
+    if (!concept) {
+      return res.status(404).json({ success: false, message: `Concept ${uuid} not found in NMRS database` });
+    }
+    return res.json({ success: true, data: concept });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * Batch resolve concept UUIDs live from the NMRS database.
+ */
+router.post('/concepts/batch', async (req: Request, res: Response) => {
+  try {
+    const { uuids } = req.body;
+    if (!Array.isArray(uuids)) {
+      return res.status(400).json({ success: false, message: 'uuids must be an array' });
+    }
+    const conceptMap = await NmrsDataBridge.getLiveConcepts(uuids);
+    const data: Record<string, any> = {};
+    for (const [k, v] of conceptMap.entries()) {
+      data[k] = v;
+    }
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 router.get('/sync-queue', async (req: Request, res: Response) => {

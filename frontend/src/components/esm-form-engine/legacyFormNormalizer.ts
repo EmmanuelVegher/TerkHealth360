@@ -20,6 +20,13 @@ export const CIEL_CONCEPT_MAP: Record<string, string> = {
   '162565': '162565AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', // TDF-3TC-NVP
 
   // Drug Strengths & OpenMRS Concepts
+  '25_300_50mg': '25/300/50mg',
+  '25/300/50mg': '25/300/50mg',
+  '25/300/50Mg': '25/300/50mg',
+  'ffaaa42a-0c41-4e3f-a85a-7378f1c2efaf': '25/300/50mg',
+  'd0623bd6-525d-4aac-bfb5-d97184e29067': '25/300/50mg',
+  '167522': '25/300/50mg',
+  '167303': '25/300/50mg',
   '300_300_50mg': '300/300/50mg',
   '300_300_600mg': '300/300/600mg',
   '300_150_200mg': '300/150/200mg',
@@ -33,6 +40,11 @@ export const CIEL_CONCEPT_MAP: Record<string, string> = {
   '166044': '300/300/50mg',
   '300/300/50Mg': '300/300/50mg',
   '300/300/50mg': '300/300/50mg',
+  '6c32f10b-e26d-4299-97af-41b797a8253e': '6c32f10b-e26d-4299-97af-41b797a8253e', // TAF-3TC-DTG
+  '167517': '6c32f10b-e26d-4299-97af-41b797a8253e',
+  '2893350f-6710-40c6-b963-ff2d9789567d': '2893350f-6710-40c6-b963-ff2d9789567d', // Tenofovir-alafenamide/Lamivudine/Dolutegravir
+  '167520': '2893350f-6710-40c6-b963-ff2d9789567d',
+  'Tenofovir-alafenamide/Lamivudine/Dolutegravir': '2893350f-6710-40c6-b963-ff2d9789567d',
   '5ec4bfef-2e06-43ea-83f0-51de36117824': '8a343013-0216-44e0-aefe-53909ffd5631',
   '166043': '8a343013-0216-44e0-aefe-53909ffd5631',
   'Tenofovir/Lamivudine/Dolutegravir': '8a343013-0216-44e0-aefe-53909ffd5631',
@@ -48,7 +60,28 @@ export const CIEL_CONCEPT_MAP: Record<string, string> = {
   '1679': 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
   '300mg': 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
   '300Mg': 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
+  '100mg': '27f5a185-9791-45b2-89e8-89df69fdac71',
+  '100Mg': '27f5a185-9791-45b2-89e8-89df69fdac71',
+  '150Mg/75mg': 'cd94a1ed-2812-4170-8bc7-90abded1beab',
+  '150mg/75mg': 'cd94a1ed-2812-4170-8bc7-90abded1beab',
+  '150Mg/75mg/40mg': '550b250c-fcc8-4176-b833-2b1355982597',
+  '150mg/75mg/40mg': '550b250c-fcc8-4176-b833-2b1355982597',
+  '300/150mg': '6717b4c6-4cf3-4ef1-9734-f2da5300003f',
+  '300/150Mg': '6717b4c6-4cf3-4ef1-9734-f2da5300003f',
+  '300/300mg': 'fcd74eb9-c917-42b1-969a-696b15a5627c',
+  '300/300Mg': 'fcd74eb9-c917-42b1-969a-696b15a5627c',
+  'RHZE': '1675AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'RHZ': '768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'EH': '1108AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'RH': '1194',
+  'Twice daily': '160858AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'Four times daily': '160870AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  '3ce/week': 'a0c98b53-f014-4cb0-a41e-8503c608ef57',
+  'Nocte': '733e7044-f9b0-41bc-b069-87c95ecd6882',
   'dbf8a287-3c82-440b-bfc3-a4b9432f9183': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183', // Cotrimoxazole
+  '99577a67-24b2-448f-aeab-6f1b67f265d6': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183', // Cotrimoxazole (mapped from construct)
+  '165726': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
+  '165726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
   '165257': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
   'Cotrimoxazole Prophylaxis': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
   'Cotrimoxazole prophylaxis': 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
@@ -63,6 +96,8 @@ export const CIEL_CONCEPT_MAP: Record<string, string> = {
   'Once daily': '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
   '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', // Isoniazid
   'Isoniazid': '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'Isoniazid (INH)': '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  'INH': '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
 
   // Purpose of Prescription / Treatment Type
   'ART': '9b49eb5e-9ca9-4494-a2ff-f1d62b6feecc',
@@ -241,6 +276,9 @@ export function normalizeLegacyFormData(
     const regStr = String(rawRegimen).trim();
     norm.dispensedRegimen = regStr;
 
+    // Preserve explicit Drugs_ART_1 if set on raw record
+    const explicitDrug1 = raw.Drugs_ART_1 || raw['ARV Medication'] || raw.arv_medication;
+
     // Check if it's TDF/3TC/DTG (165681)
     if (
       regStr === '165681' ||
@@ -249,17 +287,17 @@ export function normalizeLegacyFormData(
       regStr.startsWith('1a')
     ) {
       norm.Adult_1st_Line_Regimens = '8a343013-0216-44e0-aefe-53909ffd5631';
-      norm.Drugs_ART_1 = '8a343013-0216-44e0-aefe-53909ffd5631';
+      norm.Drugs_ART_1 = explicitDrug1 || '8a343013-0216-44e0-aefe-53909ffd5631';
       norm.name_of_drug_pharm = 'Tenofovir / Lamivudine / Dolutegravir (TDF/3TC/DTG)';
     } else if (regStr === '164505' || regStr.includes('EFV') || regStr.startsWith('1b')) {
       norm.Adult_1st_Line_Regimens = '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-      norm.Drugs_ART_1 = '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      norm.Drugs_ART_1 = explicitDrug1 || '164505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     } else if (regStr === '1652' || regStr.includes('AZT') || regStr.includes('NVP')) {
       norm.Adult_1st_Line_Regimens = '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-      norm.Drugs_ART_1 = '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      norm.Drugs_ART_1 = explicitDrug1 || '1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     } else {
       norm.Adult_1st_Line_Regimens = regStr;
-      norm.Drugs_ART_1 = regStr;
+      norm.Drugs_ART_1 = explicitDrug1 || regStr;
     }
 
     // Auto-fulfill ESM prerequisite fields to unhide regimen lines:
@@ -270,22 +308,61 @@ export function normalizeLegacyFormData(
     norm.regimen_line = norm.regimen_line || '164506AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     norm.Treatment_type = norm.Treatment_type || '9b49eb5e-9ca9-4494-a2ff-f1d62b6feecc';
 
-    // Ensure Drug Strength for ARV Drug 1
-    const rawStrength = norm.Drug_Strength_ART_1 || raw.Drug_Strength_ART_1 || raw['ARV Drug Strength'] || raw.drug_strength;
-    if (rawStrength) {
-      const strStrength = String(rawStrength);
-      if (
-        strStrength === '166044' ||
-        strStrength === '0cd9c98e-7f52-48b9-a987-404ec90cc5fe' ||
-        strStrength.toLowerCase().includes('300/300/50') ||
-        strStrength.toLowerCase() === '300/300/50mg'
-      ) {
-        norm.Drug_Strength_ART_1 = '300/300/50mg';
-      } else {
-        norm.Drug_Strength_ART_1 = CIEL_CONCEPT_MAP[rawStrength] || rawStrength;
+    // Ensure Drug Strength for ARV Drug rows 1 to 5 (human-readable names instead of concept UUIDs)
+    const STRENGTH_UUID_MAP: Record<string, string> = {
+      'ffaaa42a-0c41-4e3f-a85a-7378f1c2efaf': '25/300/50mg',
+      '167522': '25/300/50mg',
+      'd0623bd6-525d-4aac-bfb5-d97184e29067': '25/300/50mg',
+      '167303': '25/300/50mg',
+      '0cd9c98e-7f52-48b9-a987-404ec90cc5fe': '300/300/50mg',
+      '166044': '300/300/50mg',
+      '4db3bbfd-2e59-48af-ba55-1b6deed9ec32': '300/300/600mg',
+      '165618': '300/300/600mg',
+      'd1359cec-4457-4699-b050-7b65a25c1ca3': '300/150/200mg',
+      '165620': '300/150/200mg',
+      'fcd74eb9-c917-42b1-969a-696b15a5627c': '300/300mg',
+      '165621': '300/300mg',
+      '6717b4c6-4cf3-4ef1-9734-f2da5300003f': '300/150mg',
+      '165622': '300/150mg',
+      'ddd236eb-b5af-465f-9c37-862741ca75a6': '300/100mg',
+      '165624': '300/100mg',
+      '9339100a-1fe3-4978-9af1-a6ee868840ac': '200/50mg',
+      '165625': '200/50mg',
+      'abbb66b8-61c9-4b58-bad6-edf1efa546e1': '300mg',
+      '165074': '300mg',
+      'c543792b-6225-4a70-8e1f-04ea5be06212': '50mg',
+      '165617': '50mg',
+    };
+
+    for (let i = 1; i <= 5; i++) {
+      const fieldKey = `Drug_Strength_ART_${i}`;
+      const rawVal = norm[fieldKey] || raw[fieldKey] || (i === 1 ? (raw['ARV Drug Strength'] || raw.drug_strength) : undefined);
+      if (rawVal) {
+        const strVal = String(rawVal).trim();
+        if (STRENGTH_UUID_MAP[strVal]) {
+          norm[fieldKey] = STRENGTH_UUID_MAP[strVal];
+        } else if (strVal.toLowerCase().includes('25/300/50')) {
+          norm[fieldKey] = '25/300/50mg';
+        } else if (strVal.toLowerCase().includes('300/300/50')) {
+          norm[fieldKey] = '300/300/50mg';
+        } else if (CIEL_CONCEPT_MAP[strVal]) {
+          norm[fieldKey] = CIEL_CONCEPT_MAP[strVal];
+        } else {
+          norm[fieldKey] = strVal;
+        }
       }
-    } else if (norm.Drugs_ART_1) {
-      norm.Drug_Strength_ART_1 = '300/300/50mg';
+    }
+
+    // Ensure orphan ARV drug rows (2 to 5) are purged if no drug was selected
+    for (let i = 2; i <= 5; i++) {
+      if (!norm[`Drugs_ART_${i}`]) {
+        delete norm[`Drug_Strength_ART_${i}`];
+        delete norm[`Drug_Frequency_ART_${i}`];
+        delete norm[`duration_pharm_ART_${i}`];
+        delete norm[`qty_prescribed_pharm_ART_${i}`];
+        delete norm[`arvDispensedInDays_ART_${i}`];
+        delete norm[`qty_dispensed_pharm_ART_${i}`];
+      }
     }
   }
 
@@ -306,17 +383,21 @@ export function normalizeLegacyFormData(
     norm.refillMonths = String(months);
     norm.arvDispensedInDays_ART_1 = norm.arvDispensedInDays_ART_1 ?? days;
     norm.duration_pharm_ART_1 = norm.duration_pharm_ART_1 ?? days;
-    norm.tb_prevDispensedInDays = norm.tb_prevDispensedInDays ?? days;
-    norm.prepDispensedInDays = norm.prepDispensedInDays ?? days;
   }
 
-  // ── 4. Quantity Dispensed ─────────────────────────────────────────────────
-  const rawQty = raw.quantityDispensed || raw.quantity_dispensed || raw.qty_dispensed_pharm_ART_1;
-  if (rawQty !== undefined && rawQty !== null && rawQty !== '') {
-    const numQty = Number(rawQty) || 90;
-    norm.quantityDispensed = numQty;
-    norm.qty_dispensed_pharm_ART_1 = numQty;
-    norm.qty_prescribed_pharm_ART_1 = numQty;
+  // ── 4. Quantity Dispensed & Prescribed ──────────────────────────────────
+  if (raw.qty_dispensed_pharm_ART_1 !== undefined && raw.qty_dispensed_pharm_ART_1 !== null && raw.qty_dispensed_pharm_ART_1 !== '') {
+    norm.qty_dispensed_pharm_ART_1 = Number(raw.qty_dispensed_pharm_ART_1);
+  } else if (raw.quantityDispensed !== undefined && raw.quantityDispensed !== null && raw.quantityDispensed !== '') {
+    norm.qty_dispensed_pharm_ART_1 = Number(raw.quantityDispensed);
+  }
+
+  if (raw.qty_prescribed_pharm_ART_1 !== undefined && raw.qty_prescribed_pharm_ART_1 !== null && raw.qty_prescribed_pharm_ART_1 !== '') {
+    norm.qty_prescribed_pharm_ART_1 = Number(raw.qty_prescribed_pharm_ART_1);
+  } else if (raw.quantityPrescribed !== undefined && raw.quantityPrescribed !== null && raw.quantityPrescribed !== '') {
+    norm.qty_prescribed_pharm_ART_1 = Number(raw.quantityPrescribed);
+  } else if (norm.qty_dispensed_pharm_ART_1 !== undefined && norm.qty_prescribed_pharm_ART_1 === undefined) {
+    norm.qty_prescribed_pharm_ART_1 = norm.qty_dispensed_pharm_ART_1;
   }
 
   // ── 5. Pharmacist Feedback ────────────────────────────────────────────────
@@ -403,44 +484,74 @@ export function normalizeLegacyFormData(
   }
   // ── 11. Repeating Groups Normalization (OI Prophylaxis, TB Prevention, PrEP Drugs) ──
   // A. OI Prophylaxis
-  if (Array.isArray(norm.oi_prophylaxis) && norm.oi_prophylaxis.length > 0) {
-    norm.oi_prophylaxis = norm.oi_prophylaxis.map((item: any) => ({
-      ...item,
-      drugs_Cotrim: CIEL_CONCEPT_MAP[item.drugs_Cotrim] || item.drugs_Cotrim || 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
-      oi_prophylaxis_drug_strength: CIEL_CONCEPT_MAP[item.oi_prophylaxis_drug_strength] || item.oi_prophylaxis_drug_strength || 'c03561ed-1402-4bfe-b95d-9547fe6b9bf7',
-      oi_prophylaxis_drug_frequency: CIEL_CONCEPT_MAP[item.oi_prophylaxis_drug_frequency] || item.oi_prophylaxis_drug_frequency || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    }));
+  if (Array.isArray(norm.oi_prophylaxis)) {
+    const seen = new Set<string>();
+    const unique: any[] = [];
+    for (const item of norm.oi_prophylaxis) {
+      if (!item || typeof item !== 'object') continue;
+      const drug = CIEL_CONCEPT_MAP[item.drugs_Cotrim] || item.drugs_Cotrim || item['OI Drugs'] || item['OI drugs'];
+      if (!drug) continue;
+      const sig = `${drug}|${item.oi_prophylaxis_drug_strength || ''}|${item.qty_prescribed_Cotrim || ''}`;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+
+      unique.push({
+        drugs_Cotrim: CIEL_CONCEPT_MAP[drug] || drug,
+        oi_prophylaxis_drug_strength: CIEL_CONCEPT_MAP[item.oi_prophylaxis_drug_strength] || item.oi_prophylaxis_drug_strength || 'c03561ed-1402-4bfe-b95d-9547fe6b9bf7',
+        oi_prophylaxis_drug_frequency: CIEL_CONCEPT_MAP[item.oi_prophylaxis_drug_frequency] || item.oi_prophylaxis_drug_frequency || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        oi_prophylaxis_duration_Pres: item.oi_prophylaxis_duration_Pres === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (item.oi_prophylaxis_duration_Pres ?? 90),
+        qty_prescribed_Cotrim: item.qty_prescribed_Cotrim === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (item.qty_prescribed_Cotrim ?? 90),
+        oi_prophylaxisDispensedInDays: item.oi_prophylaxisDispensedInDays === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (item.oi_prophylaxisDispensedInDays ?? 90),
+        oi_prophylaxis_qty_dispensed: item.oi_prophylaxis_qty_dispensed === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (item.oi_prophylaxis_qty_dispensed ?? 90),
+      });
+    }
+    norm.oi_prophylaxis = unique;
   } else {
     const rawOiDrug = raw.drugs_Cotrim || raw['OI Drugs'] || raw['OI drugs'] || raw.oi_drug;
     if (rawOiDrug) {
       norm.oi_prophylaxis = [
         {
-          drugs_Cotrim: CIEL_CONCEPT_MAP[rawOiDrug] || 'dbf8a287-3c82-440b-bfc3-a4b9432f9183',
+          drugs_Cotrim: CIEL_CONCEPT_MAP[rawOiDrug] || rawOiDrug,
           oi_prophylaxis_drug_strength: CIEL_CONCEPT_MAP[raw.oi_prophylaxis_drug_strength || raw['ARV Drug Strength']] || 'c03561ed-1402-4bfe-b95d-9547fe6b9bf7',
           oi_prophylaxis_drug_frequency: CIEL_CONCEPT_MAP[raw.oi_prophylaxis_drug_frequency || raw['Drug Frequency']] || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-          oi_prophylaxis_duration_Pres: raw.oi_prophylaxis_duration_Pres || raw['Medication duration'] || 120,
-          qty_prescribed_Cotrim: raw.qty_prescribed_Cotrim || raw['Quantity of medication prescribed per dose'] || 120,
-          oi_prophylaxisDispensedInDays: raw.oi_prophylaxisDispensedInDays || raw['Medication Duration Dispensed'] || 120,
-          oi_prophylaxis_qty_dispensed: raw.oi_prophylaxis_qty_dispensed || raw['Medication dispensed'] || 120,
+          oi_prophylaxis_duration_Pres: raw.oi_prophylaxis_duration_Pres === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (raw.oi_prophylaxis_duration_Pres || raw['Medication duration'] || 90),
+          qty_prescribed_Cotrim: raw.qty_prescribed_Cotrim === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (raw.qty_prescribed_Cotrim || raw['Quantity of medication prescribed per dose'] || 90),
+          oi_prophylaxisDispensedInDays: raw.oi_prophylaxisDispensedInDays === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (raw.oi_prophylaxisDispensedInDays || raw['Medication Duration Dispensed'] || 90),
+          oi_prophylaxis_qty_dispensed: raw.oi_prophylaxis_qty_dispensed === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ? 180 : (raw.oi_prophylaxis_qty_dispensed || raw['Medication dispensed'] || 90),
         }
       ];
     }
   }
 
   // B. TB Prevention
-  if (Array.isArray(norm.tb_prev) && norm.tb_prev.length > 0) {
-    norm.tb_prev = norm.tb_prev.map((item: any) => ({
-      ...item,
-      tb_prev_drugs: CIEL_CONCEPT_MAP[item.tb_prev_drugs] || item.tb_prev_drugs || '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-      tb_prev_drugs_strength: CIEL_CONCEPT_MAP[item.tb_prev_drugs_strength] || item.tb_prev_drugs_strength || 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
-      tb_prev_drugs_frequency: CIEL_CONCEPT_MAP[item.tb_prev_drugs_frequency] || item.tb_prev_drugs_frequency || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    }));
+  if (Array.isArray(norm.tb_prev)) {
+    const uniqueTb: any[] = [];
+    const seenTb = new Set<string>();
+    for (const item of norm.tb_prev) {
+      if (!item || typeof item !== 'object') continue;
+      const drug = CIEL_CONCEPT_MAP[item.tb_prev_drugs] || item.tb_prev_drugs || item['TB Drugs'] || item['TB drugs'];
+      if (!drug) continue;
+      const sig = `${drug}|${item.tb_prev_drugs_strength || ''}|${item.qty_prescribed_tb_prev || ''}`;
+      if (seenTb.has(sig)) continue;
+      seenTb.add(sig);
+
+      uniqueTb.push({
+        tb_prev_drugs: CIEL_CONCEPT_MAP[drug] || drug,
+        tb_prev_drugs_strength: CIEL_CONCEPT_MAP[item.tb_prev_drugs_strength] || item.tb_prev_drugs_strength || 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
+        tb_prev_drugs_frequency: CIEL_CONCEPT_MAP[item.tb_prev_drugs_frequency] || item.tb_prev_drugs_frequency || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        tb_prev_drugs_duration_Pres: item.tb_prev_drugs_duration_Pres ?? 120,
+        qty_prescribed_tb_prev: item.qty_prescribed_tb_prev ?? 120,
+        tb_prevDispensedInDays: item.tb_prevDispensedInDays ?? 120,
+        tb_prev_drugs_qty_dispensed: item.tb_prev_drugs_qty_dispensed ?? 120,
+      });
+    }
+    norm.tb_prev = uniqueTb;
   } else {
     const rawTbDrug = raw.tb_prev_drugs || raw['TB Drugs'] || raw['TB drugs'];
     if (rawTbDrug) {
       norm.tb_prev = [
         {
-          tb_prev_drugs: CIEL_CONCEPT_MAP[rawTbDrug] || '656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          tb_prev_drugs: CIEL_CONCEPT_MAP[rawTbDrug] || rawTbDrug,
           tb_prev_drugs_strength: CIEL_CONCEPT_MAP[raw.tb_prev_drugs_strength] || 'abbb66b8-61c9-4b58-bad6-edf1efa546e1',
           tb_prev_drugs_frequency: CIEL_CONCEPT_MAP[raw.tb_prev_drugs_frequency] || '160862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
           tb_prev_drugs_duration_Pres: raw.tb_prev_drugs_duration_Pres || 120,
@@ -453,19 +564,34 @@ export function normalizeLegacyFormData(
   }
 
   // C. PrEP Drugs
-  if (Array.isArray(norm.prepdrug) && norm.prepdrug.length > 0) {
-    norm.prepdrug = norm.prepdrug.map((item: any) => ({
-      ...item,
-      prev_drugs: CIEL_CONCEPT_MAP[item.prev_drugs] || item.prev_drugs || 'c83188a1-f411-49f5-a1b6-19881a0354a2',
-      prev_drugs_strength: CIEL_CONCEPT_MAP[item.prev_drugs_strength] || item.prev_drugs_strength || 'd6a11b94-efe5-415e-8071-29d75356bac0',
-      prev_drugs_frequency: CIEL_CONCEPT_MAP[item.prev_drugs_frequency] || item.prev_drugs_frequency || '6f973a60-16a5-49bc-9278-300a9e998646',
-    }));
+  if (Array.isArray(norm.prepdrug)) {
+    const uniquePrep: any[] = [];
+    const seenPrep = new Set<string>();
+    for (const item of norm.prepdrug) {
+      if (!item || typeof item !== 'object') continue;
+      const drug = CIEL_CONCEPT_MAP[item.prev_drugs] || item.prev_drugs || item['PrEP Regimen'] || item['PrEP drugs'];
+      if (!drug) continue;
+      const sig = `${drug}|${item.prev_drugs_strength || ''}|${item.qty_prescribed_prev || ''}`;
+      if (seenPrep.has(sig)) continue;
+      seenPrep.add(sig);
+
+      uniquePrep.push({
+        prev_drugs: CIEL_CONCEPT_MAP[drug] || drug,
+        prev_drugs_strength: CIEL_CONCEPT_MAP[item.prev_drugs_strength] || item.prev_drugs_strength || 'd6a11b94-efe5-415e-8071-29d75356bac0',
+        prev_drugs_frequency: CIEL_CONCEPT_MAP[item.prev_drugs_frequency] || item.prev_drugs_frequency || '6f973a60-16a5-49bc-9278-300a9e998646',
+        prepdura: item.prepdura ?? 30,
+        qty_prescribed_prev: item.qty_prescribed_prev ?? 30,
+        prepDispensedInDays: item.prepDispensedInDays ?? 30,
+        prep_drugs_qty_dispensed: item.prep_drugs_qty_dispensed ?? 30,
+      });
+    }
+    norm.prepdrug = uniquePrep;
   } else {
     const rawPrepDrug = raw.prev_drugs || raw['PrEP Regimen'] || raw['PrEP drugs'];
     if (rawPrepDrug) {
       norm.prepdrug = [
         {
-          prev_drugs: CIEL_CONCEPT_MAP[rawPrepDrug] || 'c83188a1-f411-49f5-a1b6-19881a0354a2',
+          prev_drugs: CIEL_CONCEPT_MAP[rawPrepDrug] || rawPrepDrug,
           prev_drugs_strength: CIEL_CONCEPT_MAP[raw.prev_drugs_strength] || 'd6a11b94-efe5-415e-8071-29d75356bac0',
           prev_drugs_frequency: CIEL_CONCEPT_MAP[raw.prev_drugs_frequency] || '6f973a60-16a5-49bc-9278-300a9e998646',
           prepdura: raw.prepdura || 30,
@@ -477,37 +603,79 @@ export function normalizeLegacyFormData(
     }
   }
 
+  // D. Other Drugs
+  if (Array.isArray(norm.others_prev)) {
+    const uniqueOthers: any[] = [];
+    const seenOthers = new Set<string>();
+    for (const item of norm.others_prev) {
+      if (!item || typeof item !== 'object') continue;
+      const drug = CIEL_CONCEPT_MAP[item.other_prev_drugs] || item.other_prev_drugs || item['Other Drugs'];
+      if (!drug) continue;
+      const sig = `${drug}|${item.other_prev_drugs_strength || ''}|${item.qty_prescribed_other_prev || ''}`;
+      if (seenOthers.has(sig)) continue;
+      seenOthers.add(sig);
+
+      uniqueOthers.push({
+        other_prev_drugs: CIEL_CONCEPT_MAP[drug] || drug,
+        other_prev_drugs_strength: CIEL_CONCEPT_MAP[item.other_prev_drugs_strength] || item.other_prev_drugs_strength || '',
+        other_prev_drugs_frequency: CIEL_CONCEPT_MAP[item.other_prev_drugs_frequency] || item.other_prev_drugs_frequency || '',
+        other_prev_drugs_duration_Pres: item.other_prev_drugs_duration_Pres ?? 30,
+        qty_prescribed_other_prev: item.qty_prescribed_other_prev ?? 30,
+        other_prevDispensedInDays: item.other_prevDispensedInDays ?? 30,
+        other_prev_drugs_qty_dispensed: item.other_prev_drugs_qty_dispensed ?? 30,
+      });
+    }
+    norm.others_prev = uniqueOthers;
+  }
+
+  // Sanitize any remaining concept 180 UUIDs in numeric fields
+  for (const [k, v] of Object.entries(norm)) {
+    if (v === '180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA') {
+      norm[k] = 180;
+    }
+  }
+
   return norm;
 }
 
 /**
  * Resolves the active value for a form field, checking direct question ID,
  * normalized keys, concept UUIDs, labels, and common clinical aliases.
+ * Strictly isolates indexed obs groups (_ART_2..5, _2..5) so fields never cross-pollinate.
  */
 export function resolveFieldValue(q: any, formValues: Record<string, any>): any {
   if (!q || !formValues) return undefined;
 
-  // 1. Direct key
-  if (formValues[q.id] !== undefined && formValues[q.id] !== '') {
-    return formValues[q.id];
+  const rawId = String(q.id || '').trim();
+
+  // 1. Direct exact key match
+  if (formValues[rawId] !== undefined && formValues[rawId] !== '') {
+    return formValues[rawId];
   }
 
-  // 2. Case-insensitive / whitespace-normalized key
-  const normId = (q.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // 2. Case-insensitive exact key match
+  const normId = rawId.toLowerCase().replace(/[^a-z0-9]/g, '');
   for (const [k, v] of Object.entries(formValues)) {
     if (v !== undefined && v !== '' && k.toLowerCase().replace(/[^a-z0-9]/g, '') === normId) {
       return v;
     }
   }
 
-  // 3. Label match
+  // If this question belongs to an indexed group or has a numbered suffix (_ART_2..5, _2..5),
+  // NEVER fall back to global aliases or _ART_1 fields! Separate obs groups must remain strictly isolated.
+  const hasIndexSuffix = /_(?:art_)?([2-9]|\d{2,})$/i.test(rawId) || /arvdrug_[2-9]/i.test(rawId);
+  if (hasIndexSuffix) {
+    return undefined;
+  }
+
+  // 3. Label match (only for non-indexed fields)
   if (q.label && formValues[q.label] !== undefined && formValues[q.label] !== '') {
     return formValues[q.label];
   }
 
-  // 4. Concept UUID / CIEL ID match
+  // 4. Concept UUID / CIEL ID match (only for standalone fields, never for indexed ARV groups)
   const concept = q.questionOptions?.concept || q.concept;
-  if (concept) {
+  if (concept && !rawId.includes('_ART_')) {
     if (formValues[concept] !== undefined && formValues[concept] !== '') {
       return formValues[concept];
     }
@@ -517,8 +685,8 @@ export function resolveFieldValue(q: any, formValues: Record<string, any>): any 
     }
   }
 
-  // 5. Common Domain Aliases
-  if (normId.includes('visitdate') || normId.includes('encounterdatetime') || normId.includes('encounterdate')) {
+  // 5. Common Domain Aliases (ONLY for specific top-level standalone fields)
+  if (rawId === 'visitDate' || rawId === 'encounterDatetime' || rawId === 'encounterDate') {
     return (
       formValues.visitDate ??
       formValues.visit_date ??
@@ -529,20 +697,17 @@ export function resolveFieldValue(q: any, formValues: Record<string, any>): any 
     );
   }
 
-  if (normId.includes('regimen') || normId.includes('arvdrug')) {
+  if (rawId === 'Drugs_ART_1' || rawId === 'currentRegimen' || rawId === 'dispensedRegimen') {
     return (
+      formValues.Drugs_ART_1 ??
       formValues.Adult_1st_Line_Regimens ??
       formValues.dispensedRegimen ??
       formValues['Adult 1st Line ARV Regimen'] ??
-      formValues.currentRegimen ??
-      formValues.Drugs_ART_1
+      formValues.currentRegimen
     );
   }
 
-  if (normId.includes('refill') || normId.includes('duration') || normId.includes('dispensedindays')) {
-    if (normId === 'refill') {
-      return formValues.refill ?? (formValues.refillMonths ? '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' : undefined);
-    }
+  if (rawId === 'arvDispensedInDays_ART_1' || rawId === 'duration_pharm_ART_1') {
     return (
       formValues.arvDispensedInDays_ART_1 ??
       formValues.duration_pharm_ART_1 ??
@@ -550,39 +715,35 @@ export function resolveFieldValue(q: any, formValues: Record<string, any>): any 
     );
   }
 
-  if (normId.includes('qty') || normId.includes('quantity')) {
+  if (rawId === 'qty_dispensed_pharm_ART_1' || rawId === 'qty_prescribed_pharm_ART_1' || rawId === 'quantityDispensed') {
     return (
       formValues.qty_dispensed_pharm_ART_1 ??
-      formValues.quantityDispensed ??
-      formValues.qty_prescribed_pharm_ART_1
+      formValues.qty_prescribed_pharm_ART_1 ??
+      formValues.quantityDispensed
     );
   }
 
-  if (normId.includes('feedback') || normId.includes('error')) {
-    return (
-      formValues.name_of_arv_error_pharm ??
-      formValues.pharmacistFeedback ??
-      formValues.feedback_pharmacist
-    );
+  if (rawId === 'refill') {
+    return formValues.refill ?? (formValues.refillMonths ? '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' : undefined);
   }
 
-  if (normId.includes('weight')) {
+  if (normId === 'weight' || normId === 'latestweight') {
     return formValues.Weight ?? formValues.weight ?? formValues.latestWeight ?? formValues.latest_weight;
   }
 
-  if (normId.includes('height')) {
+  if (normId === 'height' || normId === 'latestheight') {
     return formValues['Height (cm)'] ?? formValues.Height ?? formValues.height ?? formValues.latestHeight ?? formValues.latest_height;
   }
 
-  if (normId.includes('bmi')) {
-    return formValues['Body mass index'] ?? formValues.bodyMassIndex ?? formValues.bmi;
+  if (normId === 'bmi' || normId === 'bodymassindex' || normId === 'calculatedbmi') {
+    return formValues['Body mass index'] ?? formValues.bodyMassIndex ?? formValues.bmi ?? formValues.calculatedBmi;
   }
 
-  if (normId.includes('dsd') || normId.includes('modality')) {
+  if (normId === 'dispensingmodality' || normId === 'dsdstatus') {
     return formValues.Dispensing_Modality ?? formValues['DSD Status'] ?? formValues.dsdStatus;
   }
 
-  if (normId.includes('functional')) {
+  if (normId === 'functionalstatus') {
     return formValues.functional_status ?? formValues['Functional Status'] ?? formValues.functionalStatus;
   }
 

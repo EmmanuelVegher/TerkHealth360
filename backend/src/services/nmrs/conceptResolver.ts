@@ -56,6 +56,16 @@ export const CIEL_CONCEPT_ID_MAP: Record<number, string> = {
   165277: 'Currently on TPT (Isoniazid)',
   165278: 'Completed TPT Course',
   165279: 'TPT Contraindicated / Ineligible',
+  167469: 'TB Preventive Therapy (TPT Construct)',
+  165727: 'TB Prophylaxis Drug',
+  165725: 'Drug Strength',
+  160855: 'Drug Frequency',
+  1679: '300mg',
+  165060: '100mg',
+  165062: '150mg/75mg',
+  165063: '150mg/75mg/40mg',
+  165064: '300/150mg',
+  165065: '300/300mg',
 
   // ── Clinical Adherence & Functional Status ──
   165290: 'ARV Medication Adherence Rate',
@@ -123,6 +133,16 @@ export const CIEL_CONCEPT_UUID_MAP: Record<string, string> = {
   '1658AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Patient Functional Status',
   '165257AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Cotrimoxazole (CTX) Prophylaxis',
   '165275AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'TB Preventive Therapy (TPT Status)',
+  'f3772dae-fc93-4428-baa7-268f83462e3f': 'TB Preventive Therapy (TPT Construct)',
+  'b04e1799-87fa-476c-bd43-c05a7de70a69': 'TB Prophylaxis Drug',
+  '21ea74ee-f6fa-4c55-be36-6337a8f4086c': 'TB Drug Strength',
+  '4919b76b-81e6-41c7-a5b5-cb383ff4b2fa': 'TB Drug Frequency',
+  'abbb66b8-61c9-4b58-bad6-edf1efa546e1': '300mg',
+  '27f5a185-9791-45b2-89e8-89df69fdac71': '100mg',
+  'cd94a1ed-2812-4170-8bc7-90abded1beab': '150mg/75mg',
+  '550b250c-fcc8-4176-b833-2b1355982597': '150mg/75mg/40mg',
+  '6717b4c6-4cf3-4ef1-9734-f2da5300003f': '300/150mg',
+  'fcd74eb9-c917-42b1-969a-696b15a5627c': '300/300mg',
   '5096AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': 'Next Appointment Date'
 };
 

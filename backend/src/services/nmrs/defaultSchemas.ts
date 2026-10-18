@@ -1190,7 +1190,6 @@ const PHARMACY_ORDER: FormSchemaDefinition = {
   description: 'National Pharmacy ARV dispensing, multi-month refills, and opportunistic infection meds.',
   category: 'PHARMACY',
   version: '2.0.0',
-  openmrsFormUuid: '4a238dc4-a76b-4c0f-a100-229d98fd5758',
   pages: [
     {
       label: 'Pharmacy Dispensing',
@@ -1462,6 +1461,31 @@ const TB_SCREENING_TPT: FormSchemaDefinition = {
 };
 TB_SCREENING_TPT.sections = TB_SCREENING_TPT.pages.flatMap(p => p.sections);
 
+// Auto-populate options on all questions from questionOptions.answers if options not explicitly set
+function normalizeSchemaQuestions(schema: FormSchemaDefinition): FormSchemaDefinition {
+  const visitQuestions = (qs: FormQuestionSchema[]) => {
+    for (const q of qs) {
+      if ((!q.options || q.options.length === 0) && q.questionOptions?.answers) {
+        q.options = q.questionOptions.answers.map(a => ({
+          label: a.label,
+          value: String(a.concept),
+          conceptId: typeof a.concept === "number" ? a.concept : (Number(a.concept) || undefined)
+        }));
+      }
+      if (q.questions) visitQuestions(q.questions);
+    }
+  };
+  for (const page of schema.pages || []) {
+    for (const sec of page.sections || []) {
+      if (sec.questions) visitQuestions(sec.questions);
+    }
+  }
+  for (const sec of schema.sections || []) {
+    if (sec.questions) visitQuestions(sec.questions);
+  }
+  return schema;
+}
+
 export const DEFAULT_NMRS_SCHEMAS: FormSchemaDefinition[] = [
   CARE_CARD_MASTER,
   CARE_CARD_1A,
@@ -1476,4 +1500,4 @@ export const DEFAULT_NMRS_SCHEMAS: FormSchemaDefinition[] = [
   EAC_REGISTER,
   PREP_PEP_CARD,
   TB_SCREENING_TPT
-];
+].map(normalizeSchemaQuestions);

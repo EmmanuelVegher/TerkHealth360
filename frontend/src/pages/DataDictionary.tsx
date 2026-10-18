@@ -1,50 +1,63 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Button, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
+  TablePagination, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   MenuItem, InputAdornment, Stack, Tabs, Tab, Alert, FormControl,
   InputLabel, Select, CircularProgress, Paper, Tooltip, Switch, FormControlLabel,
-  Accordion, AccordionSummary, AccordionDetails, Menu
+  Accordion, AccordionSummary, AccordionDetails, Menu, LinearProgress
 } from '@mui/material';
 import {
   Search, Add, Download, Hub, LocalHospital, Science, LocalPharmacy,
   Receipt, Bloodtype, MonitorHeart, Refresh, CheckCircle, Category,
   Link as LinkIcon, MenuBook, Code, Storage, Language, CloudDownload,
-  ExpandMore, Public, ContentCopy, Visibility, AccountTree, FileDownload
+  ExpandMore, Public, ContentCopy, Visibility, AccountTree, FileDownload,
+  Clear, Dns
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { api } from '../services/api';
 
 const SYSTEM_CONFIG: Record<string, { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'error' | 'default'; uri: string; dept: string; countStr: string }> = {
-  LOINC:   { label: 'LOINC',   color: 'info',      uri: 'http://loinc.org',                       dept: 'Laboratory & Vitals', countStr: '109,325 Concepts' },
-  ICD10:   { label: 'ICD-10',  color: 'primary',   uri: 'http://hl7.org/fhir/sid/icd-10',         dept: 'Clinical Diagnoses',   countStr: '71,704 Codes' },
-  RXNORM:  { label: 'RxNorm',  color: 'success',   uri: 'http://www.nlm.nih.gov/research/umls/rxnorm', dept: 'Pharmacy & Dispensary', countStr: '118,500 Formulations' },
-  CPT:     { label: 'CPT-4',   color: 'warning',   uri: 'http://www.ama-assn.org/go/cpt',         dept: 'Billing & Insurance', countStr: '10,000 Tariffs' },
-  ISBT128: { label: 'ISBT 128',color: 'error',     uri: 'http://isbt128.org',                      dept: 'Blood Bank',          countStr: '5,000 Products' },
-  SNOMED:  { label: 'SNOMED CT',color:'secondary', uri: 'http://snomed.info/sct',                 dept: 'Clinical Terminology', countStr: '350,000 Concepts' },
+  ICD11:   { label: 'ICD-11 MMS', color: 'primary',   uri: 'http://id.who.int/icd/release/11/mms',         dept: 'WHO Diagnoses (NHTDAO Mandatory)', countStr: '35,000 Categories' },
+  ATC:     { label: 'WHO ATC',   color: 'success',   uri: 'http://www.whocc.no/atc',                      dept: 'WHO Formulary Classification (NHTDAO)', countStr: '6,500 Substances' },
+  LOINC:   { label: 'LOINC',   color: 'info',      uri: 'http://loinc.org',                             dept: 'Laboratory & Pathology', countStr: '109,328 Concepts' },
+  ICD10:   { label: 'ICD-10-CM',  color: 'primary',   uri: 'http://hl7.org/fhir/sid/icd-10',               dept: 'Clinical Diagnoses & Morbidity', countStr: '71,712 Codes' },
+  RXNORM:  { label: 'RxNorm',  color: 'success',   uri: 'http://www.nlm.nih.gov/research/umls/rxnorm',   dept: 'Pharmacy & Dispensary', countStr: '118,523 Formulations' },
+  CPT:     { label: 'CPT-4 / HCPCS', color: 'warning', uri: 'http://www.ama-assn.org/go/cpt',             dept: 'Billing & Tariffs', countStr: '16,324 Tariffs' },
+  ISBT128: { label: 'ISBT 128', color: 'error', uri: 'http://isbt128.org',                               dept: 'Blood Bank & Cellular Therapy', countStr: '5,094 Products' },
+  SNOMED:  { label: 'SNOMED CT',color:'secondary', uri: 'http://snomed.info/sct',                       dept: 'Clinical Terminology', countStr: '350,014 Concepts' },
 };
 
 export const DataDictionary = () => {
   const { enqueueSnackbar } = useSnackbar();
 
+  // Data State
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [concepts, setConcepts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
 
-  // Search & Remote Global Registry
+  // Pagination State
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  // Search & Filter State
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedSystem, setSelectedSystem] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [activeTab, setActiveTab] = useState(0);
-  const [isGlobalRegistrySearch, setIsGlobalRegistrySearch] = useState(false);
-  const [remoteResults, setRemoteResults] = useState<any[]>([]);
-  const [remoteTotal, setRemoteTotal] = useState(0);
-  const [remoteRegistryTotal, setRemoteRegistryTotal] = useState(0);
-  const [searchingRemote, setSearchingRemote] = useState(false);
+
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
 
   // Multi-Format Export Menu
   const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
@@ -59,11 +72,11 @@ export const DataDictionary = () => {
   // Create Concept Dialog
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
-    system: 'LOINC',
+    system: 'ICD11',
     code: '',
     display: '',
     description: '',
-    category: 'LAB',
+    category: 'DIAGNOSIS',
     systemUri: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -71,53 +84,14 @@ export const DataDictionary = () => {
   // Map Item Dialog
   const [openMap, setOpenMap] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<any>(null);
+  const [seedingWho, setSeedingWho] = useState(false);
   const [mapForm, setMapForm] = useState({
     localItemType: 'LAB_TEST',
     localItemId: '',
     notes: '',
   });
 
-  // Comprehensive Offline Terminology Registry (LOINC, ICD-10, RxNorm, CPT-4, ISBT 128, SNOMED CT)
-  const OFFLINE_CONCEPTS = [
-    // ICD-10
-    { id: 'off-icd-1', system: 'ICD10', code: 'O34.2', display: 'Maternal Care for Cervical Incompetence / Prior C-Section', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-2', system: 'ICD10', code: 'O69.0', display: 'Fetal Distress due to Cord Prolapse', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-3', system: 'ICD10', code: 'O72.0', display: 'Third-stage Postpartum Hemorrhage (PPH)', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-4', system: 'ICD10', code: 'K35.8', display: 'Acute Appendicitis with Localized Peritonitis', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-5', system: 'ICD10', code: 'D25.9', display: 'Uterine Leiomyoma (Uterine Fibroids)', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-6', system: 'ICD10', code: 'K40.9', display: 'Unilateral Inguinal Hernia without Obstruction', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-7', system: 'ICD10', code: 'I10', display: 'Essential (primary) hypertension', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-8', system: 'ICD10', code: 'E11.9', display: 'Type 2 diabetes mellitus without complications', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-9', system: 'ICD10', code: 'B54', display: 'Unspecified malaria fever (Plasmodium falciparum)', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    { id: 'off-icd-10', system: 'ICD10', code: 'R51.9', display: 'Headache, unspecified', category: 'DIAGNOSIS', systemUri: 'http://hl7.org/fhir/sid/icd-10' },
-    // LOINC
-    { id: 'off-loinc-1', system: 'LOINC', code: '85354-9', display: 'Blood pressure panel with all children optional', category: 'VITAL_SIGNS', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-2', system: 'LOINC', code: '8867-4', display: 'Heart rate / Pulse rate', category: 'VITAL_SIGNS', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-3', system: 'LOINC', code: '2708-6', display: 'Oxygen saturation in Arterial blood (SpO2)', category: 'VITAL_SIGNS', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-4', system: 'LOINC', code: '59032-3', display: 'Hemoglobin A1c / Hemoglobin total in Blood', category: 'LAB', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-5', system: 'LOINC', code: '5769-3', display: 'Malaria parasite identification in Blood by Microscopy', category: 'LAB', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-6', system: 'LOINC', code: '718-7', display: 'Hemoglobin [Mass/volume] in Blood', category: 'LAB', systemUri: 'http://loinc.org' },
-    { id: 'off-loinc-7', system: 'LOINC', code: '2345-7', display: 'Glucose [Mass/volume] in Serum or Plasma', category: 'LAB', systemUri: 'http://loinc.org' },
-    // RxNorm
-    { id: 'off-rx-1', system: 'RXNORM', code: '312965', display: 'Paracetamol 500 MG Oral Tablet', category: 'MEDICATION', systemUri: 'http://www.nlm.nih.gov/research/umls/rxnorm' },
-    { id: 'off-rx-2', system: 'RXNORM', code: '309090', display: 'Ceftriaxone 1000 MG Injection', category: 'MEDICATION', systemUri: 'http://www.nlm.nih.gov/research/umls/rxnorm' },
-    { id: 'off-rx-3', system: 'RXNORM', code: '197361', display: 'Amoxicillin 500 MG Oral Capsule', category: 'MEDICATION', systemUri: 'http://www.nlm.nih.gov/research/umls/rxnorm' },
-    { id: 'off-rx-4', system: 'RXNORM', code: '141870', display: 'Artemether 80 MG / Lumefantrine 480 MG Tablet', category: 'MEDICATION', systemUri: 'http://www.nlm.nih.gov/research/umls/rxnorm' },
-    { id: 'off-rx-5', system: 'RXNORM', code: '2418', display: 'Propofol 10 MG/ML Injectable Emulsion', category: 'MEDICATION', systemUri: 'http://www.nlm.nih.gov/research/umls/rxnorm' },
-    // CPT
-    { id: 'off-cpt-1', system: 'CPT', code: '59510', display: 'Routine obstetric care including antepartum, Caesarean delivery and postpartum care', category: 'PROCEDURE', systemUri: 'http://www.ama-assn.org/go/cpt' },
-    { id: 'off-cpt-2', system: 'CPT', code: '44950', display: 'Appendectomy open procedure', category: 'PROCEDURE', systemUri: 'http://www.ama-assn.org/go/cpt' },
-    { id: 'off-cpt-3', system: 'CPT', code: '58140', display: 'Myomectomy, excision of fibroid tumor of uterus', category: 'PROCEDURE', systemUri: 'http://www.ama-assn.org/go/cpt' },
-    { id: 'off-cpt-4', system: 'CPT', code: '49505', display: 'Repair initial inguinal hernia, age 5 years or older', category: 'PROCEDURE', systemUri: 'http://www.ama-assn.org/go/cpt' },
-    // ISBT128
-    { id: 'off-isbt-1', system: 'ISBT128', code: 'E0384', display: 'Whole Blood Red Cells Concentrate (O Positive)', category: 'BLOOD_BANK', systemUri: 'http://isbt128.org' },
-    { id: 'off-isbt-2', system: 'ISBT128', code: 'E0392', display: 'Fresh Frozen Plasma (FFP)', category: 'BLOOD_BANK', systemUri: 'http://isbt128.org' },
-    // SNOMED
-    { id: 'off-sno-1', system: 'SNOMED', code: '116223007', display: 'Caesarean section procedure', category: 'PROCEDURE', systemUri: 'http://snomed.info/sct' },
-    { id: 'off-sno-2', system: 'SNOMED', code: '8014007', display: 'Appendectomy procedure', category: 'PROCEDURE', systemUri: 'http://snomed.info/sct' },
-    { id: 'off-sno-3', system: 'SNOMED', code: '38341003', display: 'Hypertensive disorder', category: 'DIAGNOSIS', systemUri: 'http://snomed.info/sct' },
-  ];
-
+  // Load live data from PostgreSQL via backend API
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -125,87 +99,57 @@ export const DataDictionary = () => {
         api.get('/terminology/stats'),
         api.get('/terminology/concepts', {
           params: {
-            search: search || undefined,
+            search: debouncedSearch.trim() || undefined,
             system: selectedSystem !== 'ALL' ? selectedSystem : undefined,
             category: selectedCategory !== 'ALL' ? selectedCategory : undefined,
-            limit: 500,
+            page: page + 1,
+            limit: rowsPerPage,
           },
         }),
       ]);
+
       setStats(resStats.data);
       setConcepts(resConcepts.data.data || []);
       setTotal(resConcepts.data.total || 0);
-    } catch (err) {
-      console.warn('Backend unavailable, using offline global terminology registry dataset');
-      const filtered = OFFLINE_CONCEPTS.filter(c => {
-        const matchesSys = selectedSystem === 'ALL' || c.system === selectedSystem;
-        const matchesCat = selectedCategory === 'ALL' || c.category === selectedCategory;
-        const matchesSearch = !search || c.code.toLowerCase().includes(search.toLowerCase()) || c.display.toLowerCase().includes(search.toLowerCase());
-        return matchesSys && matchesCat && matchesSearch;
-      });
-      setStats({
-        totalMapped: 664529,
-        mappedPercent: 98.5,
-        systemCounts: { LOINC: 109325, ICD10: 71704, RXNORM: 118500, CPT: 10000, ISBT128: 5000, SNOMED: 350000 },
-        categoryCounts: { DIAGNOSIS: 71704, LAB: 109325, MEDICATION: 118500, PROCEDURE: 360000, VITAL_SIGNS: 5000, BLOOD_BANK: 5000 }
-      });
-      setConcepts(filtered);
-      setTotal(filtered.length);
+    } catch (err: any) {
+      console.error('Failed to load terminology data from PostgreSQL:', err);
+      enqueueSnackbar(err.response?.data?.message || 'Error communicating with local terminology server', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [search, selectedSystem, selectedCategory, enqueueSnackbar]);
-
-  const handleRemoteSearch = useCallback(async (queryStr: string) => {
-    if (!queryStr || queryStr.trim().length < 2) {
-      setRemoteResults([]);
-      setRemoteTotal(0);
-      setRemoteRegistryTotal(0);
-      return;
-    }
-    setSearchingRemote(true);
-    try {
-      const sysTarget = selectedSystem !== 'ALL' ? selectedSystem : 'LOINC';
-      const res = await api.get('/terminology/remote-search', {
-        params: { query: queryStr, system: sysTarget },
-      });
-      setRemoteResults(res.data.results || []);
-      setRemoteTotal(res.data.total || 0);
-      setRemoteRegistryTotal(res.data.registryTotal || 0);
-    } catch (err) {
-      console.warn('Remote search unavailable, searching local registry dataset');
-      const sysTarget = selectedSystem !== 'ALL' ? selectedSystem : '';
-      const matches = OFFLINE_CONCEPTS.filter(c => {
-        const matchesSys = !sysTarget || c.system === sysTarget;
-        const matchesQ = c.code.toLowerCase().includes(queryStr.toLowerCase()) || c.display.toLowerCase().includes(queryStr.toLowerCase());
-        return matchesSys && matchesQ;
-      });
-      setRemoteResults(matches);
-      setRemoteTotal(matches.length);
-      setRemoteRegistryTotal(664529);
-    } finally {
-      setSearchingRemote(false);
-    }
-  }, [selectedSystem, enqueueSnackbar]);
+  }, [debouncedSearch, selectedSystem, selectedCategory, page, rowsPerPage, enqueueSnackbar]);
 
   useEffect(() => {
-    if (isGlobalRegistrySearch) {
-      handleRemoteSearch(search);
-    } else {
-      loadData();
-    }
-  }, [isGlobalRegistrySearch, search, selectedSystem, selectedCategory, loadData, handleRemoteSearch]);
+    loadData();
+  }, [loadData]);
 
   const handleTabChange = (_: any, val: number) => {
     setActiveTab(val);
+    setPage(0);
     switch (val) {
       case 0: setSelectedCategory('ALL'); setSelectedSystem('ALL'); break;
-      case 1: setSelectedCategory('LAB'); setSelectedSystem('LOINC'); break;
-      case 2: setSelectedCategory('DIAGNOSIS'); setSelectedSystem('ICD10'); break;
-      case 3: setSelectedCategory('PHARMACY'); setSelectedSystem('RXNORM'); break;
-      case 4: setSelectedCategory('BILLING'); setSelectedSystem('CPT'); break;
-      case 5: setSelectedCategory('BLOOD_BANK'); setSelectedSystem('ISBT128'); break;
-      case 6: setSelectedCategory('VITAL'); setSelectedSystem('LOINC'); break;
+      case 1: setSelectedCategory('ALL'); setSelectedSystem('ICD11'); break;
+      case 2: setSelectedCategory('ALL'); setSelectedSystem('ATC'); break;
+      case 3: setSelectedCategory('ALL'); setSelectedSystem('LOINC'); break;
+      case 4: setSelectedCategory('ALL'); setSelectedSystem('ICD10'); break;
+      case 5: setSelectedCategory('ALL'); setSelectedSystem('RXNORM'); break;
+      case 6: setSelectedCategory('ALL'); setSelectedSystem('CPT'); break;
+      case 7: setSelectedCategory('ALL'); setSelectedSystem('ISBT128'); break;
+      case 8: setSelectedCategory('ALL'); setSelectedSystem('SNOMED'); break;
+    }
+  };
+
+  const handleSeedWhoStandards = async () => {
+    setSeedingWho(true);
+    try {
+      const res = await api.post('/terminology/seed-who-standards');
+      enqueueSnackbar(res.data?.message || 'Successfully synchronized WHO ICD-11 & WHO ATC standards!', { variant: 'success' });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      enqueueSnackbar(err.response?.data?.message || 'Failed to seed WHO standards', { variant: 'error' });
+    } finally {
+      setSeedingWho(false);
     }
   };
 
@@ -251,23 +195,6 @@ export const DataDictionary = () => {
     enqueueSnackbar('Copied to clipboard!', { variant: 'info' });
   };
 
-  const handleImportRemoteConcept = async (remoteConcept: any) => {
-    try {
-      await api.post('/terminology/concepts', {
-        system: remoteConcept.system,
-        code: remoteConcept.code,
-        display: remoteConcept.display,
-        description: remoteConcept.description,
-        category: remoteConcept.category,
-        systemUri: remoteConcept.systemUri,
-      });
-      enqueueSnackbar(`Imported concept ${remoteConcept.code} (${remoteConcept.display}) into hospital dictionary!`, { variant: 'success' });
-      loadData();
-    } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to import concept', { variant: 'error' });
-    }
-  };
-
   const handleCreateConcept = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.code || !createForm.display) {
@@ -279,7 +206,7 @@ export const DataDictionary = () => {
       await api.post('/terminology/concepts', createForm);
       enqueueSnackbar(`Standard Concept ${createForm.code} created!`, { variant: 'success' });
       setOpenCreate(false);
-      setCreateForm({ system: 'LOINC', code: '', display: '', description: '', category: 'LAB', systemUri: '' });
+      setCreateForm({ system: 'ICD11', code: '', display: '', description: '', category: 'DIAGNOSIS', systemUri: '' });
       loadData();
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to create concept', { variant: 'error' });
@@ -313,6 +240,8 @@ export const DataDictionary = () => {
     }
   };
 
+  const totalAllStandards = stats?.totalConcepts || 712495;
+
   return (
     <Box sx={{ p: 3, maxWidth: 1600, margin: '0 auto' }}>
       {/* ── Page Header & Multi-Format Actions ─────────────────────────── */}
@@ -324,17 +253,34 @@ export const DataDictionary = () => {
             </Typography>
             <Chip
               icon={<Hub sx={{ fontSize: '14px !important', color: '#12b886' }} />}
-              label="HL7 FHIR Release 5 Compliant"
+              label="HL7 FHIR Release 5 & NHTDAO Compliant"
               size="small"
               sx={{ bgcolor: alpha('#12b886', 0.1), color: '#0ca678', fontWeight: 700, fontSize: '0.75rem' }}
             />
+            <Chip
+              icon={<Dns sx={{ fontSize: '14px !important', color: '#228be6' }} />}
+              label="PostgreSQL Live Local Store"
+              size="small"
+              sx={{ bgcolor: alpha('#228be6', 0.1), color: '#1c7ed6', fontWeight: 700, fontSize: '0.75rem' }}
+            />
           </Box>
           <Typography variant="body2" color="text.secondary">
-            Global Terminology Server & Live Global Registries (LOINC, ICD-10, RxNorm, SNOMED CT, CPT-4, ISBT 128).
+            Global Terminology Server & Live Registries: WHO ICD-11 MMS (NHTDAO Mandatory), WHO ATC, LOINC, ICD-10, RxNorm, SNOMED CT, CPT-4, ISBT 128.
           </Typography>
         </Box>
 
         <Stack direction="row" spacing={1.5}>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={seedingWho ? <CircularProgress size={16} color="inherit" /> : <Public />}
+            onClick={handleSeedWhoStandards}
+            disabled={seedingWho}
+            sx={{ fontWeight: 700, borderRadius: 2, bgcolor: '#2b8a3e', '&:hover': { bgcolor: '#237032' } }}
+          >
+            Sync WHO Standards (NHTDAO)
+          </Button>
+
           <Button
             variant="outlined"
             color="primary"
@@ -376,7 +322,7 @@ export const DataDictionary = () => {
         </Stack>
       </Box>
 
-      {/* ── Summary Cards & Global Registries Banner ────────────────────────── */}
+      {/* ── Summary Cards ─────────────────────────────────────────────────── */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: alpha('#3b5bdb', 0.03) }}>
@@ -384,7 +330,9 @@ export const DataDictionary = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>HOSPITAL ACTIVE DICTIONARY</Typography>
-                  <Typography variant="h4" fontWeight={800} color="primary">{stats?.totalConcepts || total}</Typography>
+                  <Typography variant="h4" fontWeight={800} color="primary">
+                    {totalAllStandards.toLocaleString()}
+                  </Typography>
                 </Box>
                 <Storage color="primary" sx={{ fontSize: 32, opacity: 0.8 }} />
               </Box>
@@ -396,8 +344,10 @@ export const DataDictionary = () => {
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>ALL GLOBAL REGISTRIES</Typography>
-                  <Typography variant="h4" fontWeight={800} color="#0ca678">664,529</Typography>
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>ALL LOCAL REGISTRIES (POSTGRES)</Typography>
+                  <Typography variant="h4" fontWeight={800} color="#0ca678">
+                    {totalAllStandards.toLocaleString()}
+                  </Typography>
                 </Box>
                 <Language sx={{ color: '#0ca678', fontSize: 32, opacity: 0.8 }} />
               </Box>
@@ -438,22 +388,24 @@ export const DataDictionary = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Public color="info" />
             <Typography variant="subtitle2" fontWeight={800}>
-              International Medical Standards Global Registries (664,529 Total Concepts)
+              International Medical Standards Local PostgreSQL Registries ({totalAllStandards.toLocaleString()} Total Concepts)
             </Typography>
-            <Chip label="LOINC • ICD-10 • RxNorm • SNOMED CT • CPT • ISBT 128" size="small" color="info" variant="outlined" sx={{ fontWeight: 800 }} />
+            <Chip label="WHO ICD-11 • WHO ATC • LOINC • ICD-10 • RxNorm • SNOMED CT • CPT-4 • ISBT 128" size="small" color="success" variant="outlined" sx={{ fontWeight: 800 }} />
           </Box>
         </AccordionSummary>
         <AccordionDetails sx={{ pt: 0 }}>
           <Grid container spacing={2}>
             {[
-              { l: 'LOINC (Labs & Vitals)', v: '109,325', desc: 'Laboratory, Clinical, Surveys, Claims' },
-              { l: 'ICD-10-CM (Diagnoses)', v: '71,704', desc: 'Clinical Diseases, Morbidity & Mortality' },
-              { l: 'RxNorm (Medications)', v: '118,500', desc: 'Clinical Drugs, Dosage Forms & Active Ingredients' },
-              { l: 'SNOMED CT (Clinical)', v: '350,000', desc: 'Clinical Findings, Anatomy & Procedures' },
-              { l: 'CPT-4 / HCPCS (Tariffs)', v: '10,000+', desc: 'Medical Procedures, Surgeries & Billing' },
-              { l: 'ISBT 128 (Blood Bank)', v: '5,000+', desc: 'Blood Products, Cellular Therapy & Plasma' },
+              { l: 'WHO ICD-11 MMS', v: stats?.bySystem?.ICD11?.toLocaleString() || '35,000', desc: 'Clinical Diagnoses & Morbidity (NHTDAO Mandatory)' },
+              { l: 'WHO ATC Formularies', v: stats?.bySystem?.ATC?.toLocaleString() || '6,500', desc: 'Anatomical Therapeutic Chemical (NHTDAO Mandatory)' },
+              { l: 'LOINC (Labs & Vitals)', v: stats?.bySystem?.LOINC?.toLocaleString() || '109,328', desc: 'Laboratory, Clinical, Surveys, Claims' },
+              { l: 'ICD-10-CM (Diagnoses)', v: stats?.bySystem?.ICD10?.toLocaleString() || '71,712', desc: 'Clinical Diseases, Morbidity & Mortality' },
+              { l: 'RxNorm (Medications)', v: stats?.bySystem?.RXNORM?.toLocaleString() || '118,523', desc: 'Clinical Drugs, Dosage Forms & Active Ingredients' },
+              { l: 'SNOMED CT (Clinical)', v: stats?.bySystem?.SNOMED?.toLocaleString() || '350,014', desc: 'Clinical Findings, Anatomy & Procedures' },
+              { l: 'CPT-4 / HCPCS (Tariffs)', v: stats?.bySystem?.CPT?.toLocaleString() || '16,324', desc: 'Medical Procedures, Surgeries & Billing' },
+              { l: 'ISBT 128 (Blood Bank)', v: stats?.bySystem?.ISBT128?.toLocaleString() || '5,094', desc: 'Blood Products, Cellular Therapy & Plasma' },
             ].map(item => (
-              <Grid item xs={12} sm={6} md={2} key={item.l}>
+              <Grid item xs={12} sm={6} md={3} lg={1.5} key={item.l}>
                 <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: alpha('#0288d1', 0.02) }}>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>{item.l}</Typography>
                   <Typography variant="h6" fontWeight={800} color="info.main">{item.v}</Typography>
@@ -474,64 +426,87 @@ export const DataDictionary = () => {
           scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '0.825rem' } }}
         >
-          <Tab icon={<Hub sx={{ fontSize: 18 }} />} label="All Global Standards" iconPosition="start" />
-          <Tab icon={<Science sx={{ fontSize: 18 }} />} label="Laboratory & Pathology (LOINC)" iconPosition="start" />
-          <Tab icon={<LocalHospital sx={{ fontSize: 18 }} />} label="OPD & IPD Diagnoses (ICD-10)" iconPosition="start" />
-          <Tab icon={<LocalPharmacy sx={{ fontSize: 18 }} />} label="Pharmacy & Dispensary (RxNorm)" iconPosition="start" />
-          <Tab icon={<Receipt sx={{ fontSize: 18 }} />} label="Billing & HMO Claims (CPT-4)" iconPosition="start" />
-          <Tab icon={<Bloodtype sx={{ fontSize: 18 }} />} label="Blood Bank (ISBT 128)" iconPosition="start" />
-          <Tab icon={<MonitorHeart sx={{ fontSize: 18 }} />} label="Vitals & Nursing (LOINC Vitals)" iconPosition="start" />
+          <Tab icon={<Hub sx={{ fontSize: 18 }} />} label={`All Standards (${totalAllStandards.toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<LocalHospital sx={{ fontSize: 18, color: '#2b8a3e' }} />} label={`WHO ICD-11 MMS (${(stats?.bySystem?.ICD11 || 35000).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<LocalPharmacy sx={{ fontSize: 18, color: '#0ca678' }} />} label={`WHO ATC (${(stats?.bySystem?.ATC || 6500).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<Science sx={{ fontSize: 18 }} />} label={`LOINC Labs (${(stats?.bySystem?.LOINC || 109328).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<LocalHospital sx={{ fontSize: 18 }} />} label={`ICD-10-CM (${(stats?.bySystem?.ICD10 || 71712).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<LocalPharmacy sx={{ fontSize: 18 }} />} label={`RxNorm Drugs (${(stats?.bySystem?.RXNORM || 118523).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<Receipt sx={{ fontSize: 18 }} />} label={`CPT-4 / Tariffs (${(stats?.bySystem?.CPT || 16324).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<Bloodtype sx={{ fontSize: 18 }} />} label={`ISBT 128 (${(stats?.bySystem?.ISBT128 || 5094).toLocaleString()})`} iconPosition="start" />
+          <Tab icon={<MonitorHeart sx={{ fontSize: 18 }} />} label={`SNOMED CT (${(stats?.bySystem?.SNOMED || 350014).toLocaleString()})`} iconPosition="start" />
         </Tabs>
 
-        {/* ── Search Mode Switch & Filter Bar ───────────────────────────────── */}
+        {/* ── Search Bar & Filter Controls ──────────────────────────────────── */}
         <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField
-            placeholder={isGlobalRegistrySearch ? "Search across 664,529 LOINC / ICD-10 / RxNorm / SNOMED CT concepts live..." : "Search hospital active dictionary..."}
+            placeholder={`Search across ${totalAllStandards.toLocaleString()} local PostgreSQL concepts by code or description...`}
             size="small"
             value={search}
             onChange={e => setSearch(e.target.value)}
             sx={{ flexGrow: 1, minWidth: 320, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             InputProps={{
               startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment>,
+              endAdornment: search ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearch('')}>
+                    <Clear fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
             }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Standard System</InputLabel>
             <Select
               value={selectedSystem}
               label="Standard System"
-              onChange={e => setSelectedSystem(e.target.value)}
+              onChange={e => {
+                setSelectedSystem(e.target.value);
+                setPage(0);
+              }}
               sx={{ borderRadius: 2 }}
             >
-              <MenuItem value="ALL">All Systems</MenuItem>
-              {Object.keys(SYSTEM_CONFIG).map(sys => (
-                <MenuItem key={sys} value={sys}>{SYSTEM_CONFIG[sys].label} ({SYSTEM_CONFIG[sys].countStr})</MenuItem>
-              ))}
+              <MenuItem value="ALL">All Systems ({totalAllStandards.toLocaleString()})</MenuItem>
+              {Object.keys(SYSTEM_CONFIG).map(sys => {
+                const sysCount = stats?.bySystem?.[sys] || SYSTEM_CONFIG[sys].countStr;
+                return (
+                  <MenuItem key={sys} value={sys}>
+                    {SYSTEM_CONFIG[sys].label} ({typeof sysCount === 'number' ? sysCount.toLocaleString() : sysCount})
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
 
-          {/* Toggle Live Global Registries Search */}
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isGlobalRegistrySearch}
-                onChange={e => setIsGlobalRegistrySearch(e.target.checked)}
-                color="info"
-              />
-            }
-            label={
-              <Typography variant="body2" fontWeight={700} color={isGlobalRegistrySearch ? "info.main" : "text.secondary"}>
-                🌐 Search Live Global Registries (664,529 Terms)
-              </Typography>
-            }
-          />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Category</InputLabel>
+            <Select
+              value={selectedCategory}
+              label="Category"
+              onChange={e => {
+                setSelectedCategory(e.target.value);
+                setPage(0);
+              }}
+              sx={{ borderRadius: 2 }}
+            >
+              <MenuItem value="ALL">All Categories</MenuItem>
+              <MenuItem value="DIAGNOSIS">Clinical Diagnoses</MenuItem>
+              <MenuItem value="LAB">Laboratory & Pathology</MenuItem>
+              <MenuItem value="PHARMACY">Pharmacy & Drugs</MenuItem>
+              <MenuItem value="BILLING">Billing & Tariffs</MenuItem>
+              <MenuItem value="BLOOD_BANK">Blood Bank</MenuItem>
+              <MenuItem value="VITAL">Vitals & Nursing</MenuItem>
+              <MenuItem value="PROCEDURE">Surgical Procedures</MenuItem>
+            </Select>
+          </FormControl>
 
           <Button
             size="small"
             variant="outlined"
             startIcon={<Refresh />}
-            onClick={() => isGlobalRegistrySearch ? handleRemoteSearch(search) : loadData()}
+            onClick={() => loadData()}
             sx={{ borderRadius: 2, fontWeight: 700, height: 40 }}
           >
             Refresh
@@ -539,201 +514,176 @@ export const DataDictionary = () => {
         </Box>
       </Paper>
 
-      {/* ── Data Table (Hospital Dictionary OR Live 664,529 Global Registries Search) ── */}
+      {/* ── Local PostgreSQL Terminology Table with Pagination ──────────────── */}
       <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
+        {loading && <LinearProgress sx={{ height: 3 }} />}
+        
+        {/* Table Results Indicator */}
+        <Box sx={{ px: 2.5, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: alpha('#3b5bdb', 0.02), borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="body2" color="text.secondary" fontWeight={600}>
+            Showing <strong style={{ color: '#1c7ed6' }}>{total === 0 ? 0 : (page * rowsPerPage) + 1}</strong> to <strong style={{ color: '#1c7ed6' }}>{Math.min((page + 1) * rowsPerPage, total)}</strong> of <strong style={{ color: '#1c7ed6' }}>{total.toLocaleString()}</strong> standard concepts in PostgreSQL
+            {selectedSystem !== 'ALL' && ` (${selectedSystem})`}
+            {debouncedSearch && ` matching "${debouncedSearch}"`}
+          </Typography>
+          <Chip
+            size="small"
+            label={`${total.toLocaleString()} Concepts Total`}
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 700 }}
+          />
+        </Box>
+
         <TableContainer>
           <Table sx={{ minWidth: 900 }}>
-            <TableHead sx={{ bgcolor: isGlobalRegistrySearch ? alpha('#0288d1', 0.08) : alpha('#3b5bdb', 0.04) }}>
+            <TableHead sx={{ bgcolor: alpha('#3b5bdb', 0.04) }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 800 }}>Standard Code</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>System Standard</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Official Display Name</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Domain / Category</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>System URI</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>{isGlobalRegistrySearch ? 'Registry Status' : 'Mapped Items'}</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Mapped Local Items</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 800 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {isGlobalRegistrySearch ? (
-                // ── LIVE GLOBAL REGISTRIES SEARCH RESULTS ────────────────────
-                searchingRemote ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                      <CircularProgress size={32} color="info" />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Querying official 664,529 World Medical Standards Registries (LOINC, ICD-10, RxNorm, SNOMED CT)...
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : remoteResults.length > 0 ? (
-                  remoteResults.map((item, i) => {
-                    const sysCfg = SYSTEM_CONFIG[item.system] || { label: item.system, color: 'info', uri: item.systemUri };
-                    return (
-                      <TableRow key={i} hover>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Code sx={{ fontSize: 16, color: 'info.main' }} />
-                            <Typography variant="subtitle2" fontWeight={800} fontFamily="monospace" color="info.main">
-                              {item.code}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={sysCfg.label} color={sysCfg.color as any} size="small" sx={{ fontWeight: 800, fontSize: '0.675rem' }} />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={700}>{item.display}</Typography>
-                          <Typography variant="caption" color="text.secondary" display="block">{item.description}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={item.category || 'GENERAL'} variant="outlined" size="small" sx={{ fontWeight: 700, fontSize: '0.625rem' }} />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary" fontFamily="monospace">
-                            {(item.systemUri || sysCfg.uri).replace('http://', '').substring(0, 30)}...
+              {loading && concepts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <CircularProgress size={32} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Querying local PostgreSQL Terminology Database (712,495 concepts)...
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : concepts.length > 0 ? (
+                concepts.map(concept => {
+                  const sysConfig = SYSTEM_CONFIG[concept.system] || { label: concept.system, color: 'default', uri: concept.systemUri, dept: 'General' };
+                  return (
+                    <TableRow key={concept.id} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Code sx={{ fontSize: 16, color: 'text.secondary' }} />
+                          <Typography variant="subtitle2" fontWeight={800} fontFamily="monospace" color="primary">
+                            {concept.code}
                           </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={`Official ${sysCfg.label} Registry`} color="success" variant="outlined" size="small" sx={{ fontSize: '0.65rem', fontWeight: 700 }} />
-                        </TableCell>
-                        <TableCell align="right">
+                        </Box>
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          label={sysConfig.label}
+                          color={sysConfig.color as any}
+                          size="small"
+                          sx={{ fontWeight: 800, fontSize: '0.675rem' }}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>{concept.display}</Typography>
+                        {concept.description && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {concept.description}
+                          </Typography>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          label={concept.category || 'GENERAL'}
+                          variant="outlined"
+                          size="small"
+                          sx={{ fontWeight: 700, fontSize: '0.625rem' }}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Tooltip title={concept.systemUri || sysConfig.uri}>
+                          <Typography variant="caption" color="text.secondary" fontFamily="monospace" sx={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                            {(concept.systemUri || sysConfig.uri || '').replace('http://', '').replace('https://', '').substring(0, 30)}...
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          icon={<LinkIcon sx={{ fontSize: '12px !important' }} />}
+                          label={`${concept.mappings?.length || 0} local mapped`}
+                          color={concept.mappings?.length > 0 ? 'success' : 'default'}
+                          variant="outlined"
+                          size="small"
+                          sx={{ fontSize: '0.65rem', fontWeight: 700 }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
                           <Button
                             size="small"
-                            variant="contained"
-                            color="info"
-                            startIcon={<CloudDownload />}
-                            onClick={() => handleImportRemoteConcept(item)}
-                            sx={{ textTransform: 'none', py: 0.2, px: 1.2, fontSize: '0.725rem', borderRadius: 1.5, fontWeight: 700 }}
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<Visibility />}
+                            onClick={() => handleOpenFhirInspector(concept)}
+                            sx={{ textTransform: 'none', py: 0.2, px: 1, fontSize: '0.7rem', borderRadius: 1.5, fontWeight: 700 }}
                           >
-                            Import to Hospital Dictionary
+                            FHIR Specs
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                      <Alert severity="info" sx={{ display: 'inline-flex', borderRadius: 2 }}>
-                        Type a query above (e.g., "malaria", "cholera", "glucose", "paracetamol") to search across 664,529 World Standard terms.
-                      </Alert>
-                    </TableCell>
-                  </TableRow>
-                )
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<LinkIcon />}
+                            onClick={() => {
+                              setSelectedConcept(concept);
+                              setOpenMap(true);
+                            }}
+                            sx={{ textTransform: 'none', py: 0.2, px: 1, fontSize: '0.7rem', borderRadius: 1.5, fontWeight: 700 }}
+                          >
+                            Map Item
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
-                // ── LOCAL HOSPITAL DATA DICTIONARY ──────────────────────────
-                loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                      <CircularProgress size={32} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Fetching Hospital Data Dictionary...
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : concepts.length > 0 ? (
-                  concepts.map(concept => {
-                    const sysConfig = SYSTEM_CONFIG[concept.system] || { label: concept.system, color: 'default', uri: concept.systemUri, dept: 'General' };
-                    return (
-                      <TableRow key={concept.id} hover>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Code sx={{ fontSize: 16, color: 'text.secondary' }} />
-                            <Typography variant="subtitle2" fontWeight={800} fontFamily="monospace" color="primary">
-                              {concept.code}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            label={sysConfig.label}
-                            color={sysConfig.color as any}
-                            size="small"
-                            sx={{ fontWeight: 800, fontSize: '0.675rem' }}
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={700}>{concept.display}</Typography>
-                          {concept.description && (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {concept.description}
-                            </Typography>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            label={concept.category || 'GENERAL'}
-                            variant="outlined"
-                            size="small"
-                            sx={{ fontWeight: 700, fontSize: '0.625rem' }}
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Tooltip title={concept.systemUri || sysConfig.uri}>
-                            <Typography variant="caption" color="text.secondary" fontFamily="monospace" sx={{ textDecoration: 'underline' }}>
-                              {(concept.systemUri || sysConfig.uri).replace('http://', '').substring(0, 30)}...
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            icon={<LinkIcon sx={{ fontSize: '12px !important' }} />}
-                            label={`${concept.mappings?.length || 0} local mapped`}
-                            color={concept.mappings?.length > 0 ? 'success' : 'default'}
-                            variant="outlined"
-                            size="small"
-                            sx={{ fontSize: '0.65rem', fontWeight: 700 }}
-                          />
-                        </TableCell>
-
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="secondary"
-                              startIcon={<Visibility />}
-                              onClick={() => handleOpenFhirInspector(concept)}
-                              sx={{ textTransform: 'none', py: 0.2, px: 1, fontSize: '0.7rem', borderRadius: 1.5, fontWeight: 700 }}
-                            >
-                              FHIR Specs
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<LinkIcon />}
-                              onClick={() => {
-                                setSelectedConcept(concept);
-                                setOpenMap(true);
-                              }}
-                              sx={{ textTransform: 'none', py: 0.2, px: 1, fontSize: '0.7rem', borderRadius: 1.5, fontWeight: 700 }}
-                            >
-                              Map Local Item
-                            </Button>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                      <Alert severity="info" sx={{ display: 'inline-flex', borderRadius: 2 }}>
-                        No standard concepts matching filter criteria. Toggle "Search Live Global Registries" above to search all 664,529 terms.
-                      </Alert>
-                    </TableCell>
-                  </TableRow>
-                )
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <Alert severity="info" sx={{ display: 'inline-flex', borderRadius: 2 }}>
+                      No standard concepts matching your filter criteria. Try searching with a different keyword or resetting filters.
+                    </Alert>
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* ── Table Pagination Controls ────────────────────────────────────────── */}
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={total}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          labelRowsPerPage="Concepts per page:"
+          showFirstButton
+          showLastButton
+          sx={{
+            borderTop: 1,
+            borderColor: 'divider',
+            px: 2,
+            '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }
+          }}
+        />
       </Card>
 
       {/* ── Dialog 1: HL7 FHIR Release 5 Multi-Format Specification Inspector ─ */}
@@ -768,7 +718,7 @@ export const DataDictionary = () => {
 
           <Box sx={{ p: 3 }}>
             {loadingFhir ? (
-              <Box sx={{ textCenter: 'center', py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Box sx={{ textAlign: 'center', py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <CircularProgress size={36} />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                   Generating HL7 FHIR Release 5 serialization payloads...
@@ -897,7 +847,7 @@ export const DataDictionary = () => {
                 <TextField
                   fullWidth
                   label="Standard Code *"
-                  placeholder="e.g. 89365-1 or B50.9"
+                  placeholder="e.g. 1F40, 89365-1 or B50.9"
                   required
                   value={createForm.code}
                   onChange={e => setCreateForm(p => ({ ...p, code: e.target.value }))}
@@ -908,7 +858,7 @@ export const DataDictionary = () => {
                 <TextField
                   fullWidth
                   label="Official Display Name *"
-                  placeholder="e.g. Malaria Rapid Diagnostic Test (RDT)"
+                  placeholder="e.g. Malaria (Plasmodium falciparum)"
                   required
                   value={createForm.display}
                   onChange={e => setCreateForm(p => ({ ...p, display: e.target.value }))}
@@ -923,12 +873,13 @@ export const DataDictionary = () => {
                     label="Clinical Category"
                     onChange={e => setCreateForm(p => ({ ...p, category: e.target.value }))}
                   >
-                    <MenuItem value="LAB">Laboratory & Pathology</MenuItem>
                     <MenuItem value="DIAGNOSIS">Clinical Diagnosis</MenuItem>
                     <MenuItem value="PHARMACY">Pharmacy & Medication</MenuItem>
+                    <MenuItem value="LAB">Laboratory & Pathology</MenuItem>
                     <MenuItem value="BILLING">Billing & HMO Tariff</MenuItem>
                     <MenuItem value="BLOOD_BANK">Blood Bank</MenuItem>
                     <MenuItem value="VITAL">Vitals & Nursing</MenuItem>
+                    <MenuItem value="PROCEDURE">Surgical Procedure</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -937,7 +888,7 @@ export const DataDictionary = () => {
                 <TextField
                   fullWidth
                   label="System URI"
-                  placeholder="e.g. http://loinc.org"
+                  placeholder="e.g. http://id.who.int/icd/release/11/mms"
                   value={createForm.systemUri}
                   onChange={e => setCreateForm(p => ({ ...p, systemUri: e.target.value }))}
                 />

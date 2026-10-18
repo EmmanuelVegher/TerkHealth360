@@ -17,6 +17,7 @@ import {
   SettingsInputComponent, LocalGasStation, BarChart, AccessTime, LocalAtm, PlusOne, AutoGraph, NotificationsActive, TrendingUp, BabyChangingStation, CalendarMonth, DateRange, Description, PersonalVideo, Speed,
   Healing, AutoAwesome, MonitorHeart, Person, CallMade, Close, RateReview, Hotel, Sensors, AccountTree,
   Gavel, WorkHistory, RemoveRedEye, Palette, CloudSync, SyncAlt, CloudDownload,
+  HealthAndSafety, Vaccines, Coronavirus, Masks, BugReport,
 } from '@mui/icons-material';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -106,6 +107,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
     Main: true, Clinical: true, 'Finance & HR': true, Admin: true, Management: true,
   });
   const [openSubItems, setOpenSubItems] = useState<Record<string, boolean>>({
+    'Specialty Disease Clinics': true,
     'Pharmacy Inventory': true,
     'Inventory & Warehouse Master': true,
     'Sourcing & Procurement': false,
@@ -268,6 +270,24 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           ],
         },
         { text: 'Outpatient Care (OPD)', icon: <LocalHospital />, path: '/opd', permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'OPD' },
+        {
+          text: 'Specialty Disease Clinics',
+          icon: <HealthAndSafety />,
+          path: '/clinics',
+          allowedDesignations: [
+            'Doctor', 'Nurse', 'Admin', 'Super Admin', 'Clinician', 'Medical Officer',
+            'Consultant', 'Physician', 'Surgeon', 'Record Officer', 'Secretary',
+            'Staff', 'Health Information Management', 'HIM', 'Public Health Officer', 'Auditor'
+          ],
+          children: [
+            { text: 'HIV / ART Clinic (PEPFAR/NMRS)', icon: <Coronavirus />, path: '/clinics/hiv-art' },
+            { text: 'TB & Chest Clinic (DOTS)', icon: <Masks />, path: '/clinics/tb-dots' },
+            { text: 'Malaria Clinic (NMEP)', icon: <BugReport />, path: '/clinics/malaria' },
+            { text: 'Immunization (EPI)', icon: <Vaccines />, path: '/clinics/immunization' },
+            { text: 'Polio / AFP Surveillance', icon: <Vaccines />, path: '/clinics/polio-afp' },
+            { text: 'Maternal & Child Health', icon: <PregnantWoman />, path: '/clinics/mch' },
+          ],
+        },
         {
           text: 'Inpatient Care (IPD)',
           icon: <Bed />,
@@ -1099,6 +1119,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
       // Workforce & Roster is commented out / hidden for the admin role
       if (
         item.path === '/' ||
+        item.path === '/clinics' ||
+        item.path?.startsWith('/clinics') ||
+        item.text === 'Specialty Disease Clinics' ||
         /* item.path === '/timesheets' ||
         item.path?.startsWith('/timesheets') ||
         item.text === 'Workforce & Roster' || */

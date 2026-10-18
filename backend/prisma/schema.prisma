@@ -176,6 +176,8 @@ model Patient {
   eyeEncounters                EyeEncounter[]
   nmrsMapping                  NmrsPatientMapping?
   nmrsEncounters               NmrsEncounterRecord[]
+  consents                     PatientConsent[]
+  breakGlassLogs               BreakGlassLog[]
 
   @@index([familyAccountId])
   @@index([lastName, firstName])
@@ -301,6 +303,12 @@ model Staff {
   qualification               String?
   specialization              String?
   licenseNumber               String?
+  mdcnFolioNumber             String?                        @map("mdcn_folio_number")
+  nmcnNumber                  String?                        @map("nmcn_number")
+  pcnNumber                   String?                        @map("pcn_number")
+  mlscnNumber                 String?                        @map("mlscn_number")
+  nationalProviderId          String?                        @map("national_provider_id")
+  regulatoryCouncil           String?                        @map("regulatory_council")
   isActive                    Boolean                        @default(true)
   createdAt                   DateTime                       @default(now())
   updatedAt                   DateTime                       @updatedAt
@@ -370,6 +378,7 @@ model Staff {
   telemedicineSessions        TelemedicineSession[]          @relation("TelemedicineHost")
   triagesDone                 TriageRecord[]                 @relation("TriageCreator")
   wardNurseRosters            WardNurseRoster[]
+  witnessedConsents           PatientConsent[]               @relation("ConsentWitness")
 
   @@index([isActive])
   @@index([createdAt])
@@ -701,15 +710,63 @@ model PasswordResetToken {
 }
 
 model BreakGlassLog {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   userId          String
-  reason          String
-  actionPerformed String
-  accessedAt      DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientId       String?   @map("patient_id")
+  reason          String    @db.Text
+  actionPerformed String    @map("action_performed")
+  accessedAt      DateTime  @default(now()) @map("accessed_at")
+  ipAddress       String?   @map("ip_address")
+  userRole        String?   @map("user_role")
+  severity        String    @default("EMERGENCY") // EMERGENCY | CRITICAL_OVERRIDE | SENSITIVE_RECORD
+  reviewedByDpo   Boolean   @default(false) @map("reviewed_by_dpo")
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewedById    String?   @map("reviewed_by_id")
+  dpoNotes        String?   @map("dpo_notes") @db.Text
+  dpoAction       String?   @map("dpo_action") // APPROVED | FLAG_BREACH | ESCALATED
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient         Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([patientId])
+  @@index([reviewedByDpo])
+  @@index([accessedAt])
   @@map("break_glass_logs")
+}
+
+model PatientConsent {
+  id                    String    @id @default(uuid())
+  fhirId                String?   @unique
+  patientId             String    @map("patient_id")
+  status                String    @default("ACTIVE") @map("status") // DRAFT | ACTIVE | INACTIVE | REVOKED | EXPIRED
+  scope                 String    @default("PATIENT_PRIVACY") @map("scope") // PATIENT_PRIVACY | RESEARCH | REGISTRY_SHARING | THIRD_PARTY_DISCLOSURE | TELEHEALTH
+  category              String    @default("DATA_PROCESSING") @map("category") // SENSITIVE_HEALTH_DATA | GENETIC_DATA | REPRODUCTIVE_HEALTH | MENTAL_HEALTH | GENERAL_EHR
+  provisionType         String    @default("PERMIT") @map("provision_type") // PERMIT | DENY
+  purposeOfUse          String    @map("purpose_of_use") // TREATMENT | PUBLIC_HEALTH_SURVEILLANCE | CLINICAL_RESEARCH | HMO_CLAIMS | HIE_INTEROP
+  dataClassesAllowed    String?   @map("data_classes_allowed") // Comma-separated: "DEMOGRAPHICS,DIAGNOSES,LABS,MEDICATIONS"
+  dataClassesRestricted String?   @map("data_classes_restricted") // Comma-separated: "HIV_STATUS,MENTAL_HEALTH"
+  consentingPartyName   String?   @map("consenting_party_name")
+  consentingPartyRel    String    @default("SELF") @map("consenting_party_rel") // SELF | PARENT | GUARDIAN | SPOUSE
+  signatureType         String    @default("DIGITAL") @map("signature_type") // DIGITAL | WRITTEN | VERBAL_WITNESSED
+  signatureRef          String?   @map("signature_ref")
+  validFrom             DateTime  @default(now()) @map("valid_from")
+  validTo               DateTime? @map("valid_to")
+  revokedAt             DateTime? @map("revoked_at")
+  revokedReason         String?   @map("revoked_reason")
+  witnessStaffId        String?   @map("witness_staff_id")
+  dpoReviewed           Boolean   @default(true) @map("dpo_reviewed")
+  ndpcLawfulBasis       String    @default("EXPLICIT_CONSENT") @map("ndpc_lawful_basis") // EXPLICIT_CONSENT | VITAL_INTEREST | PUBLIC_HEALTH_LAW | LEGAL_OBLIGATION
+  notes                 String?   @map("notes") @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  witnessStaff          Staff?    @relation("ConsentWitness", fields: [witnessStaffId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, status])
+  @@index([scope, status])
+  @@index([createdAt])
+  @@map("patient_consents")
 }
 
 model PatientCardReprint {
@@ -1973,6 +2030,9 @@ model PharmacyInventoryItem {
   requiresFasting     Boolean                          @default(false)
   isActive            Boolean                          @default(true)
   loincCode           String?
+  atcCode             String?                          @map("atc_code")
+  atcName             String?                          @map("atc_name")
+  therapeuticClass    String?                          @map("therapeutic_class")
   moniepointProductId String?
   stockLeft           Int                              @default(0)
   createdAt           DateTime                         @default(now())
@@ -4319,11 +4379,15 @@ model TerminologyConcept {
 
   @@unique([system, code])
   @@index([system, code])
+  @@index([system])
+  @@index([code])
+  @@index([display])
   @@index([category])
+  @@index([system, category])
+  @@index([system, isActive])
   @@index([isActive])
   @@index([createdAt])
   @@index([updatedAt])
-  @@index([code])
   @@map("terminology_concepts")
 }
 
@@ -4338,6 +4402,7 @@ model CodeMapping {
   createdAt     DateTime           @default(now())
 
   @@index([conceptId])
+  @@index([localItemType, localItemId])
   @@index([createdAt])
   @@map("code_mappings")
 }
@@ -4793,6 +4858,9 @@ model NmrsConfig {
   openmrsPassword   String   @default("Admin123") @map("openmrs_password")
   facilityName      String   @default("Faith Foundation Specialist Hospital") @map("facility_name")
   facilityDATIMCode String   @default("DATIM-NIG-7821") @map("facility_datim_code")
+  facilityDhprsCode String?  @default("DHPRS-FCT-0482") @map("facility_dhprs_code")
+  facilityNhfrCode  String?  @default("NHFR-2489-01") @map("facility_nhfr_code")
+  nhtdaoRegistered  Boolean  @default(true) @map("nhtdao_registered")
   stateName         String   @default("Benue") @map("state_name")
   lgaName           String   @default("Makurdi") @map("lga_name")
   autoSyncEnabled   Boolean  @default(true) @map("auto_sync_enabled")
@@ -4911,5 +4979,67 @@ model NmrsSyncQueue {
   @@index([status, createdAt])
   @@index([entityType, entityId])
   @@map("nmrs_sync_queues")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NHTDAO Layer 4: Public Health Aggregate Reporting (DHIS2 / NHMIS / IDSR / OpenHEXA)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Dhis2Config {
+  id                    String    @id @default(uuid())
+  baseUrl               String    @default("https://dhis2nigeria.org.ng/dhis") @map("base_url")
+  authType              String    @default("BASIC") @map("auth_type") // BASIC | PAT
+  username              String?
+  password              String?
+  personalAccessToken   String?   @map("personal_access_token")
+  orgUnitUid            String?   @map("org_unit_uid")
+  dataSetUid            String?   @map("data_set_uid")
+  attributeOptionComboUid String? @map("attribute_option_combo_uid")
+  periodType            String    @default("Monthly") @map("period_type")
+  autoSubmitEnabled     Boolean   @default(false) @map("auto_submit_enabled")
+  submissionDayOfMonth  Int       @default(5) @map("submission_day_of_month")
+  openhexaFeedEnabled   Boolean   @default(false) @map("openhexa_feed_enabled")
+  openhexaApiKey        String?   @map("openhexa_api_key")
+  lastConnectionStatus  String?   @map("last_connection_status")
+  lastConnectionAt      DateTime? @map("last_connection_at")
+  isActive              Boolean   @default(true) @map("is_active")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("dhis2_configs")
+}
+
+model Dhis2DataElementMapping {
+  id                     String   @id @default(uuid())
+  indicatorKey           String   @unique @map("indicator_key")
+  dataElementUid         String?  @map("data_element_uid")
+  categoryOptionComboUid String?  @map("category_option_combo_uid")
+  isEnabled              Boolean  @default(true) @map("is_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("dhis2_data_element_mappings")
+}
+
+model Dhis2Submission {
+  id               String    @id @default(uuid())
+  period           String
+  dataSetUid       String?   @map("data_set_uid")
+  orgUnitUid       String?   @map("org_unit_uid")
+  status           String    @default("PENDING") // PENDING | DRY_RUN_OK | SUCCESS | WARNING | ERROR
+  dryRun           Boolean   @default(false) @map("dry_run")
+  trigger          String    @default("MANUAL") // MANUAL | SCHEDULED
+  payload          Json
+  importSummary    Json?     @map("import_summary")
+  importedCount    Int       @default(0) @map("imported_count")
+  updatedCount     Int       @default(0) @map("updated_count")
+  ignoredCount     Int       @default(0) @map("ignored_count")
+  errorMessage     String?   @map("error_message") @db.Text
+  submittedById    String?   @map("submitted_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([period])
+  @@index([status, createdAt])
+  @@map("dhis2_submissions")
 }
 

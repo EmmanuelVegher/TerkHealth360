@@ -62,7 +62,7 @@ let _activeLayer: DbLayer = 'PRIMARY';
 const _layerStatus: Record<DbLayer, LayerStatus> = {
   PRIMARY: { layer: 'PRIMARY', url: process.env.DATABASE_URL!,         healthy: true,                                       lastCheck: null, lastError: null, failures: 0, successes: 0 },
   STANDBY: { layer: 'STANDBY', url: process.env.STANDBY_DATABASE_URL!, healthy: Boolean(process.env.STANDBY_DATABASE_URL), lastCheck: null, lastError: null, failures: 0, successes: 0 },
-  CLOUD:   { layer: 'CLOUD',   url: process.env.NEON_DATABASE_URL!,     healthy: false,                                      lastCheck: null, lastError: null, failures: 0, successes: 0 },
+  CLOUD:   { layer: 'CLOUD',   url: process.env.NEON_DATABASE_URL!,     healthy: Boolean(process.env.NEON_DATABASE_URL),     lastCheck: null, lastError: null, failures: 0, successes: 0 },
   OFFLINE: { layer: 'OFFLINE', url: '',                                  healthy: false,                                      lastCheck: null, lastError: null, failures: 0, successes: 0 },
 };
 

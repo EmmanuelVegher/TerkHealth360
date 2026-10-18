@@ -71,6 +71,9 @@ import LeaveManagementPage from './pages/LeaveManagementPage';
 import RecordMigration from './pages/RecordMigration';
 import DentalClinic from './pages/DentalClinic';
 import EyeClinic from './pages/EyeClinic';
+import ClinicsHub from './pages/clinics/ClinicsHub';
+import ClinicDashboard from './pages/clinics/ClinicDashboard';
+import ClinicPatientWorkspace from './pages/clinics/ClinicPatientWorkspace';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -181,6 +184,10 @@ function App() {
         <Route path="eye-clinic/optical-rx"   element={<EyeClinic />} />
         <Route path="eye-clinic/telemetry"    element={<EyeClinic />} />
         <Route path="eye-clinic/*"            element={<EyeClinic />} />
+        {/* Specialty Disease Clinics (NHTDAO Harmonized Workspaces) */}
+        <Route path="clinics"                 element={<ClinicsHub />} />
+        <Route path="clinics/:program"         element={<ClinicDashboard />} />
+        <Route path="clinics/:program/patient/:patientId" element={<ClinicPatientWorkspace />} />
         {/* Nigeria Medical Records System (NMRS) Redirects */}
         <Route path="nmrs-interop"            element={<Navigate to="/emr-workspace" replace />} />
         <Route path="nmrs-interop/*"          element={<Navigate to="/emr-workspace" replace />} />

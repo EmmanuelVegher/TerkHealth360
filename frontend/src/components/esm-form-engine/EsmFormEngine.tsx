@@ -30,6 +30,8 @@ import { evaluateExpression } from './expressionRunner';
 import { EsmPageRenderer } from './EsmPageRenderer';
 import { EsmSidebar } from './EsmSidebar';
 import { normalizeLegacyFormData } from './legacyFormNormalizer';
+import { ALL_ARV_DRUGS, getArvDrugsForRegimen } from './arvDatasource';
+import { lookupArvStrength } from './commonExpressionHelpers';
 
 export interface EsmFormEngineProps {
   schema: FormSchema;
@@ -110,14 +112,96 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
     setFormValues((prev) => {
       const updated = { ...prev, [fieldId]: cleanVal };
 
+      // When a Regimen is selected, automatically update active_regimen_info,
+      // and pre-select the primary FDC drug into ARV Drug 1 with its strength & frequency
+      if (
+        fieldId === 'Adult_1st_Line_Regimens' ||
+        fieldId === 'Adult_2nd_line_ARV_regimen' ||
+        fieldId === 'Adult_3rd_Line_ARV_Regimens' ||
+        fieldId === 'Child_1st_line_ARV_regimen' ||
+        fieldId === 'Child_2nd_line_ARV_regimen' ||
+        fieldId === 'Child_3rd_Line_ARV_Regimens' ||
+        fieldId === 'dispensedRegimen' ||
+        fieldId === 'currentRegimen' ||
+        fieldId === 'regimen'
+      ) {
+        if (cleanVal) {
+          const ageGroup = updated['Treatment_age_group'] || 'a291af62-d00e-4ace-a672-f6f965b325fe';
+          updated['active_regimen_info'] = `${ageGroup}|${cleanVal}`;
+          updated['dispensedRegimen'] = cleanVal;
+
+          const filteredDrugs = getArvDrugsForRegimen(cleanVal);
+          const primaryFdc = filteredDrugs.find((d) => d.isFdc) || filteredDrugs[0];
+          if (primaryFdc) {
+            // Auto-select primary drug for ARV Drug 1
+            updated['Drugs_ART_1'] = primaryFdc.concept;
+            updated['Drug_Strength_ART_1'] = primaryFdc.strength;
+            if (primaryFdc.frequency) {
+              updated['Drug_Frequency_ART_1'] = primaryFdc.frequency;
+            }
+          }
+        }
+      }
+
+      // When an ARV Drug option is selected, automatically select its Drug Strength & default Frequency
+      if (fieldId.startsWith('Drugs_ART_') && cleanVal) {
+        const rowIdx = fieldId.replace('Drugs_ART_', '');
+        const autoStrength = lookupArvStrength(cleanVal);
+        if (autoStrength) {
+          updated[`Drug_Strength_ART_${rowIdx}`] = autoStrength;
+        }
+        const matchedDrug = ALL_ARV_DRUGS.find(
+          (d) =>
+            d.concept.toLowerCase() === String(cleanVal).toLowerCase() ||
+            d.value.toLowerCase() === String(cleanVal).toLowerCase() ||
+            d.label.toLowerCase() === String(cleanVal).toLowerCase() ||
+            String(cleanVal).toLowerCase().includes(d.concept.toLowerCase())
+        );
+        if (matchedDrug?.frequency && !updated[`Drug_Frequency_ART_${rowIdx}`]) {
+          updated[`Drug_Frequency_ART_${rowIdx}`] = matchedDrug.frequency;
+        }
+      }
+
+      // Auto-convenience for duration/qty within the same ARV drug row (never cross-pollinating rows)
+      if (fieldId.startsWith('duration_pharm_ART_') && cleanVal) {
+        const rowIdx = fieldId.replace('duration_pharm_ART_', '');
+        if (updated[`arvDispensedInDays_ART_${rowIdx}`] === undefined || updated[`arvDispensedInDays_ART_${rowIdx}`] === '') {
+          updated[`arvDispensedInDays_ART_${rowIdx}`] = cleanVal;
+        }
+        if (updated[`qty_prescribed_pharm_ART_${rowIdx}`] === undefined || updated[`qty_prescribed_pharm_ART_${rowIdx}`] === '') {
+          updated[`qty_prescribed_pharm_ART_${rowIdx}`] = cleanVal;
+        }
+        if (updated[`qty_dispensed_pharm_ART_${rowIdx}`] === undefined || updated[`qty_dispensed_pharm_ART_${rowIdx}`] === '') {
+          updated[`qty_dispensed_pharm_ART_${rowIdx}`] = cleanVal;
+        }
+      }
+
+      // If a drug is cleared from a non-primary row (e.g. Drugs_ART_2..5), clear all sub-fields for that row
+      if (fieldId.startsWith('Drugs_ART_') && !cleanVal) {
+        const rowIdx = fieldId.replace('Drugs_ART_', '');
+        delete updated[`Drug_Strength_ART_${rowIdx}`];
+        delete updated[`Drug_Frequency_ART_${rowIdx}`];
+        delete updated[`duration_pharm_ART_${rowIdx}`];
+        delete updated[`qty_prescribed_pharm_ART_${rowIdx}`];
+        delete updated[`arvDispensedInDays_ART_${rowIdx}`];
+        delete updated[`qty_dispensed_pharm_ART_${rowIdx}`];
+      }
+
       // Evaluate any calculate expressions on dependent fields
       allRawFields.forEach((field) => {
         const calcExpr = field.questionOptions?.calculate?.calculateExpression;
         if (calcExpr) {
           try {
             const calculatedVal = evaluateExpression(calcExpr, field, allRawFields, updated, patientContext);
-            if (calculatedVal !== null && calculatedVal !== undefined) {
+            if (calculatedVal !== null && calculatedVal !== undefined && calculatedVal !== '') {
               updated[field.id] = calculatedVal;
+            } else if (calculatedVal === '' || calculatedVal === null) {
+              if (field.id.startsWith('Drug_Strength_ART_')) {
+                const drugId = field.id.replace('Drug_Strength_', 'Drugs_');
+                if (!updated[drugId]) {
+                  updated[field.id] = '';
+                }
+              }
             }
           } catch {
             // Ignore calculate evaluation error
@@ -294,9 +378,87 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
       return;
     }
 
-    // Build standard OpenMRS / NMRS Obs Encounter Payload
-    const obsList: Array<{ concept: string; value: any; obsDatetime?: string; formFieldNamespace?: string; formFieldPath?: string }> = [];
+    // Build standard OpenMRS / NMRS Obs Encounter Payload strictly matching OpenMRS 3.x ESM form engine specification
+    const obsList: any[] = [];
+    const handledFieldIds = new Set<string>();
+
+    // 1. Identify obsGroups from schema
+    const obsGroups: FormField[] = [];
+    schema.pages?.forEach((p) => {
+      p.sections?.forEach((s) => {
+        s.questions?.forEach((q) => {
+          if (q.type === 'obsGroup' || q.questionOptions?.rendering === 'repeating') {
+            obsGroups.push(q);
+          }
+        });
+      });
+    });
+
+    // Process obsGroups
+    obsGroups.forEach((grp) => {
+      handledFieldIds.add(grp.id);
+      grp.questions?.forEach((child) => handledFieldIds.add(child.id));
+
+      const grpConcept = grp.questionOptions?.concept;
+      if (!grpConcept) return;
+
+      const isRepeating = grp.questionOptions?.rendering === 'repeating';
+      const grpVal = formValues[grp.id];
+
+      if (isRepeating && Array.isArray(grpVal)) {
+        grpVal.forEach((row) => {
+          if (!row || typeof row !== 'object') return;
+          const groupMembers: any[] = [];
+          grp.questions?.forEach((subQ) => {
+            const subVal = row[subQ.id];
+            if (subVal !== undefined && subVal !== null && subVal !== '' && subQ.questionOptions?.concept) {
+              groupMembers.push({
+                concept: subQ.questionOptions.concept,
+                value: subVal,
+                formFieldNamespace: 'rfe-forms',
+                formFieldPath: `rfe-forms-${subQ.id}`,
+              });
+            }
+          });
+          if (groupMembers.length > 0) {
+            obsList.push({
+              concept: grpConcept,
+              formFieldNamespace: 'rfe-forms',
+              formFieldPath: `rfe-forms-${grp.id}`,
+              groupMembers,
+            });
+          }
+        });
+      } else {
+        // Non-repeating Obs Group (e.g. ARVDrug_1..5)
+        const groupMembers: any[] = [];
+        grp.questions?.forEach((subQ) => {
+          const subVal = formValues[subQ.id];
+          if (subVal !== undefined && subVal !== null && subVal !== '' && subQ.questionOptions?.concept) {
+            groupMembers.push({
+              concept: subQ.questionOptions.concept,
+              value: subVal,
+              formFieldNamespace: 'rfe-forms',
+              formFieldPath: `rfe-forms-${subQ.id}`,
+            });
+          }
+        });
+        if (groupMembers.length > 0) {
+          obsList.push({
+            concept: grpConcept,
+            formFieldNamespace: 'rfe-forms',
+            formFieldPath: `rfe-forms-${grp.id}`,
+            groupMembers,
+          });
+        }
+      }
+    });
+
+    // 2. Process all remaining standalone root fields
     allRawFields.forEach((field) => {
+      if (handledFieldIds.has(field.id)) return;
+      if (field.type === 'obsGroup') return;
+
       const val = formValues[field.id];
       if (val !== undefined && val !== null && val !== '') {
         const conceptUuid = field.questionOptions?.concept;
@@ -305,8 +467,8 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
             concept: conceptUuid,
             value: val,
             obsDatetime: formValues['encounterDatetime'] || new Date().toISOString(),
-            formFieldNamespace: 'rfe',
-            formFieldPath: field.id,
+            formFieldNamespace: 'rfe-forms',
+            formFieldPath: `rfe-forms-${field.id}`,
           });
         }
       }
@@ -318,8 +480,11 @@ export const EsmFormEngine: React.FC<EsmFormEngineProps> = ({
       encounterDatetime: formValues['encounterDatetime'] || new Date().toISOString(),
       location: formValues['encounterLocation'] || patientContext.locationUuid,
       provider: formValues['encounterProvider'],
+      form: {
+        uuid: schema.uuid || '4a238dc4-a76b-4c0f-a100-229d98fd5758',
+      },
       obs: obsList,
-      formSchemaUuid: schema.uuid,
+      formSchemaUuid: schema.uuid || '4a238dc4-a76b-4c0f-a100-229d98fd5758',
       formName: schema.name,
     };
 

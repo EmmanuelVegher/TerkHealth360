@@ -16,6 +16,7 @@ import {
   MedicalServices, Science, Receipt, Launch, MonitorHeart, Air, Scale,
   FitnessCenter, RestartAlt, FilterAlt, Close, CloudSync, SyncAlt, HealthAndSafety,
   Edit, CloudDownload, Assignment, LibraryBooks, Storage, Description, Check, ExpandMore, Sync,
+  FolderShared,
 } from '@mui/icons-material';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -23,6 +24,7 @@ import {
 } from 'recharts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
+import PatientLongitudinal from './clinics/PatientLongitudinal';
 import { useSnackbar } from 'notistack';
 import { EsmFormEngine, EsmFormBuilder, FormSchema, normalizeLegacyFormData } from '../components/esm-form-engine';
 
@@ -227,9 +229,10 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
   const [nmrsFormData, setNmrsFormData] = useState<Record<string, any>>({});
   const [savingNmrsForm, setSavingNmrsForm] = useState<boolean>(false);
   const [syncingNmrs, setSyncingNmrs] = useState<boolean>(false);
+  const [pullingNmrs, setPullingNmrs] = useState<boolean>(false);
   const [activeFormPage, setActiveFormPage] = useState<number>(0);
   const [formCategoryFilter, setFormCategoryFilter] = useState<string>('ALL');
-  const [nmrsSubTab, setNmrsSubTab] = useState<'forms' | 'studio'>('forms');
+  const [nmrsSubTab, setNmrsSubTab] = useState<'forms' | 'longitudinal' | 'records' | 'studio'>('forms');
   const [editPepfarModalOpen, setEditPepfarModalOpen] = useState<boolean>(false);
   const [customPepfarInput, setCustomPepfarInput] = useState<string>('');
   const [savingPepfarId, setSavingPepfarId] = useState<boolean>(false);
@@ -467,6 +470,21 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
     }
   };
 
+  const handlePullPatientEncountersFromOpenmrs = async () => {
+    if (!selectedPat?.id) return;
+    setPullingNmrs(true);
+    try {
+      await api.post(`/nmrs/patients/${selectedPat.id}/pull`);
+      const sRes = await api.get(`/nmrs/patients/${selectedPat.id}/summary`);
+      setNmrsSummary(sRes.data?.data || null);
+      enqueueSnackbar('Refreshed and synchronized all encounter records and observations from OpenMRS host', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to pull from OpenMRS host', { variant: 'error' });
+    } finally {
+      setPullingNmrs(false);
+    }
+  };
+
   const handleSavePepfarId = async () => {
     if (!selectedPat?.id || !customPepfarInput.trim()) {
       enqueueSnackbar('Please enter a valid PEPFAR Identifier (Identifier Type 4)', { variant: 'warning' });
@@ -643,9 +661,11 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
       news2Risk: t.news2Risk || 'LOW',
       presentingComplaints: t.presentingComplaints || '',
       triageType: t.triageType || 'OUTPATIENT',
-      source: t.presentingComplaints?.includes('Treatment Sheet') || t.presentingComplaints?.includes('migrat') || t.triageType === 'MIGRATED'
-        ? 'MIGRATED FOLDER'
-        : (t.triageType === 'INPATIENT' ? 'WARD INPATIENT' : 'TRIAGE DESK'),
+      source: (t.triageType === 'SPECIALTY_CLINIC' || t.presentingComplaints?.startsWith('['))
+        ? (t.presentingComplaints?.match(/^\[(.*?)\]/)?.[1] ? `[${t.presentingComplaints.match(/^\[(.*?)\]/)[1].toUpperCase()}]` : 'SPECIALTY CLINIC')
+        : (t.presentingComplaints?.includes('Treatment Sheet') || t.presentingComplaints?.includes('migrat') || t.triageType === 'MIGRATED'
+          ? 'MIGRATED FOLDER'
+          : (t.triageType === 'INPATIENT' ? 'WARD INPATIENT' : 'TRIAGE DESK')),
       recordedBy: t.creator ? `${t.creator.firstName} ${t.creator.lastName}${t.creator.designation ? ` (${t.creator.designation})` : ''}` : 'Triage / Ward Staff',
       isObservation: false,
     }));
@@ -687,6 +707,44 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
     const combined = [...triageList, ...obsList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return combined;
   }, [emrData]);
+
+  // Unified Prescriptions list (merges Outpatient Pharmacy & Specialty Clinic Medication Requests)
+  const unifiedPrescriptionsList = useMemo(() => {
+    const list: any[] = [];
+    const seenKeys = new Set<string>();
+
+    // 1. Pharmacy Prescriptions
+    for (const p of prescriptions || []) {
+      const key = p.id || p.prescriptionNumber;
+      if (key) seenKeys.add(key);
+      list.push({
+        ...p,
+        source: 'Outpatient Pharmacy',
+        sourceType: 'PHARMACY',
+      });
+    }
+
+    // 2. Specialty Clinics & EMR Medication Requests
+    for (const m of (emrData?.recentMeds || [])) {
+      const key = m.id || m.fhirId;
+      if (key && seenKeys.has(key)) continue;
+      const originMatch = m.note?.match(/Origin:\s*\[(.*?)\]/i) || m.medicationDisplay?.match(/\[(.*?)\]/i);
+      const originTag = originMatch ? `[${originMatch[1].toUpperCase()}]` : (m.note?.includes('Specialty') ? 'SPECIALTY CLINIC' : 'EMR ORDER');
+      list.push({
+        ...m,
+        prescriptionNumber: m.fhirId || m.id?.substring(0, 8).toUpperCase(),
+        medicationName: m.medicationDisplay || m.medicationCode,
+        medicationDisplay: m.medicationDisplay,
+        dosage: m.dosageText,
+        dosageInstruction: m.dosageText,
+        orderedAt: m.authoredOn || m.createdAt,
+        source: originTag,
+        sourceType: 'MED_REQUEST',
+      });
+    }
+
+    return list.sort((a, b) => new Date(b.orderedAt || b.createdAt || 0).getTime() - new Date(a.orderedAt || a.createdAt || 0).getTime());
+  }, [prescriptions, emrData?.recentMeds]);
 
   const filteredVitalsList = useMemo(() => {
     return unifiedVitalsList.filter((v: any) => {
@@ -797,7 +855,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
     const riskColor = riskCategory === 'HIGH' ? '#f03e3e' : riskCategory === 'MODERATE' ? '#f59f00' : '#2b8a3e';
 
     // Polypharmacy Assessment
-    const rxCount = prescriptions.length || emrData.recentMeds?.length || 0;
+    const rxCount = unifiedPrescriptionsList.length;
     const polypharmacyRisk = rxCount >= 5 ? 'HIGH (Polypharmacy Flag)' : rxCount >= 3 ? 'MODERATE' : 'LOW';
 
     return {
@@ -809,7 +867,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
       rxCount,
       activeDiagCount,
     };
-  }, [emrData, prescriptions]);
+  }, [emrData, unifiedPrescriptionsList]);
 
   // Helper to render ICD-10 Wrapped Pills
   const renderIcd10Pills = (icdStr: string) => {
@@ -898,6 +956,9 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
 
       if (names.length > 0) return names.join(', ');
     }
+
+    const topDisplay = cleanName(rx.medicationDisplay);
+    if (topDisplay) return topDisplay;
 
     const topDirect = cleanName(rx.medicationName);
     if (topDirect) return topDirect;
@@ -1157,6 +1218,12 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                   >
                     Refresh Records
                   </Button>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                    {[['hiv-art', 'HIV'], ['tb-dots', 'TB'], ['malaria', 'Malaria'], ['immunization', 'EPI'], ['polio-afp', 'AFP'], ['mch', 'MCH']].map(([id, label]) => (
+                      <Button key={id} size="small" variant="text" onClick={() => navigate(`/clinics/${id}/patient/${selectedPat.id}`)}
+                        sx={{ textTransform: 'none', fontWeight: 800, fontSize: '0.7rem', minWidth: 0, px: 1 }}>{label} clinic ↗</Button>
+                    ))}
+                  </Stack>
                 </Stack>
               </Grid>
             </Grid>
@@ -1348,7 +1415,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
               >
                 <Tab icon={<History fontSize="small" />} iconPosition="start" label={`Encounters & SOAP Notes (${emrData.consultationNotes?.length || 0})`} />
                 <Tab icon={<MonitorHeart fontSize="small" />} iconPosition="start" label={`Vitals & Triage History (${unifiedVitalsList.length})`} />
-                <Tab icon={<Medication fontSize="small" />} iconPosition="start" label={`Prescriptions (${prescriptions.length || emrData.recentMeds?.length || 0})`} />
+                <Tab icon={<Medication fontSize="small" />} iconPosition="start" label={`Prescriptions (${unifiedPrescriptionsList.length})`} />
                 <Tab icon={<Biotech fontSize="small" />} iconPosition="start" label={`Lab Diagnostics (${labOrders.length || 0})`} />
                 <Tab icon={<MedicalServices fontSize="small" />} iconPosition="start" label={`🦷 Dental & Odontogram (${dentalEncounters.length})`} />
                 <Tab icon={<ContentCut fontSize="small" />} iconPosition="start" label={`Surgical History (${(emrData.surgicalBookings || []).length})`} />
@@ -1357,7 +1424,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                 <Tab
                   icon={<CloudSync fontSize="small" />}
                   iconPosition="start"
-                  label={`🇳🇬 NMRS & HIV Forms (${nmrsSummary?.encounters?.length || 0})`}
+                  label={`🇳🇬 Specialty Clinics & Public Health (${nmrsSummary?.encounters?.length || 0})`}
                   sx={{ color: '#059669', '&.Mui-selected': { color: '#047857', fontWeight: 900 } }}
                 />
               </Tabs>
@@ -1839,8 +1906,15 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                   <Chip
                                     label={v.source}
                                     size="small"
-                                    variant="outlined"
-                                    color={v.source?.includes('MIGRATED') ? 'secondary' : 'primary'}
+                                    variant={v.source?.startsWith('[') ? 'filled' : 'outlined'}
+                                    color={
+                                      v.source?.includes('MALARIA') ? 'success' :
+                                      v.source?.includes('HIV') || v.source?.includes('ART') ? 'error' :
+                                      v.source?.includes('TB') || v.source?.includes('DOTS') ? 'warning' :
+                                      v.source?.includes('IMMUN') || v.source?.includes('POLIO') ? 'info' :
+                                      v.source?.includes('MCH') ? 'secondary' :
+                                      v.source?.includes('MIGRATED') ? 'secondary' : 'primary'
+                                    }
                                     sx={{ fontWeight: 700, fontSize: '0.65rem', height: 22 }}
                                   />
                                 </TableCell>
@@ -1892,16 +1966,24 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
               {/* ── TAB 2: PRESCRIPTIONS & PHARMACY HISTORY ─────────────────── */}
               {activeTab === 2 && (
                 <Stack spacing={2.5}>
-                  <Typography variant="subtitle1" fontWeight={800}>
-                    Medication Orders & Pharmacy Prescription History
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800}>
+                        Medication Orders & Pharmacy Prescription History ({unifiedPrescriptionsList.length})
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Unified pharmacotherapy orders from Outpatient Pharmacy and Specialty Clinics (Malaria, HIV/ART, TB/DOTS, EPI).
+                      </Typography>
+                    </Box>
+                  </Box>
 
-                  {prescriptions.length > 0 || emrData.recentMeds?.length > 0 ? (
+                  {unifiedPrescriptionsList.length > 0 ? (
                     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                       <Table size="small">
                         <TableHead sx={{ bgcolor: '#f8fafc' }}>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 800 }}>Prescription Ref</TableCell>
+                            <TableCell sx={{ fontWeight: 800 }}>Origin / Clinic Source</TableCell>
                             <TableCell sx={{ fontWeight: 800 }}>Medication Name</TableCell>
                             <TableCell sx={{ fontWeight: 800 }}>Dosage / Frequency</TableCell>
                             <TableCell sx={{ fontWeight: 800 }}>Prescribed Date</TableCell>
@@ -1909,10 +1991,26 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {(prescriptions.length > 0 ? prescriptions : emrData.recentMeds).map((rx: any, i: number) => (
+                          {unifiedPrescriptionsList.map((rx: any, i: number) => (
                             <TableRow key={rx.id || i} hover>
                               <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', color: 'primary.main' }}>
                                 {formatPrescriptionRef(rx, i)}
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={rx.source || 'Outpatient Pharmacy'}
+                                  size="small"
+                                  variant={rx.source?.startsWith('[') ? 'filled' : 'outlined'}
+                                  color={
+                                    rx.source?.includes('MALARIA') ? 'success' :
+                                    rx.source?.includes('HIV') || rx.source?.includes('ART') ? 'error' :
+                                    rx.source?.includes('TB') || rx.source?.includes('DOTS') ? 'warning' :
+                                    rx.source?.includes('IMMUN') || rx.source?.includes('POLIO') ? 'info' :
+                                    rx.source?.includes('MCH') ? 'secondary' :
+                                    'default'
+                                  }
+                                  sx={{ fontWeight: 800, fontSize: '0.65rem', height: 22 }}
+                                />
                               </TableCell>
                               <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>
                                 {formatPrescriptionMedName(rx)}
@@ -1921,7 +2019,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                 {formatPrescriptionDosage(rx)}
                               </TableCell>
                               <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                                {new Date(rx.createdAt || rx.orderedAt || Date.now()).toLocaleDateString()}
+                                {new Date(rx.orderedAt || rx.createdAt || Date.now()).toLocaleDateString()}
                               </TableCell>
                               <TableCell>
                                 <Chip
@@ -1967,7 +2065,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                           {/* Order Header */}
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
                             <Box>
-                              <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                              <Stack direction="row" spacing={1} alignItems="center" mb={0.5} flexWrap="wrap">
                                 <Chip
                                   label={(order.orderNumber || order.id?.substring(0, 8).toUpperCase() || '').startsWith('LAB-') ? (order.orderNumber || order.id?.substring(0, 8).toUpperCase()) : `LAB-${order.orderNumber || order.id?.substring(0, 8).toUpperCase()}`}
                                   color="success"
@@ -1982,10 +2080,20 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                                     sx={{ fontWeight: 800, fontSize: '0.65rem' }}
                                   />
                                 )}
+                                {(order.clinicalNotes?.includes('Origin:') || order.department === 'SPECIALTY_CLINIC') && (
+                                  <Chip
+                                    label={order.clinicalNotes?.match(/Origin:\s*\[(.*?)\]/i)?.[1] ? `📍 [${order.clinicalNotes.match(/Origin:\s*\[(.*?)\]/i)[1].toUpperCase()}]` : '📍 [SPECIALTY CLINIC]'}
+                                    color="secondary"
+                                    size="small"
+                                    variant="filled"
+                                    sx={{ fontWeight: 800, fontSize: '0.68rem', height: 22 }}
+                                  />
+                                )}
                               </Stack>
                               <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
                                 🗓️ Ordered Date: {new Date(order.createdAt || order.orderedAt || Date.now()).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                                 {order.requestedBy && ` • Requested by Dr. ${order.requestedBy.firstName || ''} ${order.requestedBy.lastName || ''}`}
+                                {order.clinicalNotes && ` • ${order.clinicalNotes}`}
                               </Typography>
                             </Box>
 
@@ -2634,10 +2742,10 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                 </Stack>
               )}
 
-              {/* ── TAB 8: NIGERIA MEDICAL RECORDS SYSTEM (NMRS) PUBLIC HEALTH & DYNAMIC FORMS ── */}
+              {/* ── TAB 8: NIGERIA MEDICAL RECORDS SYSTEM (NMRS) PUBLIC HEALTH & SPECIALTY DISEASE CLINICS ── */}
               {activeTab === 8 && (
                 <Stack spacing={3}>
-                  {/* 1. Public Health HIV Care Passport Card */}
+                  {/* 1. Public Health HIV Care Passport & Specialty Clinics Header Card */}
                   <Card sx={{
                     border: '1px solid #10b981',
                     borderRadius: 3,
@@ -2646,29 +2754,58 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                   }}>
                     <Box sx={{
                       background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                      p: 2,
+                      p: 2.5,
                       color: '#ffffff',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       flexWrap: 'wrap',
-                      gap: 1.5
+                      gap: 2
                     }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 40, height: 40 }}>
-                          <HealthAndSafety sx={{ color: '#fff' }} />
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 44, height: 44 }}>
+                          <HealthAndSafety sx={{ color: '#fff', fontSize: 26 }} />
                         </Avatar>
                         <Box>
                           <Typography variant="h6" fontWeight={800} sx={{ color: '#fff' }}>
-                            Nigeria HIV Care Passport & Public Health Indicators
+                            Nigeria Public Health Care Passport &amp; Specialty Disease Clinics
                           </Typography>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                            FMoH / PEPFAR Enrolled Client • OpenMRS Bi-Directional Synchronized Profile
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', display: 'block', mt: 0.25 }}>
+                            FMoH / PEPFAR Enrolled Client • OpenMRS Bi-Directional Synchronized Profile • Interoperable Disease Clinics
                           </Typography>
                         </Box>
                       </Box>
 
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {/* Quick Clinic Links & Sync Actions */}
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {selectedPat && [
+                          { id: 'hiv-art', label: 'HIV / ART ↗' },
+                          { id: 'tb-dots', label: 'TB / DOTS ↗' },
+                          { id: 'malaria', label: 'Malaria ↗' },
+                          { id: 'immunization', label: 'EPI ↗' },
+                          { id: 'polio-afp', label: 'Polio / AFP ↗' },
+                          { id: 'mch', label: 'MCH ↗' },
+                        ].map((c) => (
+                          <Button
+                            key={c.id}
+                            size="small"
+                            onClick={() => navigate(`/clinics/${c.id}/patient/${selectedPat.id}`)}
+                            sx={{
+                              bgcolor: 'rgba(255,255,255,0.18)',
+                              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                              color: '#fff',
+                              fontWeight: 800,
+                              textTransform: 'none',
+                              borderRadius: 2,
+                              fontSize: '0.72rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            {c.label}
+                          </Button>
+                        ))}
+                        <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.3)', my: 0.5 }} />
                         <Button
                           variant="outlined"
                           size="small"
@@ -2681,10 +2818,11 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                             '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', borderColor: '#fff' },
                             fontWeight: 700,
                             textTransform: 'none',
-                            borderRadius: 2
+                            borderRadius: 2,
+                            fontSize: '0.75rem',
                           }}
                         >
-                          Pull Schemas from OpenMRS CLOB
+                          Pull CLOB Schemas
                         </Button>
                         <Button
                           variant="contained"
@@ -2698,16 +2836,36 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                             color: '#fff',
                             fontWeight: 700,
                             textTransform: 'none',
-                            borderRadius: 2
+                            borderRadius: 2,
+                            fontSize: '0.75rem',
                           }}
                         >
-                          {syncingNmrs ? 'Syncing...' : 'Sync to OpenMRS Host'}
+                          {syncingNmrs ? 'Syncing...' : 'Sync to OpenMRS'}
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={pullingNmrs ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <Refresh />}
+                          onClick={handlePullPatientEncountersFromOpenmrs}
+                          disabled={pullingNmrs}
+                          sx={{
+                            bgcolor: 'rgba(255,255,255,0.25)',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.35)' },
+                            color: '#fff',
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {pullingNmrs ? 'Pulling...' : 'Pull Latest'}
                         </Button>
                       </Box>
                     </Box>
 
                     <CardContent sx={{ p: 2.5 }}>
                       <Grid container spacing={2}>
+                        {/* HIV 1: PEPFAR ID */}
                         <Grid item xs={12} sm={6} md={3}>
                           <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', height: '100%', position: 'relative' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2739,6 +2897,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                           </Box>
                         </Grid>
 
+                        {/* HIV 2: Regimen */}
                         <Grid item xs={12} sm={6} md={3}>
                           <Box sx={{ p: 1.5, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #bae6fd', height: '100%' }}>
                             <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700, display: 'block' }}>
@@ -2747,10 +2906,11 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                             <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0284c7', my: 0.5 }}>
                               {nmrsSummary?.mapping?.currentRegimen || '1a: TDF + 3TC + DTG'}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontSize: 10 }}>First-Line Optimized Adult</Typography>
+                            <Typography variant="caption" sx={{ color: '#64748b', fontSize: 10 }}>First-Line Optimized Adult Regimen</Typography>
                           </Box>
                         </Grid>
 
+                        {/* HIV 3: Viral Load */}
                         <Grid item xs={12} sm={6} md={3}>
                           <Box sx={{ p: 1.5, bgcolor: '#ecfdf5', borderRadius: 2, border: '1px solid #a7f3d0', height: '100%' }}>
                             <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block' }}>
@@ -2763,6 +2923,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                           </Box>
                         </Grid>
 
+                        {/* HIV 4: CD4 */}
                         <Grid item xs={12} sm={6} md={3}>
                           <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', height: '100%' }}>
                             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, display: 'block' }}>
@@ -2772,6 +2933,58 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                               {nmrsSummary?.mapping?.lastCd4Count ? `${nmrsSummary.mapping.lastCd4Count} cells/µL` : '520 cells/µL'}
                             </Typography>
                             <Typography variant="caption" sx={{ color: '#64748b', fontSize: 10 }}>Target: &gt;350 cells/µL</Typography>
+                          </Box>
+                        </Grid>
+
+                        {/* Cross Clinic 1: TB / DOTS Status */}
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#fffbeb', borderRadius: 2, border: '1px solid #fde68a', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 700, display: 'block' }}>
+                              TB / DOTS Program
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#d97706', my: 0.5 }}>
+                              Screened Active
+                            </Typography>
+                            <Chip label="NTBLCP Protocol" size="small" sx={{ fontSize: 9.5, height: 18, fontWeight: 800, bgcolor: '#fef3c7', color: '#92400e' }} />
+                          </Box>
+                        </Grid>
+
+                        {/* Cross Clinic 2: Malaria Status */}
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#f0fdf4', borderRadius: 2, border: '1px solid #bbf7d0', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#15803d', fontWeight: 700, display: 'block' }}>
+                              Malaria Surveillance
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#16a34a', my: 0.5 }}>
+                              NMEP Monitored
+                            </Typography>
+                            <Chip label="mRDT &amp; ACT Active" size="small" sx={{ fontSize: 9.5, height: 18, fontWeight: 800, bgcolor: '#dcfce7', color: '#15803d' }} />
+                          </Box>
+                        </Grid>
+
+                        {/* Cross Clinic 3: Immunization EPI */}
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#eff6ff', borderRadius: 2, border: '1px solid #bfdbfe', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#1d4ed8', fontWeight: 700, display: 'block' }}>
+                              Routine Immunization (EPI)
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#2563eb', my: 0.5 }}>
+                              NPHCDA Registered
+                            </Typography>
+                            <Chip label="Schedule Active" size="small" sx={{ fontSize: 9.5, height: 18, fontWeight: 800, bgcolor: '#dbeafe', color: '#1e40af' }} />
+                          </Box>
+                        </Grid>
+
+                        {/* Cross Clinic 4: Maternal & Child Health */}
+                        <Grid item xs={12} sm={6} md={3}>
+                          <Box sx={{ p: 1.5, bgcolor: '#fdf2f8', borderRadius: 2, border: '1px solid #fbcfe8', height: '100%' }}>
+                            <Typography variant="caption" sx={{ color: '#be185d', fontWeight: 700, display: 'block' }}>
+                              Maternal &amp; Child Health
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#db2777', my: 0.5 }}>
+                              NHMIS Integrated
+                            </Typography>
+                            <Chip label="MCH / PMTCT Connected" size="small" sx={{ fontSize: 9.5, height: 18, fontWeight: 800, bgcolor: '#fce7f3', color: '#9d174d' }} />
                           </Box>
                         </Grid>
                       </Grid>
@@ -2794,7 +3007,7 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                         </Typography>
                       </Box>
 
-                      {/* Mode Switcher: Form Entry vs Schema Studio */}
+                      {/* Mode Switcher: Form Entry vs Longitudinal vs Records vs Schema Studio */}
                       <Tabs
                         value={nmrsSubTab}
                         onChange={(_, v) => setNmrsSubTab(v)}
@@ -2819,6 +3032,13 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                         }}
                       >
                         <Tab value="forms" icon={<Assignment fontSize="small" />} iconPosition="start" label="Clinical Form Entry" />
+                        <Tab value="longitudinal" icon={<TrendingUp fontSize="small" />} iconPosition="start" label="Longitudinal Trends &amp; Timeline" />
+                        <Tab
+                          value="records"
+                          icon={<FolderShared fontSize="small" />}
+                          iconPosition="start"
+                          label={`Visit Records (${groupedVisits.reduce((acc, v) => acc + (v.encounters?.length || 0), 0)})`}
+                        />
                         <Tab value="studio" icon={<LibraryBooks fontSize="small" />} iconPosition="start" label="Schema Studio &amp; Builder" />
                       </Tabs>
                     </Box>
@@ -2832,12 +3052,16 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                             {[
                               { id: 'ALL', label: 'All Forms' },
-                              { id: 'HIV_PROGRAM', label: 'HIV Care Cards' },
-                              { id: 'PMTCT_ANC', label: 'PMTCT / ANC' },
+                              { id: 'HIV_PROGRAM', label: 'HIV / ART' },
+                              { id: 'TB_PROGRAM', label: 'TB / DOTS' },
+                              { id: 'MALARIA_PROGRAM', label: 'Malaria Registers' },
+                              { id: 'IMMUNIZATION_EPI', label: 'Immunization (EPI)' },
+                              { id: 'POLIO_AFP', label: 'Polio / AFP' },
+                              { id: 'PMTCT_ANC', label: 'PMTCT / Antenatal' },
+                              { id: 'MCH_CHILD_HEALTH', label: 'Child Health & IMCI' },
                               { id: 'HTS_TESTING', label: 'HTS Testing' },
-                              { id: 'PHARMACY', label: 'Pharmacy' },
-                              { id: 'LAB', label: 'Laboratory' },
-                              { id: 'TB_PROGRAM', label: 'TB Program' },
+                              { id: 'PHARMACY', label: 'Pharmacy Registers' },
+                              { id: 'LAB', label: 'Laboratory Orders' },
                               { id: 'PREP_PEP', label: 'PrEP & PEP' },
                               { id: 'CARE_SUPPORT', label: 'Care & Support' },
                             ].map(cat => (
@@ -2917,18 +3141,18 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
 
                           if (isBasicStub && nmrsSchemas.length > 0) {
                             const targetName = (activeSchema.formName || activeSchema.formCode || '').toLowerCase().trim();
-                            const matched = nmrsSchemas.find((s: any) => {
+                            const matched = nmrsSchemas.filter((s: any) => {
                               if (s.id === activeSchema.id) return false;
                               const sName = (s.formName || '').toLowerCase().trim();
                               const sJsonName = (s.schemaJson?.name || '').toLowerCase().trim();
                               return sName === targetName || sJsonName === targetName ||
                                 (targetName.includes('adult') && (s.formCode === 'ADULT_CLINICAL_EVALUATION' || sName.includes('adult initial') || sJsonName.includes('adult initial'))) ||
-                                (targetName.includes('pharmacy') && (s.formCode === 'PHARMACY_ORDER' || sName.includes('pharmacy order'))) ||
+                                (targetName.includes('pharmacy') && (s.formCode === 'PHARMACY_ORDER_FORM' || s.formCode === 'PHARMACY_ORDER' || sName.includes('pharmacy'))) ||
                                 (targetName.includes('lab') && (s.formCode === 'INTEGRATED_LAB_ORDER' || sName.includes('laboratory order'))) ||
                                 (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
                                 (targetName.includes('intake') && s.formCode === 'CLIENT_INTAKE_FORM') ||
                                 (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM'));
-                            });
+                            }).sort((a: any, b: any) => (b.schemaJson?.pages?.length || 0) - (a.schemaJson?.pages?.length || 0))[0];
                             if (matched?.schemaJson?.pages?.length) {
                               rawSchema = matched.schemaJson;
                             }
@@ -3006,8 +3230,184 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                         })()}
                       </Stack>
                     )}
+                    {nmrsSubTab === 'longitudinal' && selectedPat && (
+                      <Box sx={{ mt: 1 }}>
+                        <PatientLongitudinal patientId={selectedPat.id} />
+                      </Box>
+                    )}
 
-                    {/* SUBTAB 2: SCHEMA STUDIO & BUILDER */}
+                    {/* SUBTAB 3: CLINICAL FORM RECORDS GROUPED BY VISIT */}
+                    {nmrsSubTab === 'records' && (
+                      <Box sx={{ mt: 1 }}>
+                        {groupedVisits.length > 0 ? (
+                          <Stack spacing={2.5}>
+                            {groupedVisits.map((v, vIdx) => (
+                              <Accordion
+                                key={v.visitNumber || vIdx}
+                                defaultExpanded={vIdx === 0}
+                                sx={{
+                                  borderRadius: '12px !important',
+                                  border: '1px solid #e2e8f0',
+                                  boxShadow: 'none',
+                                  '&:before': { display: 'none' },
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <AccordionSummary
+                                  expandIcon={<ExpandMore />}
+                                  sx={{
+                                    bgcolor: '#f8fafc',
+                                    px: 2.5,
+                                    py: 1,
+                                    borderBottom: '1px solid #e2e8f0',
+                                    '& .MuiAccordionSummary-content': {
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      mr: 1
+                                    }
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                                      Visit: {v.visitNumber}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                      Checked in: {v.checkedInAt} | Type: {v.visitType} | Status: {v.status}
+                                    </Typography>
+                                  </Box>
+                                  <Chip
+                                    label={`${v.encounters.length} Encounters`}
+                                    size="small"
+                                    sx={{ fontWeight: 700, bgcolor: '#e2e8f0', color: '#334155' }}
+                                  />
+                                </AccordionSummary>
+
+                                <AccordionDetails sx={{ p: 2.5, bgcolor: '#ffffff' }}>
+                                  <Typography
+                                    variant="subtitle2"
+                                    fontWeight={800}
+                                    color="primary.main"
+                                    sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+                                  >
+                                    <Description fontSize="small" /> Official National Form Records (OpenMRS / NMRS)
+                                  </Typography>
+
+                                  <Stack spacing={2}>
+                                    {v.encounters.map((ne: any) => (
+                                      <Paper
+                                        key={ne.id}
+                                        variant="outlined"
+                                        sx={{
+                                          p: 2.5,
+                                          borderRadius: 2.5,
+                                          bgcolor: '#fbfcfd',
+                                          borderColor: '#e2e8f0',
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': {
+                                            borderColor: '#cbd5e1',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                                          }
+                                        }}
+                                      >
+                                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                                          <Box>
+                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                              {ne.formSchema?.formName || ne.encounterType}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                              Encounter No: {ne.encounterNumber} | Date: {new Date(ne.encounterDate).toLocaleDateString()} | Clinician: {ne.clinicianName || 'Chioma (Clinical Provider)'}
+                                            </Typography>
+                                          </Box>
+
+                                          <Box display="flex" alignItems="center" gap={1.5}>
+                                            <Chip
+                                              label={ne.syncStatus === 'SYNCED' ? 'SYNCED' : 'PENDING OPENMRS'}
+                                              size="small"
+                                              color={ne.syncStatus === 'SYNCED' ? 'success' : 'warning'}
+                                              icon={ne.syncStatus === 'SYNCED' ? <CheckCircle sx={{ fontSize: '14px !important' }} /> : <Warning sx={{ fontSize: '14px !important' }} />}
+                                              sx={{ fontWeight: 800, fontSize: '0.75rem', height: 26 }}
+                                            />
+                                            {ne.syncStatus !== 'SYNCED' && (
+                                              <Tooltip title="Sync this encounter to OpenMRS on laptop server">
+                                                <Button
+                                                  size="small"
+                                                  variant="outlined"
+                                                  color="warning"
+                                                  disabled={syncingEncounterId === ne.id}
+                                                  startIcon={syncingEncounterId === ne.id ? <CircularProgress size={12} color="inherit" /> : <Sync sx={{ fontSize: 14 }} />}
+                                                  onClick={() => handleSyncSingleEncounter(ne.id)}
+                                                  sx={{
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: 700,
+                                                    py: 0.2,
+                                                    px: 1,
+                                                    height: 26,
+                                                    textTransform: 'none',
+                                                    borderRadius: 2
+                                                  }}
+                                                >
+                                                  Sync to NMRS
+                                                </Button>
+                                              </Tooltip>
+                                            )}
+                                            <Tooltip title={`Open & Edit ${ne.formSchema?.formName || ne.encounterType}`}>
+                                              <IconButton
+                                                size="small"
+                                                color="primary"
+                                                onClick={() => handleOpenFormDialog(ne)}
+                                                sx={{
+                                                  bgcolor: '#e0f2fe',
+                                                  color: '#0284c7',
+                                                  width: 30,
+                                                  height: 30,
+                                                  '&:hover': { bgcolor: '#bae6fd' }
+                                                }}
+                                              >
+                                                <Edit fontSize="small" />
+                                              </IconButton>
+                                            </Tooltip>
+                                          </Box>
+                                        </Box>
+
+                                        {ne.formData && typeof ne.formData === 'object' && (
+                                          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
+                                            <Grid container spacing={2}>
+                                              {Object.entries(ne.formData)
+                                                .filter(([k]) => !['groups_count', 'active_regimen_info', 'signature', 'id', 'uuid', 'facilityName'].includes(k))
+                                                .slice(0, 6)
+                                                .map(([k, v]: [string, any]) => {
+                                                  const { label, value } = formatEncounterDisplayField(k, v);
+                                                  return (
+                                                    <Grid item xs={12} sm={6} md={4} key={k}>
+                                                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {label}
+                                                      </Typography>
+                                                      <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap title={value}>
+                                                        {value}
+                                                      </Typography>
+                                                    </Grid>
+                                                  );
+                                                })}
+                                            </Grid>
+                                          </Box>
+                                        )}
+                                      </Paper>
+                                    ))}
+                                  </Stack>
+                                </AccordionDetails>
+                              </Accordion>
+                            ))}
+                          </Stack>
+                        ) : (
+                          <Alert severity="info" sx={{ borderRadius: 2 }}>
+                            No past national clinical encounter forms recorded for this client yet. Select a national form under "Clinical Form Entry" to fill the first encounter.
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* SUBTAB 4: SCHEMA STUDIO & BUILDER */}
                     {nmrsSubTab === 'studio' && (
                       <Box sx={{ mt: 1 }}>
                         <EsmFormBuilder
@@ -3070,173 +3470,6 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
                       </Button>
                     </DialogActions>
                   </Dialog>
-
-                  {/* 3. Official National Form Records (OpenMRS / NMRS) Grouped by Visit */}
-                  {groupedVisits.length > 0 ? (
-                    <Stack spacing={2.5}>
-                      {groupedVisits.map((v, vIdx) => (
-                        <Accordion
-                          key={v.visitNumber || vIdx}
-                          defaultExpanded={vIdx === 0}
-                          sx={{
-                            borderRadius: '12px !important',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: 'none',
-                            '&:before': { display: 'none' },
-                            overflow: 'hidden'
-                          }}
-                        >
-                          <AccordionSummary
-                            expandIcon={<ExpandMore />}
-                            sx={{
-                              bgcolor: '#f8fafc',
-                              px: 2.5,
-                              py: 1,
-                              borderBottom: '1px solid #e2e8f0',
-                              '& .MuiAccordionSummary-content': {
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                mr: 1
-                              }
-                            }}
-                          >
-                            <Box>
-                              <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
-                                Visit: {v.visitNumber}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                                Checked in: {v.checkedInAt} | Type: {v.visitType} | Status: {v.status}
-                              </Typography>
-                            </Box>
-                            <Chip
-                              label={`${v.encounters.length} Encounters`}
-                              size="small"
-                              sx={{ fontWeight: 700, bgcolor: '#e2e8f0', color: '#334155' }}
-                            />
-                          </AccordionSummary>
-
-                          <AccordionDetails sx={{ p: 2.5, bgcolor: '#ffffff' }}>
-                            <Typography
-                              variant="subtitle2"
-                              fontWeight={800}
-                              color="primary.main"
-                              sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
-                            >
-                              <Description fontSize="small" /> Official National Form Records (OpenMRS / NMRS)
-                            </Typography>
-
-                            <Stack spacing={2}>
-                              {v.encounters.map((ne: any) => (
-                                <Paper
-                                  key={ne.id}
-                                  variant="outlined"
-                                  sx={{
-                                    p: 2.5,
-                                    borderRadius: 2.5,
-                                    bgcolor: '#fbfcfd',
-                                    borderColor: '#e2e8f0',
-                                    transition: 'all 0.2s ease',
-                                    '&:hover': {
-                                      borderColor: '#cbd5e1',
-                                      boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                                    }
-                                  }}
-                                >
-                                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
-                                    <Box>
-                                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
-                                        {ne.formSchema?.formName || ne.encounterType}
-                                      </Typography>
-                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                                        Encounter No: {ne.encounterNumber} | Date: {new Date(ne.encounterDate).toLocaleDateString()} | Clinician: {ne.clinicianName || 'Chioma (Clinical Provider)'}
-                                      </Typography>
-                                    </Box>
-
-                                    <Box display="flex" alignItems="center" gap={1.5}>
-                                      <Chip
-                                        label={ne.syncStatus === 'SYNCED' ? 'SYNCED' : 'PENDING OPENMRS'}
-                                        size="small"
-                                        color={ne.syncStatus === 'SYNCED' ? 'success' : 'warning'}
-                                        icon={ne.syncStatus === 'SYNCED' ? <CheckCircle sx={{ fontSize: '14px !important' }} /> : <Warning sx={{ fontSize: '14px !important' }} />}
-                                        sx={{ fontWeight: 800, fontSize: '0.75rem', height: 26 }}
-                                      />
-                                      {ne.syncStatus !== 'SYNCED' && (
-                                        <Tooltip title="Sync this encounter to OpenMRS on laptop server">
-                                          <Button
-                                            size="small"
-                                            variant="outlined"
-                                            color="warning"
-                                            disabled={syncingEncounterId === ne.id}
-                                            startIcon={syncingEncounterId === ne.id ? <CircularProgress size={12} color="inherit" /> : <Sync sx={{ fontSize: 14 }} />}
-                                            onClick={() => handleSyncSingleEncounter(ne.id)}
-                                            sx={{
-                                              fontSize: '0.72rem',
-                                              fontWeight: 700,
-                                              py: 0.2,
-                                              px: 1,
-                                              height: 26,
-                                              textTransform: 'none',
-                                              borderRadius: 2
-                                            }}
-                                          >
-                                            Sync to NMRS
-                                          </Button>
-                                        </Tooltip>
-                                      )}
-                                      <Tooltip title={`Open & Edit ${ne.formSchema?.formName || ne.encounterType}`}>
-                                        <IconButton
-                                          size="small"
-                                          color="primary"
-                                          onClick={() => handleOpenFormDialog(ne)}
-                                          sx={{
-                                            bgcolor: '#e0f2fe',
-                                            color: '#0284c7',
-                                            width: 30,
-                                            height: 30,
-                                            '&:hover': { bgcolor: '#bae6fd' }
-                                          }}
-                                        >
-                                          <Edit fontSize="small" />
-                                        </IconButton>
-                                      </Tooltip>
-                                    </Box>
-                                  </Box>
-
-                                  {ne.formData && typeof ne.formData === 'object' && (
-                                    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
-                                      <Grid container spacing={2}>
-                                        {Object.entries(ne.formData)
-                                          .filter(([k]) => !['groups_count', 'active_regimen_info', 'signature', 'id', 'uuid', 'facilityName'].includes(k))
-                                          .slice(0, 6)
-                                          .map(([k, v]: [string, any]) => {
-                                            const { label, value } = formatEncounterDisplayField(k, v);
-                                            return (
-                                              <Grid item xs={12} sm={6} md={4} key={k}>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                                                  {label}
-                                                </Typography>
-                                                <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap title={value}>
-                                                  {value}
-                                                </Typography>
-                                              </Grid>
-                                            );
-                                          })}
-                                      </Grid>
-                                    </Box>
-                                  )}
-                                </Paper>
-                              ))}
-                            </Stack>
-                          </AccordionDetails>
-                        </Accordion>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Alert severity="info" sx={{ borderRadius: 2 }}>
-                      No past NMRS clinical forms recorded for this client yet. Select a national form above to fill the first encounter.
-                    </Alert>
-                  )}
                 </Stack>
               )}
             </Box>
@@ -3263,16 +3496,16 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
 
               if (isBasicStub && nmrsSchemas.length > 0) {
                 const targetName = (editingEncounter.formSchema?.formName || editingEncounter.encounterType || '').toLowerCase().trim();
-                const matched = nmrsSchemas.find((s: any) => {
+                const matched = nmrsSchemas.filter((s: any) => {
                   const sName = (s.formName || '').toLowerCase().trim();
                   return sName === targetName || sName.includes(targetName) || targetName.includes(sName) ||
                     (targetName.includes('intake') && (s.formCode === 'CLIENT_INTAKE_FORM' || s.formCode === 'HTS_REGISTER')) ||
                     (targetName.includes('hts') && (s.formCode === 'HTS_REGISTER' || s.formCode === 'CLIENT_INTAKE_FORM')) ||
-                    (targetName.includes('pharmacy') && s.formCode === 'PHARMACY_ORDER') ||
-                    (targetName.includes('lab') && s.formCode === 'INTEGRATED_LAB_ORDER') ||
+                    (targetName.includes('pharmacy') && (s.formCode === 'PHARMACY_ORDER_FORM' || s.formCode === 'PHARMACY_ORDER' || sName.includes('pharmacy'))) ||
+                    (targetName.includes('lab') && (s.formCode === 'INTEGRATED_LAB_ORDER' || sName.includes('laboratory'))) ||
                     (targetName.includes('care card') && s.formCode === 'CARE_CARD_MASTER') ||
                     (targetName.includes('adult') && s.formCode === 'CARE_CARD_4B');
-                });
+                }).sort((a: any, b: any) => (b.schemaJson?.pages?.length || 0) - (a.schemaJson?.pages?.length || 0))[0];
                 if (matched?.schemaJson) {
                   rawSchema = matched.schemaJson;
                 }
@@ -3336,11 +3569,12 @@ export const EMRDashboard: React.FC<EMRDashboardProps> = ({
             mode="edit"
             isSubmitting={savingEncounter}
             onCancel={() => setEditingEncounter(null)}
-            onSubmit={async (formData) => {
+            onSubmit={async (formData, encounterPayload) => {
               setSavingEncounter(true);
               try {
                 const res = await api.put(`/nmrs/encounters/${editingEncounter.id}`, {
-                  formData
+                  formData,
+                  encounterPayload
                 });
                 enqueueSnackbar(res.data?.message || 'Encounter form updated successfully', { variant: 'success' });
                 setEditingEncounter(null);

@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-10-17T20:50:27.946982",
+  "outputDirectory": "/Users/mac/Downloads/TerkHealth360/data/terminologies",
+  "standardsSummary": {
+    "ICD11": {
+      "title": "WHO ICD-11 MMS (11th Revision of International Classification of Diseases)",
+      "systemUri": "http://id.who.int/icd/release/11/mms",
+      "count": 35000,
+      "jsonFile": "data/terminologies/icd11_terminologies.json",
+      "csvFile": "data/terminologies/icd11_terminologies.csv"
+    },
+    "ATC": {
+      "title": "WHO Anatomical Therapeutic Chemical (ATC) Classification",
+      "systemUri": "http://www.whocc.no/atc",
+      "count": 6500,
+      "jsonFile": "data/terminologies/who_atc_terminologies.json",
+      "csvFile": "data/terminologies/who_atc_terminologies.csv"
+    },
+    "LOINC": {
+      "title": "Logical Observation Identifiers Names and Codes (LOINC)",
+      "systemUri": "http://loinc.org",
+      "count": 109325,
+      "jsonFile": "data/terminologies/loinc_terminologies.json",
+      "csvFile": "data/terminologies/loinc_terminologies.csv"
+    },
+    "ICD10": {
+      "title": "International Classification of Diseases, 10th Revision (ICD-10-CM)",
+      "systemUri": "http://hl7.org/fhir/sid/icd-10",
+      "count": 71704,
+      "jsonFile": "data/terminologies/icd10_terminologies.json",
+      "csvFile": "data/terminologies/icd10_terminologies.csv"
+    },
+    "RXNORM": {
+      "title": "RxNorm (Medications) \u2014 Clinical Drugs, Dosage Forms & Active Ingredients",
+      "systemUri": "http://www.nlm.nih.gov/research/umls/rxnorm",
+      "count": 118500,
+      "jsonFile": "data/terminologies/rxnorm_terminologies.json",
+      "csvFile": "data/terminologies/rxnorm_terminologies.csv"
+    },
+    "CPT": {
+      "title": "Current Procedural Terminology (CPT-4) & HCPCS Level II Hospital Tariffs",
+      "systemUri": "http://www.ama-assn.org/go/cpt",
+      "count": 16324,
+      "jsonFile": "data/terminologies/cpt_terminologies.json",
+      "csvFile": "data/terminologies/cpt_terminologies.csv",
+      "lastUpdated": "2026-10-18T05:40:08.545565"
+    },
+    "ISBT128": {
+      "title": "ISBT 128 Blood Products, Cellular Therapy, Plasma & Tissue Allografts",
+      "systemUri": "http://isbt128.org",
+      "count": 5086,
+      "jsonFile": "data/terminologies/isbt128_terminologies.json",
+      "csvFile": "data/terminologies/isbt128_terminologies.csv",
+      "lastUpdated": "2026-10-18T06:28:47.381917"
+    },
+    "SNOMED": {
+      "title": "SNOMED CT (Clinical) \u2014 Clinical Findings, Anatomy & Procedures",
+      "system": "SNOMED",
+      "systemUri": "http://snomed.info/sct",
+      "category": "CLINICAL",
+      "count": 350000,
+      "conceptCount": 350000,
+      "jsonFile": "data/terminologies/snomed_terminologies.json",
+      "csvFile": "data/terminologies/snomed_terminologies.csv",
+      "lastUpdated": "2026-10-17T20:50:27.946972"
+    }
+  },
+  "totalConceptsCount": 712439,
+  "updatedAt": "2026-10-18T06:28:47.381930"
+}
