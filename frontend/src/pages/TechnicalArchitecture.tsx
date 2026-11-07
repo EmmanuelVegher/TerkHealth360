@@ -11,7 +11,8 @@ import {
   Dns, Cable, Security, DeveloperMode, Refresh, Add, CheckCircle,
   Warning, Cancel, FileDownload, Send, CloudQueue, DeveloperBoard,
   MenuBook, SettingsInputComponent, Search, Close, Visibility, Storage,
-  Policy, FiberManualRecord, SettingsBackupRestore, Download, UploadFile, Schedule
+  Policy, FiberManualRecord, SettingsBackupRestore, Download, UploadFile, Schedule,
+  DeleteOutline
 } from '@mui/icons-material';
 import { api, API_BASE_URL } from '../services/api';
 import { useSnackbar } from 'notistack';
@@ -136,6 +137,10 @@ const TechnicalArchitecture = () => {
   const [selectedLocalBackupFile, setSelectedLocalBackupFile] = useState<File | null>(null);
   const [uploadRestoreMode, setUploadRestoreMode] = useState<'APPLY_RESTORE' | 'VERIFY_INTEGRITY'>('APPLY_RESTORE');
   const [isUploadingRestore, setIsUploadingRestore] = useState(false);
+
+  const [deleteBackupModalOpen, setDeleteBackupModalOpen] = useState(false);
+  const [selectedBackupForDelete, setSelectedBackupForDelete] = useState<any | null>(null);
+  const [isDeletingBackup, setIsDeletingBackup] = useState(false);
 
   // ─── Fetch All Architecture Data from PostgreSQL ──────────────────────────
   const fetchData = useCallback(async () => {
@@ -361,6 +366,33 @@ const TechnicalArchitecture = () => {
     } catch (err: any) {
       console.error('Download error:', err);
       enqueueSnackbar('Could not download backup file directly', { variant: 'warning' });
+    }
+  };
+
+  const handleOpenDeleteBackupDialog = (backup: any) => {
+    setSelectedBackupForDelete(backup);
+    setDeleteBackupModalOpen(true);
+  };
+
+  const handleExecuteDeleteBackup = async () => {
+    if (!selectedBackupForDelete) return;
+    setIsDeletingBackup(true);
+    try {
+      const backupId = encodeURIComponent(selectedBackupForDelete.id || selectedBackupForDelete.snapshotId);
+      const filename = encodeURIComponent(selectedBackupForDelete.filename || '');
+      const snapshotId = encodeURIComponent(selectedBackupForDelete.snapshotId || '');
+      const res = await api.delete(
+        `/architecture/dr/backups/${backupId}?filename=${filename}&snapshotId=${snapshotId}`,
+        { skipOfflineQueue: true } as any
+      );
+      enqueueSnackbar(res.data?.message || 'Backup snapshot permanently deleted.', { variant: 'success' });
+      setDeleteBackupModalOpen(false);
+      setSelectedBackupForDelete(null);
+      fetchData();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to delete backup snapshot', { variant: 'error' });
+    } finally {
+      setIsDeletingBackup(false);
     }
   };
 
@@ -1233,6 +1265,20 @@ const TechnicalArchitecture = () => {
                                 <Download sx={{ fontSize: 16, color: '#475569' }} />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Delete Backup Snapshot">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDeleteBackupDialog(b)}
+                                sx={{
+                                  border: '1px solid #fecaca',
+                                  bgcolor: '#fef2f2',
+                                  p: 0.5,
+                                  '&:hover': { bgcolor: '#fee2e2', borderColor: '#f87171' }
+                                }}
+                              >
+                                <DeleteOutline sx={{ fontSize: 16, color: DANGER }} />
+                              </IconButton>
+                            </Tooltip>
                           </Stack>
                         </TableCell>
                       </TableRow>
@@ -1576,6 +1622,75 @@ const TechnicalArchitecture = () => {
             }}
           >
             {isUploadingRestore ? 'Restoring Uploaded Backup...' : 'Upload & Restore Database'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── Delete Backup Snapshot Confirmation Dialog ─── */}
+      <Dialog
+        open={deleteBackupModalOpen}
+        onClose={() => !isDeletingBackup && setDeleteBackupModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: DANGER, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteOutline sx={{ color: DANGER }} />
+          Delete Backup Snapshot
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedBackupForDelete && (
+            <Box>
+              <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                Are you sure you want to permanently delete this backup snapshot from the server and disk storage?
+              </Alert>
+              <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
+                <Stack spacing={0.8}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Snapshot ID</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                      {selectedBackupForDelete.snapshotId || selectedBackupForDelete.id}
+                    </Typography>
+                  </Box>
+                  {selectedBackupForDelete.filename && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Archive File</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                        {selectedBackupForDelete.filename}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Created</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{selectedBackupForDelete.timestamp}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Size</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{selectedBackupForDelete.sizeMb} MB</Typography>
+                    </Box>
+                  </Box>
+                </Stack>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setDeleteBackupModalOpen(false)}
+            disabled={isDeletingBackup}
+            sx={{ textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleExecuteDeleteBackup}
+            disabled={isDeletingBackup}
+            startIcon={<DeleteOutline />}
+            sx={{ fontWeight: 700, textTransform: 'none' }}
+          >
+            {isDeletingBackup ? 'Deleting...' : 'Delete Backup'}
           </Button>
         </DialogActions>
       </Dialog>

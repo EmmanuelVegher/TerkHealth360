@@ -1420,6 +1420,98 @@ router.get('/dr/download/:backupId', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/architecture/dr/backups/:backupId — Manually delete a generated backup file & audit record
+async function handleDeleteBackupSnapshot(req: Request, res: Response) {
+  try {
+    const backupId = String(req.params.backupId || req.body?.backupId || '').trim();
+    const requestedFilename = String(req.query.filename || req.body?.filename || '').trim();
+    const snapshotId = String(req.query.snapshotId || req.body?.snapshotId || '').trim();
+
+    if (!backupId && !requestedFilename && !snapshotId) {
+      return res.status(400).json({ success: false, message: 'Backup ID or filename is required to delete a backup.' });
+    }
+
+    // 1. Find all backup logs in audit_logs to match by id, resourceId, snapshotId, or filename
+    const allBackupLogs = await prisma.auditLog.findMany({
+      where: {
+        action: { in: ['ARCH_TRIGGER_BACKUP', 'ARCH_RESTORE_BACKUP'] }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200
+    });
+
+    let resolvedFilename = requestedFilename ? path.basename(requestedFilename) : '';
+    const logsToDeleteIds: string[] = [];
+
+    for (const log of allBackupLogs) {
+      const c = (log.changes as any) || {};
+      const logFile = c.filename || c.restoredFile || (c.filePath ? path.basename(c.filePath) : '');
+      const matchesId =
+        (backupId && (log.id === backupId || log.resourceId === backupId)) ||
+        (snapshotId && (log.id === snapshotId || log.resourceId === snapshotId));
+
+      if (matchesId) {
+        logsToDeleteIds.push(log.id);
+        if (!resolvedFilename && logFile) {
+          resolvedFilename = path.basename(logFile);
+        }
+      }
+    }
+
+    // Also collect any other auditLog entries referencing the same physical filename so it isn't duplicated
+    if (resolvedFilename) {
+      for (const log of allBackupLogs) {
+        const c = (log.changes as any) || {};
+        const logFile = c.filename || c.restoredFile || (c.filePath ? path.basename(c.filePath) : '');
+        if (logFile && path.basename(logFile) === resolvedFilename && !logsToDeleteIds.includes(log.id)) {
+          logsToDeleteIds.push(log.id);
+        }
+      }
+    }
+
+    // 2. Delete the physical backup archive from BACKUPS_DIR if present
+    let fileDeleted = false;
+    if (resolvedFilename) {
+      const safeFilePath = path.join(BACKUPS_DIR, path.basename(resolvedFilename));
+      if (fs.existsSync(safeFilePath)) {
+        try {
+          fs.unlinkSync(safeFilePath);
+          fileDeleted = true;
+        } catch (unlinkErr: any) {
+          console.warn('[DeleteBackup] Could not unlink physical file:', unlinkErr.message);
+        }
+      }
+    }
+
+    // 3. Delete matching auditLog entries from PostgreSQL
+    if (logsToDeleteIds.length > 0) {
+      await prisma.auditLog.deleteMany({
+        where: { id: { in: logsToDeleteIds } }
+      });
+    }
+
+    const remaining = await enforceBackupRetention(MAX_RETAINED_BACKUPS);
+
+    res.json({
+      success: true,
+      fileDeleted,
+      deletedLogsCount: logsToDeleteIds.length,
+      remainingCount: remaining.length,
+      message: `Backup ${snapshotId || backupId}${resolvedFilename ? ` (${resolvedFilename})` : ''} has been permanently deleted.`
+    });
+  } catch (err: any) {
+    console.error('Error deleting backup:', err);
+    res.status(500).json({
+      success: false,
+      message: `Failed to delete backup snapshot: ${err.message}`,
+      error: err.message
+    });
+  }
+}
+
+router.delete('/dr/backups/:backupId', handleDeleteBackupSnapshot);
+router.post('/dr/delete-backup', handleDeleteBackupSnapshot);
+
 router.get('/analytics', async (_req: Request, res: Response) => {
   try {
     const [dbInfo] = await prisma.$queryRaw<any[]>`
