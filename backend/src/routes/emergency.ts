@@ -1,5 +1,5 @@
 import { Router } from 'express';
-
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -150,7 +150,7 @@ router.get('/arrivals', async (req, res, next) => {
     ].sort((a, b) => new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime());
 
     // Auto-seed realistic sample A&E patients if the emergency queue is currently empty
-    if (all.length === 0) {
+    if (all.length === 0 && !isHardResetActive()) {
       const resusBed = await prisma.emergencyBed.findFirst({ where: { bedCode: 'RESUS-01' } });
       const trlBed1  = await prisma.emergencyBed.findFirst({ where: { bedCode: 'TRL-01' } });
       const trlBed2  = await prisma.emergencyBed.findFirst({ where: { bedCode: 'TRL-02' } });
@@ -464,7 +464,7 @@ router.get('/beds', async (req, res, next) => {
   try {
     let beds = await prisma.emergencyBed.findMany({ orderBy: { bedCode: 'asc' } });
     
-    if (beds.length === 0) {
+    if (beds.length === 0 && !isHardResetActive()) {
       const defaultBeds = [
         { bedCode: 'RESUS-01', bedType: 'RESUSCITATION_BAY', status: 'AVAILABLE' },
         { bedCode: 'RESUS-02', bedType: 'RESUSCITATION_BAY', status: 'AVAILABLE' },

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../prisma.js';
 import { logAudit } from '../utils/auditHelper.js';
 import { extractDrugFromImage } from '../utils/drugVisionExtractor.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -183,6 +184,7 @@ export const DEFAULT_CONTROLLED_SUBSTANCES = [
 ];
 
 async function ensureMasterCatalogueAndControlledSubstances() {
+  if (isHardResetActive()) return;
   try {
     const defaultStores = [
       { name: 'Central Pharmacy Warehouse', code: 'WH-MAIN', location: 'Main Block Ground Floor', capacity: 50000 },
@@ -461,19 +463,21 @@ router.post('/ai-auto-create-drug', authMiddleware, async (req: any, res: Respon
 
 router.get('/warehouses', async (req: Request, res: Response) => {
   try {
-    const defaultStores = [
-      { name: 'Central Pharmacy Warehouse', code: 'WH-MAIN', location: 'Main Block Ground Floor', capacity: 50000 },
-      { name: 'Pharmacy Dispensary', code: 'DISP-MAIN', location: 'Pharmacy Dispensary Hall', capacity: 20000 },
-      { name: 'OPD Pharmacy Depot', code: 'OPD-PHARM', location: 'Outpatient Building 1st Floor', capacity: 15000 },
-      { name: 'Main Clinical Laboratory Reagent Store', code: 'LAB-MAIN', location: 'Laboratory Wing 2nd Floor', capacity: 25000 },
-      { name: 'Blood Bank Storage Vault', code: 'BLOOD-BANK', location: 'Blood Transfusion Unit', capacity: 10000 },
-    ];
-    for (const store of defaultStores) {
-      await prisma.pharmacyWarehouse.upsert({
-        where: { code: store.code },
-        update: { name: store.name, location: store.location },
-        create: store,
-      }).catch(() => {});
+    if (!isHardResetActive()) {
+      const defaultStores = [
+        { name: 'Central Pharmacy Warehouse', code: 'WH-MAIN', location: 'Main Block Ground Floor', capacity: 50000 },
+        { name: 'Pharmacy Dispensary', code: 'DISP-MAIN', location: 'Pharmacy Dispensary Hall', capacity: 20000 },
+        { name: 'OPD Pharmacy Depot', code: 'OPD-PHARM', location: 'Outpatient Building 1st Floor', capacity: 15000 },
+        { name: 'Main Clinical Laboratory Reagent Store', code: 'LAB-MAIN', location: 'Laboratory Wing 2nd Floor', capacity: 25000 },
+        { name: 'Blood Bank Storage Vault', code: 'BLOOD-BANK', location: 'Blood Transfusion Unit', capacity: 10000 },
+      ];
+      for (const store of defaultStores) {
+        await prisma.pharmacyWarehouse.upsert({
+          where: { code: store.code },
+          update: { name: store.name, location: store.location },
+          create: store,
+        }).catch(() => {});
+      }
     }
     const warehouses = await prisma.pharmacyWarehouse.findMany({
       orderBy: { createdAt: 'asc' }
@@ -482,7 +486,7 @@ router.get('/warehouses', async (req: Request, res: Response) => {
     const whMain = warehouses.find(w => w.code === 'WH-MAIN');
     const dispMain = warehouses.find(w => w.code === 'DISP-MAIN');
 
-    if (whMain && dispMain) {
+    if (!isHardResetActive() && whMain && dispMain) {
       const items = await prisma.pharmacyInventoryItem.findMany({
         include: { batches: true }
       });
@@ -1673,7 +1677,7 @@ router.get('/coldchain', async (req: Request, res: Response) => {
       orderBy: { recordedAt: 'desc' }
     });
 
-    if (logs.length === 0) {
+    if (logs.length === 0 && !isHardResetActive()) {
       const warehouses = await prisma.pharmacyWarehouse.findMany();
       const batches = await prisma.pharmacyStockBatch.findMany({ include: { warehouse: true } });
 

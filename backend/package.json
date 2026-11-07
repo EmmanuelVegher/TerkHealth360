@@ -16,6 +16,7 @@
     "seed:loinc:local": "tsx prisma/seed_scraped_terminologies.ts --local --standard=loinc",
     "seed:icd10:local": "tsx prisma/seed_local_icd10.ts",
     "seed:rxnorm:local": "tsx prisma/seed_local_rxnorm.ts",
+    "seed:facilities": "tsx prisma/seed_federal_facilities.ts",
     "stt:download": "node scripts/downloadWhisperModel.js"
   },
   "prisma": {

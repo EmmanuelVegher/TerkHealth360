@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { logAudit } from '../utils/auditHelper.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -235,5 +236,16 @@ router.get('/analytics', (req: Request, res: Response) => {
     }
   });
 });
+
+export function resetCRMMemoryState() {
+  crmProfiles.length = 0;
+  contactCases.length = 0;
+  reminders.length = 0;
+  satisfactionSurveys.length = 0;
+}
+
+if (isHardResetActive()) {
+  resetCRMMemoryState();
+}
 
 export default router;

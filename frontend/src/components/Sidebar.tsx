@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import {
   Box, List, ListItemButton, ListItemIcon, ListItemText,
   Typography, Divider, Avatar, Collapse, Drawer, IconButton,
-  useTheme, useMediaQuery,
+  useTheme, useMediaQuery, Tooltip,
 } from '@mui/material';
 import {
   Dashboard, People, CalendarToday, LocalHospital, LocalPharmacy,
@@ -17,7 +17,7 @@ import {
   SettingsInputComponent, LocalGasStation, BarChart, AccessTime, LocalAtm, PlusOne, AutoGraph, NotificationsActive, TrendingUp, BabyChangingStation, CalendarMonth, DateRange, Description, PersonalVideo, Speed,
   Healing, AutoAwesome, MonitorHeart, Person, CallMade, Close, RateReview, Hotel, Sensors, AccountTree,
   Gavel, WorkHistory, RemoveRedEye, Palette, CloudSync, SyncAlt, CloudDownload,
-  HealthAndSafety, Vaccines, Coronavirus, Masks, BugReport,
+  HealthAndSafety, Vaccines, Coronavirus, Masks, BugReport, SwapHoriz, Storage,
 } from '@mui/icons-material';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -102,6 +102,42 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
   const isPureFinanceStaff = !isSuperAdmin && !isHospitalAdmin && isUserFinanceStaff(user) && !isPureAuditorStaff;
   const isInsuranceStaff = isSuperAdmin || isUserInsuranceStaff(user);
   const isPureInsuranceStaff = !isSuperAdmin && !isHospitalAdmin && isUserInsuranceStaff(user);
+  
+  const [hospitalName, setHospitalName] = useState(() => localStorage.getItem('app_hospital_name') || 'Faith Foundation');
+  const [hospitalSubtitle, setHospitalSubtitle] = useState(() => localStorage.getItem('app_hospital_subtitle') || 'Mission Hospital');
+
+  useEffect(() => {
+    const loadHospitalInfo = async () => {
+      try {
+        const res = await api.get('/config/public-info');
+        if (res.data?.success) {
+          if (res.data.hospitalName) {
+            setHospitalName(res.data.hospitalName);
+            localStorage.setItem('app_hospital_name', res.data.hospitalName);
+          }
+          if (res.data.hospitalSubtitle) {
+            setHospitalSubtitle(res.data.hospitalSubtitle);
+            localStorage.setItem('app_hospital_subtitle', res.data.hospitalSubtitle);
+          }
+        }
+      } catch (err) {
+        // Fallback to localStorage
+      }
+    };
+    loadHospitalInfo();
+
+    const handleUpdate = () => {
+      const savedName = localStorage.getItem('app_hospital_name');
+      const savedSub = localStorage.getItem('app_hospital_subtitle');
+      if (savedName) setHospitalName(savedName);
+      if (savedSub) setHospitalSubtitle(savedSub);
+      loadHospitalInfo();
+    };
+
+    window.addEventListener('hospital-config-updated', handleUpdate);
+    return () => window.removeEventListener('hospital-config-updated', handleUpdate);
+  }, []);
+
   const [config, setConfig] = useState<Record<string, boolean>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({
     Main: true, Clinical: true, 'Finance & HR': true, Admin: true, Management: true,
@@ -174,6 +210,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
       }
     };
     fetchConfig();
+
+    const handleConfigUpdate = (e: any) => {
+      if (e.detail?.moduleKey) {
+        setConfig(prev => ({ ...prev, [e.detail.moduleKey]: e.detail.isActive }));
+      } else {
+        fetchConfig();
+      }
+    };
+    window.addEventListener('hospital-config-updated', handleConfigUpdate);
+    return () => window.removeEventListener('hospital-config-updated', handleConfigUpdate);
   }, []);
 
   // Check if current logged-in user is a supervisor with subordinates in /staff/hierarchy
@@ -213,6 +259,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: "Bishop Module",
           icon: <Shield />,
           path: '/bishop-desk',
+          moduleKey: 'BISHOP',
           allowedDesignations: ['Bishop', 'Admin', 'Super Admin'],
           children: [
             { text: 'Executive Overview', icon: <TrendingUp />, path: '/bishop-desk' },
@@ -227,16 +274,28 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           ],
         },
         { text: 'Patients (MPI)', icon: <People />,            path: '/patients',     permission: 'patient:read', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Secretary', 'Admin'] },
-        { text: '📸 AI Folder & Record Migration', icon: <CameraAlt />, path: '/record-migration', allowedDesignations: ['Super Admin'] },
+        {
+          text: 'Data & Record Migration',
+          icon: <SyncAlt />,
+          path: '/settings?section=migration',
+          moduleKey: 'MIGRATION',
+          allowedDesignations: ['Super Admin', 'Admin'],
+          children: [
+            { text: 'Migration Pathways (Hub)', icon: <SwapHoriz />, path: '/settings?section=migration' },
+            { text: '📸 Paper & Folder AI Scan', icon: <CameraAlt />, path: '/record-migration' },
+            { text: '⚡ REST / SMART on FHIR & DB', icon: <Storage />, path: '/settings?section=migration&type=smart-fhir' },
+          ],
+        },
         // { text: 'Record Merges', icon: <HistoryEdu />,         path: '/merge-records', permission: 'patient:write', allowedDesignations: ['Record Officer', 'Admin'] },
-        { text: 'Visits & Flow', icon: <DirectionsCar />,      path: '/visits',       permission: 'patient:read', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Admin'] },
+        { text: 'Visits & Flow', icon: <DirectionsCar />,      path: '/visits',       permission: 'patient:read', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Admin'], moduleKey: 'VISITS' },
         { text: 'Patient EMR & History', icon: <Portrait />,           path: '/emr-workspace', allowedDesignations: ['Doctor', 'Nurse', 'Pathologist', 'Lab Technician', 'Lab Scientist', 'Lab Scientists', 'Record Officer', 'Admin'] },
-        { text: 'Appointments',  icon: <CalendarToday />,      path: '/appointments', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Secretary', 'Admin'] },
-        { text: 'Queue Tracker', icon: <Queue />,              path: '/queues', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Admin', 'Accountant', 'Pathologist', 'Lab Technician', 'Lab Scientist', 'Lab Scientists', 'Cashier'] },
+        { text: 'Appointments',  icon: <CalendarToday />,      path: '/appointments', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Secretary', 'Admin'], moduleKey: 'APPOINTMENTS' },
+        { text: 'Queue Tracker', icon: <Queue />,              path: '/queues', allowedDesignations: ['Doctor', 'Nurse', 'Record Officer', 'Admin', 'Accountant', 'Pathologist', 'Lab Technician', 'Lab Scientist', 'Lab Scientists', 'Cashier'], moduleKey: 'QUEUE' },
         {
           text: 'Workforce & Roster',
           icon: <Assignment />,
           path: '/timesheets',
+          moduleKey: 'WORKFORCE',
           children: [
             { text: 'Monthly Timesheet Grid', icon: <DateRange />, path: '/timesheets' },
             { text: 'Biometric Attendance Clock', icon: <AccessTime />, path: '/staff/attendance-roster/clock-logs' },
@@ -257,6 +316,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'Nursing Workspace',
           icon: <LocalHospital />,
           path: '/nursing',
+          moduleKey: 'NURSING',
           permission: 'clinical:read',
           allowedDesignations: ['Nurse', 'Admin'],
           children: [
@@ -274,6 +334,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'Specialty Disease Clinics',
           icon: <HealthAndSafety />,
           path: '/clinics',
+          moduleKey: 'CLINICS',
           allowedDesignations: [
             'Doctor', 'Nurse', 'Admin', 'Super Admin', 'Clinician', 'Medical Officer',
             'Consultant', 'Physician', 'Surgeon', 'Record Officer', 'Secretary',
@@ -465,9 +526,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
         },
 
 
-        { text: 'Family Planning',            icon: <VolunteerActivism />, path: '/family-planning', permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'MATERNITY' },
-        { text: 'Antenatal Care (ANC)',       icon: <PregnantWoman />,     path: '/anc',             permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'MATERNITY' },
-        { text: 'Labour & Delivery Ward',     icon: <Timeline />,          path: '/labour-ward',     permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'MATERNITY' },
+        { text: 'Family Planning',            icon: <VolunteerActivism />, path: '/family-planning', permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'FAMILY_PLANNING' },
+        { text: 'Antenatal Care (ANC)',       icon: <PregnantWoman />,     path: '/anc',             permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'ANC' },
+        { text: 'Labour & Delivery Ward',     icon: <Timeline />,          path: '/labour-ward',     permission: 'clinical:read', allowedDesignations: ['Doctor', 'Nurse', 'Admin'], moduleKey: 'LABOUR_WARD' },
         {
           text: 'Maternity & Postnatal Ward',
           icon: <ChildCare />,
@@ -497,6 +558,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'Dental Clinic',
           icon: <MedicalServices />,
           path: '/dental',
+          moduleKey: 'DENTAL',
           permission: 'clinical:read',
           allowedDesignations: ['Doctor', 'Nurse', 'Admin', 'Super Admin'],
           children: [
@@ -512,6 +574,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'Eye Clinic (Ophthalmology)',
           icon: <RemoveRedEye />,
           path: '/eye-clinic',
+          moduleKey: 'EYE_CLINIC',
           permission: 'clinical:read',
           allowedDesignations: ['Doctor', 'Nurse', 'Admin', 'Super Admin'],
           children: [
@@ -845,11 +908,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
         { text: 'Roles & RBAC', icon: <Shield />,              path: '/roles',        permission: 'role:read', allowedDesignations: ['Admin'] },
         // { text: 'Departments',  icon: <Business />,            path: '/departments',  permission: 'department:read', allowedDesignations: ['Admin'] },
         { text: 'Audit Logs',   icon: <HistoryEdu />,          path: '/audit-logs',   permission: 'audit:read', allowedDesignations: ['Admin'] },
-        { text: 'Document DMS',  icon: <FolderZip />,           path: '/dms',          permission: 'patient:read', allowedDesignations: ['Record Officer', 'Secretary', 'Admin'] },
+        { text: 'Document DMS',  icon: <FolderZip />,           path: '/dms',          moduleKey: 'DMS', permission: 'patient:read', allowedDesignations: ['Record Officer', 'Secretary', 'Admin'] },
         {
           text: 'Security IAM',
           icon: <Shield />,
           path: '/security-iam',
+          moduleKey: 'SECURITY_IAM',
           permission: 'role:read',
           allowedDesignations: ['Admin'],
           children: [
@@ -863,6 +927,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           text: 'System Architecture',
           icon: <Policy />,
           path: '/architecture',
+          moduleKey: 'ARCHITECTURE',
           permission: 'role:read',
           allowedDesignations: ['Admin'],
           children: [
@@ -892,6 +957,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
           ],
         },
         */
+        /*
         {
           text: 'Enterprise Analytics',
           icon: <Assessment />,
@@ -905,6 +971,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
             { text: 'Predictive Intelligence', icon: <AutoGraph />, path: '/analytics/predictive' },
           ],
         },
+        */
         { text: 'Events',       icon: <Event />,               path: '/events',       permission: 'settings:read', allowedDesignations: ['Admin'] },
         {
           text: 'Messages',
@@ -943,9 +1010,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
         overflowY: 'auto', overflowX: 'hidden',
       }}
     >
-      {/* Logo */}
-      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+      {/* Logo & Dynamic Hospital Title */}
+      <Box sx={{ px: 1.5, py: 1.5, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0, flex: 1 }}>
           <Box
             component="img"
             src={assetUrl('/hospital-logo.webp')}
@@ -955,20 +1022,51 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
               borderRadius: '6px',
               objectFit: 'contain',
               flexShrink: 0,
+              mt: 0.15,
             }}
           />
           
-          <Box>
-            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800, lineHeight: 1.1, fontSize: '0.88rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              Faith Foundation
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.68rem', fontWeight: 600 }}>
-              Mission Hospital
-            </Typography>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Tooltip title={hospitalName} enterDelay={400} arrow placement="bottom-start">
+              <Typography
+                variant="h6"
+                sx={{
+                  color: '#fff',
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                  fontSize: hospitalName.length > 36 ? '0.78rem' : (hospitalName.length > 22 ? '0.84rem' : '0.90rem'),
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  whiteSpace: 'normal',
+                  wordBreak: 'normal',
+                  overflowWrap: 'break-word',
+                  letterSpacing: '-0.2px',
+                }}
+              >
+                {hospitalName}
+              </Typography>
+            </Tooltip>
+            {hospitalSubtitle && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'rgba(255,255,255,0.75)',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  display: 'block',
+                  whiteSpace: 'normal',
+                  wordBreak: 'normal',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.25,
+                  mt: 0.35,
+                }}
+              >
+                {hospitalSubtitle}
+              </Typography>
+            )}
           </Box>
         </Box>
         {isMobile && (
-          <IconButton onClick={onMobileClose} sx={{ color: 'rgba(255,255,255,0.85)', p: 0.5 }}>
+          <IconButton onClick={onMobileClose} sx={{ color: 'rgba(255,255,255,0.85)', p: 0.5, mt: -0.5 }}>
             <Close sx={{ fontSize: 18 }} />
           </IconButton>
         )}
@@ -1244,9 +1342,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
       return true;
     }
 
-    // AI Hospital Paper Folder & Record Migration Station is strictly accessible to Super Admin only
+    // AI Hospital Paper Folder & Record Migration Station is accessible to Super Admin and Admin
     if (item.path === '/record-migration' || item.path?.startsWith('/record-migration')) {
-      return isSuperAdmin;
+      return isSuperAdmin || isHospitalAdmin;
     }
 
     // ── Internal Auditor: MUST be checked FIRST before generic finance/staff rules ─────────────────

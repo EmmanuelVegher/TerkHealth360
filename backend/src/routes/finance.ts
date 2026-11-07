@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { logAudit } from '../utils/auditHelper.js';
 import { prisma } from '../prisma.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -4264,6 +4265,32 @@ router.post('/submitted-reports/:id/reject', async (req: Request, res: Response)
 
   res.json({ success: true, data: submittedReports, report });
 });
+
+export function resetFinanceMemoryState() {
+  journalVouchers.length = 0;
+  grantTransactions.length = 0;
+  taxFilings.length = 0;
+  bankReconciliations.length = 0;
+  governanceRisks.length = 0;
+  financeFraudAlerts.length = 0;
+  gatewayTransactions.length = 0;
+  gatewayPayouts.length = 0;
+  vendorPayables.length = 0;
+  submittedReports.length = 0;
+  fixedAssets.length = 0;
+  donorGrants.length = 0;
+  chartOfAccounts.forEach((a: any) => {
+    a.balance = 0;
+  });
+  budgets.forEach((b: any) => {
+    b.committed = 0;
+    b.actual = 0;
+  });
+}
+
+if (isHardResetActive()) {
+  resetFinanceMemoryState();
+}
 
 export default router;
 

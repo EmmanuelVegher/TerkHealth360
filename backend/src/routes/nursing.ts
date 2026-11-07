@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { authMiddleware } from '../middleware/auth.js';
 import { logAudit } from '../utils/auditHelper.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -377,7 +378,7 @@ router.get('/ward-patients', authMiddleware, async (req, res, next) => {
     });
 
     // Auto-seed active admissions across wards if active IPD admissions count is low
-    if (activeAdmissions.length < 5) {
+    if (activeAdmissions.length < 5 && !isHardResetActive()) {
       const defaultWardsData = [
         { name: 'Medical Ward', type: 'GENERAL', capacity: 30 },
         { name: 'Accident & Emergency Ward', type: 'EMERGENCY', capacity: 20 },

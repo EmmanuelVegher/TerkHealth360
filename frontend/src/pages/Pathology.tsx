@@ -207,6 +207,8 @@ const DEFAULT_ARCHIVE_LOCATORS: ArchiveLocatorSlot[] = [
 const STORAGE_KEY_PATHOLOGY_ARCHIVE = 'smart_hospital_pathology_archive_v2';
 const STORAGE_KEY_ARCHIVE_LOCATORS = 'smart_hospital_archive_locators_v2';
 
+const isHardResetActive = () => localStorage.getItem('hard_reset_active') === 'true';
+
 const loadSavedArchiveLocators = (): ArchiveLocatorSlot[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ARCHIVE_LOCATORS);
@@ -238,7 +240,7 @@ const loadSavedArchiveItems = (): SlideArchiveItem[] => {
   } catch (err) {
     console.warn('Failed reading archive storage:', err);
   }
-  return INITIAL_ARCHIVE;
+  return isHardResetActive() ? [] : INITIAL_ARCHIVE;
 };
 
 const saveArchiveItemsToStorage = (items: SlideArchiveItem[]) => {
@@ -282,7 +284,7 @@ const loadSavedIHCRecords = (): IHCRecord[] => {
   } catch (err) {
     console.warn('Failed reading IHC storage:', err);
   }
-  return INITIAL_IHC;
+  return isHardResetActive() ? [] : INITIAL_IHC;
 };
 
 const saveIHCRecordsToStorage = (records: IHCRecord[]) => {
@@ -848,14 +850,16 @@ const savePathologyReportToStorage = (key: string, data: Partial<HistologyOrder>
 
   // State Stores
   const [histologyOrders, setHistologyOrders] = useState<HistologyOrder[]>(() => {
+    if (isHardResetActive()) return [];
     const saved = loadSavedPathologyReports();
     return INITIAL_HISTOLOGY.map(h => {
       const s = saved[h.id] || (h.refNo ? saved[h.refNo] : undefined);
       return s ? { ...h, ...s } : h;
     });
   });
-  const [cytologySpecimens, setCytologySpecimens] = useState<CytologySpecimen[]>(INITIAL_CYTOLOGY);
+  const [cytologySpecimens, setCytologySpecimens] = useState<CytologySpecimen[]>(() => isHardResetActive() ? [] : INITIAL_CYTOLOGY);
   const [mortuaryRecords, setMortuaryRecords] = useState<MortuaryRecord[]>(() => {
+    if (isHardResetActive()) return [];
     const savedAutopsies = loadSavedMortuaryAutopsies();
     const savedReleases = loadSavedMortuaryReleases();
     return INITIAL_MORTUARY.map(m => {
@@ -916,8 +920,8 @@ const savePathologyReportToStorage = (key: string, data: Partial<HistologyOrder>
   });
 
   // External Referral & Courier State
-  const [externalOrders, setExternalOrders] = useState<ExternalPathologyReferral[]>(INITIAL_EXTERNAL_REFERRALS);
-  const [courierLogs, setCourierLogs] = useState<CourierLog[]>(INITIAL_COURIER_LOGS);
+  const [externalOrders, setExternalOrders] = useState<ExternalPathologyReferral[]>(() => isHardResetActive() ? [] : INITIAL_EXTERNAL_REFERRALS);
+  const [courierLogs, setCourierLogs] = useState<CourierLog[]>(() => isHardResetActive() ? [] : INITIAL_COURIER_LOGS);
 
   // Dialog State
   const [isExternalModalOpen, setIsExternalModalOpen] = useState(false);
@@ -966,7 +970,7 @@ const savePathologyReportToStorage = (key: string, data: Partial<HistologyOrder>
   });
 
   // Dynamic Doctor Options for Requesting Clinician & Surgeon Dropdowns (Strictly Doctors/Physicians from Staff Records)
-  const [doctorOptions, setDoctorOptions] = useState<string[]>([
+  const [doctorOptions, setDoctorOptions] = useState<string[]>(() => isHardResetActive() ? [] : [
     'Dr. EMMANUEL VEGHER (Chief Consultant Physician)',
     'Dr. Tertsegha Vegher (Senior Medical Officer - SMO)',
     'Dr. Grace Okafor (Consultant Obstetrician & Gynaecologist)',
@@ -1018,7 +1022,7 @@ const savePathologyReportToStorage = (key: string, data: Partial<HistologyOrder>
           return `${formattedName} (${specialty})`;
         });
 
-        const defaults = [
+        const defaults = isHardResetActive() ? [] : [
           'Dr. EMMANUEL VEGHER (Chief Consultant Physician)',
           'Dr. Tertsegha Vegher (Senior Medical Officer - SMO)',
           'Dr. Grace Okafor (Consultant Obstetrician & Gynaecologist)',

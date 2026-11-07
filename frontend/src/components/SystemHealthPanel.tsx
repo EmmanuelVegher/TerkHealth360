@@ -101,7 +101,12 @@ const SystemHealthPanel = () => {
       const [sys, syncData, evtData] = await Promise.all([
         sysRes.json(), syncRes.json(), evtRes.json(),
       ]);
-      if (sys.ok)     setStatus(sys);
+      if (sys.ok) {
+        setStatus(sys);
+        if (sys.hardResetActive) {
+          localStorage.setItem('hard_reset_active', 'true');
+        }
+      }
       if (syncData.ok) setSync(syncData.sync);
       if (evtData.ok)  setEvents(evtData.events || []);
       setLastRefresh(new Date());

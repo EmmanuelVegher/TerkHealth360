@@ -104,31 +104,82 @@ const Login = () => {
   const [startupPhases, setStartupPhases] = useState<any[]>([]);
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'starting' | 'unreachable'>('checking');
 
+  // Dynamic Hospital Identity & Slides
+  const [hospitalName, setHospitalName] = useState(() => localStorage.getItem('app_hospital_name') || "God's Love Health Care and Maternity");
+  const [hospitalSubtitle, setHospitalSubtitle] = useState(() => localStorage.getItem('app_hospital_subtitle') || 'Mission Hospital · Jehovah Rapha');
+  const [hospitalMission, setHospitalMission] = useState(() => localStorage.getItem('app_hospital_mission') || 'Empowering clinical excellence through integrated medical records and compassionate care.');
+  const [slides, setSlides] = useState<any[]>(HOSPITAL_SLIDES);
+
   // Background Slideshow state
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  // Fetch public hospital info on mount
+  useEffect(() => {
+    const fetchPublicInfo = async () => {
+      try {
+        const res = await api.get('/config/public-info');
+        if (res.data?.success) {
+          if (res.data.hospitalName) {
+            setHospitalName(res.data.hospitalName);
+            localStorage.setItem('app_hospital_name', res.data.hospitalName);
+          }
+          if (res.data.hospitalSubtitle) {
+            setHospitalSubtitle(res.data.hospitalSubtitle);
+            localStorage.setItem('app_hospital_subtitle', res.data.hospitalSubtitle);
+          }
+          if (res.data.hospitalMission) {
+            setHospitalMission(res.data.hospitalMission);
+            localStorage.setItem('app_hospital_mission', res.data.hospitalMission);
+          }
+          if (res.data.slides && Array.isArray(res.data.slides) && res.data.slides.length > 0) {
+            setSlides(res.data.slides);
+          }
+        }
+      } catch (err) {
+        // Fallback gracefully
+      }
+    };
+    fetchPublicInfo();
+
+    const handleUpdate = () => {
+      const savedName = localStorage.getItem('app_hospital_name');
+      const savedSub = localStorage.getItem('app_hospital_subtitle');
+      const savedMis = localStorage.getItem('app_hospital_mission');
+      if (savedName) setHospitalName(savedName);
+      if (savedSub) setHospitalSubtitle(savedSub);
+      if (savedMis) setHospitalMission(savedMis);
+      fetchPublicInfo();
+    };
+
+    window.addEventListener('hospital-config-updated', handleUpdate);
+    return () => window.removeEventListener('hospital-config-updated', handleUpdate);
+  }, []);
+
   // Auto-advance slideshow & preload all slide images
   useEffect(() => {
-    HOSPITAL_SLIDES.forEach((s) => {
+    if (slides.length === 0) return;
+    slides.forEach((s) => {
       const img = new window.Image();
       img.src = assetUrl(s.image);
     });
 
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HOSPITAL_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 6500);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [slides]);
 
   const handlePrevSlide = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentSlide((prev) => (prev - 1 + HOSPITAL_SLIDES.length) % HOSPITAL_SLIDES.length);
+    if (slides.length === 0) return;
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
   const handleNextSlide = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentSlide((prev) => (prev + 1) % HOSPITAL_SLIDES.length);
+    if (slides.length === 0) return;
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
   };
 
   useEffect(() => {
@@ -277,18 +328,18 @@ const Login = () => {
         }}
       >
         {/* Render each slide with smooth cross-fade & Ken Burns zoom effect */}
-        {HOSPITAL_SLIDES.map((slide, index) => {
+        {slides.map((slide, index) => {
           const isActive = index === currentSlide;
           return (
             <Box
-              key={slide.image}
+              key={slide.image || index}
               sx={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundImage: `url(${assetUrl(slide.image)})`,
+                backgroundImage: `url(${slide.image?.startsWith('/') || slide.image?.startsWith('http') ? assetUrl(slide.image) : slide.image})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 opacity: isActive ? 1 : 0,
@@ -400,7 +451,7 @@ const Login = () => {
                   },
                 }}
               >
-                Faith Foundation<br />Mission Hospital<br />Nsukka
+                {hospitalName}
               </Typography>
 
               {/* Accent Line + Subheading */}
@@ -417,12 +468,13 @@ const Login = () => {
                   variant="subtitle2"
                   sx={{
                     color: '#fff',
-                    letterSpacing: '0.25em',
+                    letterSpacing: '0.2em',
                     fontWeight: 700,
+                    textTransform: 'uppercase',
                     fontSize: { md: '0.85rem', lg: '0.95rem', xl: '1.05rem' },
                   }}
                 >
-                  JEHOVAH RAPHA
+                  {hospitalSubtitle}
                 </Typography>
                 <Box
                   sx={{
@@ -435,24 +487,32 @@ const Login = () => {
               </Box>
             </Box>
 
-            {/* Description */}
-            <Typography
-              variant="body1"
-              textAlign="center"
-              sx={{
-                color: 'rgba(255, 255, 255, 0.82)',
-                fontSize: { md: '0.9rem', lg: '1rem', xl: '1.15rem' },
-                lineHeight: 1.5,
-                maxWidth: { md: 440, lg: 480, xl: 520 },
-                mx: 'auto',
-                '@media (max-height: 800px)': {
-                  fontSize: '0.95rem',
-                  maxWidth: 460,
-                },
-              }}
-            >
-              Empowering clinical excellence through integrated medical records and compassionate care.
-            </Typography>
+            {/* Description / Mission */}
+            {hospitalMission && (
+              <Typography
+                variant="body1"
+                textAlign="center"
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.92)',
+                  fontSize: { md: '0.88rem', lg: '0.98rem', xl: '1.08rem' },
+                  lineHeight: 1.55,
+                  maxWidth: { md: 460, lg: 520, xl: 580 },
+                  mx: 'auto',
+                  mt: 1.5,
+                  px: 2,
+                  fontStyle: 'italic',
+                  fontWeight: 400,
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.55)',
+                  '@media (max-height: 800px)': {
+                    fontSize: '0.85rem',
+                    lineHeight: 1.4,
+                    mt: 1,
+                  },
+                }}
+              >
+                "{hospitalMission}"
+              </Typography>
+            )}
           </Box>
 
           {/* Bottom Section: Slideshow Department Indicator & Navigation Controls */}
@@ -500,7 +560,7 @@ const Login = () => {
                     display: 'block',
                   }}
                 >
-                  {HOSPITAL_SLIDES[currentSlide].dept}
+                  {slides[currentSlide]?.dept || 'Healthcare Facility'}
                 </Typography>
                 <Typography
                   variant="body2"
@@ -511,7 +571,7 @@ const Login = () => {
                     lineHeight: 1.25,
                   }}
                 >
-                  {HOSPITAL_SLIDES[currentSlide].desc}
+                  {slides[currentSlide]?.desc || ''}
                 </Typography>
               </Box>
 
@@ -532,9 +592,9 @@ const Login = () => {
 
             {/* Slide Progress Dots */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-              {HOSPITAL_SLIDES.map((s, idx) => (
+              {slides.map((s, idx) => (
                 <Box
-                  key={s.image}
+                  key={s.image || idx}
                   onClick={() => setCurrentSlide(idx)}
                   sx={{
                     width: idx === currentSlide ? 24 : 7,
@@ -638,7 +698,7 @@ const Login = () => {
                 px: 1,
               }}
             >
-              Faith Foundation Mission Hospital
+              {hospitalName}
             </Typography>
             <Typography
               variant="caption"
@@ -650,8 +710,24 @@ const Login = () => {
                 mt: 0.5,
               }}
             >
-              Nsukka · Jehovah Rapha
+              {hospitalSubtitle}
             </Typography>
+            {hospitalMission && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#64748b',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  mt: 0.6,
+                  maxWidth: 320,
+                  display: 'block',
+                  lineHeight: 1.35,
+                }}
+              >
+                "{hospitalMission}"
+              </Typography>
+            )}
           </Box>
 
           {/* Header Title Info */}

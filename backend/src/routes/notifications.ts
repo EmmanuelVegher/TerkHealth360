@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { logAudit } from '../utils/auditHelper.js';
 import { chatStore } from '../utils/chatStorage.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -840,5 +841,16 @@ router.get('/analytics', (req: Request, res: Response) => {
     }
   });
 });
+
+export function resetNotificationsMemoryState() {
+  notificationLogs.length = 0;
+  clinicalAlerts.length = 0;
+  internalChats.length = 0;
+  announcements.length = 0;
+}
+
+if (isHardResetActive()) {
+  resetNotificationsMemoryState();
+}
 
 export default router;

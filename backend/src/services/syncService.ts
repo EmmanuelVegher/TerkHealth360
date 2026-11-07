@@ -149,12 +149,15 @@ async function applyToLayer(
 }
 
 let isSyncing = false;
+let lastCloudQuotaPauseTime = 0;
 
 // ── One sync cycle ────────────────────────────────────────────────────────
 async function runSyncCycle(): Promise<void> {
   if (!SYNC_ONLINE) return;
   // If currently in cloud fallback mode, skip outbox sync (cloud IS the source)
   if (getLayer() === 'CLOUD' || getLayer() === 'OFFLINE') return;
+  // Back off if cloud database quota is exceeded (pause sync attempts for 5 minutes)
+  if (Date.now() - lastCloudQuotaPauseTime < 300_000) return;
   if (isSyncing) return;
 
   isSyncing = true;
@@ -234,8 +237,12 @@ async function runSyncCycle(): Promise<void> {
 
   } catch (err: any) {
     const msg = err?.message || String(err);
-    if (msg.includes('exceeded the compute time quota') || msg.includes('ECONNREFUSED') || msg.includes('timeout')) {
-      console.warn(`[SyncService] Sync cycle skipped (cloud quota or offline): ${msg.split('\n')[0]}`);
+    const isQuotaError = msg.includes('exceeded the quota') || msg.includes('exceeded the compute time quota') || msg.includes('quota');
+    if (isQuotaError) {
+      lastCloudQuotaPauseTime = Date.now();
+      console.warn('[SyncService] Cloud sync paused for 5m (Neon cloud database quota exceeded). Local PRIMARY database on port 5432 remains active and unaffected.');
+    } else if (msg.includes('ECONNREFUSED') || msg.includes('timeout') || msg.includes('ENOTFOUND')) {
+      console.warn(`[SyncService] Sync cycle skipped (cloud offline or unreachable): ${msg.split('\n')[0]}`);
     } else {
       console.warn('[SyncService] Sync cycle failed. Error:', msg);
     }

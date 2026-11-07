@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { setVisitWorkflowStepByStatus } from './workflow.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -207,7 +208,7 @@ router.get('/beds', authMiddleware, async (req, res, next) => {
       }
     });
 
-    if (existingLbrBedsCount === 0) {
+    if (existingLbrBedsCount === 0 && !isHardResetActive()) {
       let lbrWard = await prisma.ward.findFirst({
         where: {
           OR: [
@@ -266,7 +267,7 @@ router.get('/beds', authMiddleware, async (req, res, next) => {
       }
     });
 
-    if (existingTheatreBedsCount === 0) {
+    if (existingTheatreBedsCount === 0 && !isHardResetActive()) {
       let theatreWard = await prisma.ward.findFirst({
         where: {
           OR: [

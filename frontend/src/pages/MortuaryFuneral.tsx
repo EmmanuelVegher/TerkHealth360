@@ -378,6 +378,8 @@ const loadSavedMortuaryAutopsies = (): Record<string, any> => {
   return {};
 };
 
+const isHardResetActive = () => localStorage.getItem('hard_reset_active') === 'true';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN MORTUARY FUNERAL SERVICES COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -388,13 +390,17 @@ const MortuaryFuneral = () => {
   const [loading, setLoading] = useState(false);
 
   // ─── Data States ──────────────────────────────────────────────────────────
-  const [admissions, setAdmissions] = useState<any[]>(DEFAULT_ADMISSIONS);
-  const [storage, setStorage] = useState<any[]>(DEFAULT_STORAGE_CABINETS);
-  const [custody, setCustody] = useState<any[]>(DEFAULT_CUSTODY_LOGS);
-  const [autopsies, setAutopsies] = useState<any[]>(DEFAULT_AUTOPSIES);
-  const [embalmings, setEmbalmings] = useState<any[]>(DEFAULT_EMBALMING);
-  const [viewings, setViewings] = useState<any[]>(DEFAULT_VIEWINGS);
-  const [morticians, setMorticians] = useState<any[]>(DEFAULT_MORTICIANS);
+  const [admissions, setAdmissions] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_ADMISSIONS);
+  const [storage, setStorage] = useState<any[]>(() =>
+    isHardResetActive()
+      ? DEFAULT_STORAGE_CABINETS.map(c => ({ ...c, occupied: false, occupant: null }))
+      : DEFAULT_STORAGE_CABINETS
+  );
+  const [custody, setCustody] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_CUSTODY_LOGS);
+  const [autopsies, setAutopsies] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_AUTOPSIES);
+  const [embalmings, setEmbalmings] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_EMBALMING);
+  const [viewings, setViewings] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_VIEWINGS);
+  const [morticians, setMorticians] = useState<any[]>(() => isHardResetActive() ? [] : DEFAULT_MORTICIANS);
   const [selectedEmbalmer, setSelectedEmbalmer] = useState<string>('Caleb Okoh (Licensed Mortician & Embalmer - MOR-0001)');
   const [selectedPrepStatus, setSelectedPrepStatus] = useState<string>('DRESSED_AND_GROOMED');
   const [capa, setCapa] = useState<any[]>([]);
@@ -503,8 +509,11 @@ const MortuaryFuneral = () => {
         api.get('/mortuary/viewings').catch(() => ({ data: { data: DEFAULT_VIEWINGS } })),
       ]);
 
+      const hardReset = isHardResetActive();
       let fetchedAdmissions = adRes?.data?.data;
-      if (!Array.isArray(fetchedAdmissions) || fetchedAdmissions.length === 0) {
+      if (!Array.isArray(fetchedAdmissions)) {
+        fetchedAdmissions = hardReset ? [] : DEFAULT_ADMISSIONS;
+      } else if (fetchedAdmissions.length === 0 && !hardReset) {
         fetchedAdmissions = DEFAULT_ADMISSIONS;
       }
 
@@ -514,7 +523,9 @@ const MortuaryFuneral = () => {
       }
 
       let fetchedCustody = cuRes?.data?.data;
-      if (!Array.isArray(fetchedCustody) || fetchedCustody.length === 0) {
+      if (!Array.isArray(fetchedCustody)) {
+        fetchedCustody = hardReset ? [] : DEFAULT_CUSTODY_LOGS;
+      } else if (fetchedCustody.length === 0 && !hardReset) {
         fetchedCustody = DEFAULT_CUSTODY_LOGS;
       }
 
@@ -524,15 +535,21 @@ const MortuaryFuneral = () => {
       }
 
       let fetchedAutopsies = auRes?.data?.data;
-      if (!Array.isArray(fetchedAutopsies) || fetchedAutopsies.length === 0) {
+      if (!Array.isArray(fetchedAutopsies)) {
+        fetchedAutopsies = hardReset ? [] : DEFAULT_AUTOPSIES;
+      } else if (fetchedAutopsies.length === 0 && !hardReset) {
         fetchedAutopsies = DEFAULT_AUTOPSIES;
       }
       let fetchedEmbalmings = embRes?.data?.data;
-      if (!Array.isArray(fetchedEmbalmings) || fetchedEmbalmings.length === 0) {
+      if (!Array.isArray(fetchedEmbalmings)) {
+        fetchedEmbalmings = hardReset ? [] : DEFAULT_EMBALMING;
+      } else if (fetchedEmbalmings.length === 0 && !hardReset) {
         fetchedEmbalmings = DEFAULT_EMBALMING;
       }
       let fetchedViewings = viwRes?.data?.data;
-      if (!Array.isArray(fetchedViewings) || fetchedViewings.length === 0) {
+      if (!Array.isArray(fetchedViewings)) {
+        fetchedViewings = hardReset ? [] : DEFAULT_VIEWINGS;
+      } else if (fetchedViewings.length === 0 && !hardReset) {
         fetchedViewings = DEFAULT_VIEWINGS;
       }
 
@@ -733,15 +750,17 @@ const MortuaryFuneral = () => {
         });
 
         const mergedMorticians = [...staffMorticians];
-        DEFAULT_MORTICIANS.forEach(dm => {
-          if (!mergedMorticians.some(m => m.name.toLowerCase().includes(dm.name.toLowerCase()) || (dm.employeeId && m.employeeId === dm.employeeId))) {
-            mergedMorticians.push(dm);
-          }
-        });
+        if (!isHardResetActive()) {
+          DEFAULT_MORTICIANS.forEach(dm => {
+            if (!mergedMorticians.some(m => m.name.toLowerCase().includes(dm.name.toLowerCase()) || (dm.employeeId && m.employeeId === dm.employeeId))) {
+              mergedMorticians.push(dm);
+            }
+          });
+        }
 
         setMorticians(mergedMorticians);
       } catch {
-        setMorticians(DEFAULT_MORTICIANS);
+        setMorticians(isHardResetActive() ? [] : DEFAULT_MORTICIANS);
       }
 
       setAdmissions(fetchedAdmissions);

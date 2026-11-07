@@ -77,6 +77,7 @@ import interopRoutes from './routes/interop.js';
 import dhis2Routes from './routes/dhis2.js';
 import privacyRoutes from './routes/privacy.js';
 import diseaseClinicsRoutes from './routes/diseaseClinics.js';
+import facilitiesRoutes from './routes/facilities.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -94,6 +95,8 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: false,
+  hsts: false, // Disabled on localhost/LAN to prevent forcing unwanted HTTPS
+  contentSecurityPolicy: false, // Prevent upgrade-insecure-requests on localhost
 }));
 app.use(cors({
   origin: (origin, callback) => {
@@ -285,7 +288,12 @@ app.use('/api/physiotherapy', authMiddleware, rehabilitationRoutes);
 app.use('/api/architecture', authMiddleware, architectureRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/workflow', workflowRoutes);
-app.use('/api/config', authMiddleware, configRoutes);
+app.use('/api/config', (req, res, next) => {
+  if (req.path === '/public-info' || (req.path === '/slideshow' && req.method === 'GET')) {
+    return next();
+  }
+  return authMiddleware(req, res, next);
+}, configRoutes);
 app.use('/api/ipd', ipdRoutes);
 app.use('/api/ward-roster', wardRosterRoutes);
 app.use('/api/wards', wardsRoutes);
@@ -313,6 +321,9 @@ app.get('/api/dhis2/openhexa/feed', (req, res, next) => {
 app.use('/api/dhis2', authMiddleware, dhis2Routes);
 // NHTDAO Layer 5: Privacy-by-Design & NDPC Compliance Auditing
 app.use('/api/privacy', authMiddleware, privacyRoutes);
+
+// Federal Ministry of Health (FMoH) Health Facilities Registry (HFR)
+app.use('/api/facilities', facilitiesRoutes);
 
 
 // ── SPA catch-all: return index.html for any non-API route ──────────────────

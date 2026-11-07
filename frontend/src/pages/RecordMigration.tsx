@@ -550,7 +550,17 @@ const ALL_FOLDER_FORMS: Array<{ id: FormTypeOption; label: string; icon: any; co
   { id: 'AUTO_DETECT', label: 'Auto-Detect Form Type', icon: AutoAwesome, color: '#64748b', desc: 'AI classifies content automatically' },
 ];
 
-export default function RecordMigration() {
+export interface RecordMigrationProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  onSwitchToSmartFhir?: () => void;
+}
+
+export default function RecordMigration({
+  isModal = false,
+  onClose,
+  onSwitchToSmartFhir
+}: RecordMigrationProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -1521,7 +1531,85 @@ export default function RecordMigration() {
   const canCommit = hasValidPatient || hasNonPatientData;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, minHeight: '100vh', bgcolor: '#f8fafc' }}>
+    <Box sx={{ p: isModal ? 2 : { xs: 2, md: 3 }, minHeight: isModal ? 'auto' : '100vh', bgcolor: '#f8fafc' }}>
+      {/* ── MODAL HEADER / ALTERNATIVE MIGRATION ROUTE ── */}
+      {isModal ? (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1.5,
+            px: 2.5,
+            mb: 2,
+            borderRadius: 2.5,
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            color: '#fff',
+            border: '1px solid #334155',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1.5
+          }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Chip label="Manual Paper Migration" size="small" color="primary" sx={{ fontWeight: 700 }} />
+            <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#fff' }}>
+              Modal Station: Physical Folder & Document Scanning
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            {onSwitchToSmartFhir && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="info"
+                onClick={onSwitchToSmartFhir}
+                sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700, borderColor: 'rgba(56, 189, 248, 0.4)' }}
+              >
+                Switch to REST / SMART on FHIR Migration
+              </Button>
+            )}
+            {onClose && (
+              <Button
+                size="small"
+                variant="contained"
+                color="error"
+                startIcon={<Close />}
+                onClick={onClose}
+                sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}
+              >
+                Close Modal
+              </Button>
+            )}
+          </Stack>
+        </Paper>
+      ) : (
+        <Alert
+          severity="info"
+          sx={{
+            mb: 2.5,
+            borderRadius: 2.5,
+            border: '1px solid #bae6fd',
+            bgcolor: '#f0f9ff',
+            color: '#0369a1',
+            alignItems: 'center'
+          }}
+          action={
+            <Button
+              size="small"
+              color="primary"
+              variant="contained"
+              onClick={() => navigate('/settings?section=migration&type=smart-fhir')}
+              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+            >
+              Go to REST / SMART on FHIR
+            </Button>
+          }
+        >
+          <strong>Hospitals with an Existing Database:</strong> If your hospital already has an existing EHR, application, or database (OpenMRS, MySQL, PostgreSQL, etc.), use the <strong>REST / SMART on FHIR Interoperability Gateway</strong> in Settings for automated migration.
+        </Alert>
+      )}
+
       {/* ── TOP HEADER & STATS ── */}
       <Paper
         elevation={0}

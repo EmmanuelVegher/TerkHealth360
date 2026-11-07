@@ -124,12 +124,18 @@ export async function setupTriggers(): Promise<void> {
   let client: pg.PoolClient | undefined;
   try {
     client = await getActivePool();
-    console.log('[SyncTrigger] Installing CDC trigger function…');
     await client.query(CREATE_TRIGGER_FUNCTION);
 
     const { rows } = await client.query<{ tablename: string }>(LIST_TABLES);
+    const { rows: existingTrigRows } = await client.query<{ tgname: string }>(`
+      SELECT tgname
+      FROM pg_trigger
+      WHERE tgname LIKE 'trg_sync_%' AND NOT tgisinternal;
+    `);
+    const existingTriggers = new Set(existingTrigRows.map(r => r.tgname));
 
     let installed = 0;
+    let alreadyPresent = 0;
     let skipped = 0;
 
     for (const { tablename } of rows) {
@@ -137,13 +143,18 @@ export async function setupTriggers(): Promise<void> {
         skipped++;
         continue;
       }
+      const triggerName = `trg_sync_${tablename}`;
+      if (existingTriggers.has(triggerName)) {
+        alreadyPresent++;
+        continue;
+      }
       await client.query(buildTriggerSQL(tablename));
       installed++;
     }
 
     console.log(
-      `[SyncTrigger] ✓ Triggers installed on ${installed} tables` +
-      ` (${skipped} excluded).`
+      `[SyncTrigger] ✓ Triggers ready on ${installed + alreadyPresent} tables` +
+      ` (${installed} newly created, ${alreadyPresent} already active, ${skipped} excluded).`
     );
   } catch (err) {
     console.error('[SyncTrigger] ✗ Failed to install triggers:', err);

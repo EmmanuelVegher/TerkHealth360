@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { logAudit } from '../utils/auditHelper.js';
 import { invoices, billChargeMasterService } from './billing.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -1531,5 +1532,22 @@ router.get('/analytics', (req: Request, res: Response) => {
     }
   });
 });
+
+export function resetMortuaryMemoryState() {
+  mortuaryAdmissions.length = 0;
+  chainOfCustodyLogs.length = 0;
+  autopsyRecords.length = 0;
+  embalmingRecords.length = 0;
+  viewingSchedules.length = 0;
+  capaPlans.length = 0;
+  deceasedPatientQueue.length = 0;
+  storageCabinets.forEach((c: any) => {
+    c.occupied = false;
+  });
+}
+
+if (isHardResetActive()) {
+  resetMortuaryMemoryState();
+}
 
 export default router;

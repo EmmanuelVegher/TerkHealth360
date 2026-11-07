@@ -1,5 +1,6 @@
 import { prisma } from '../prisma.js';
 import bcrypt from 'bcryptjs';
+import { isHardResetActive } from './resetState.js';
 
 export const INITIAL_STAFF = [
   { employeeId: 'FF-0001', firstName: 'Emmanuel', lastName: 'Vegher', email: 'vegher.emmanuel@yahoo.com', role: 'DOCTOR', department: 'OPD', designation: 'Chief Consultant Physician', specialization: 'Internal Medicine', licenseNumber: 'MDCN-L-10291' },
@@ -35,6 +36,9 @@ export const INITIAL_STAFF = [
 ];
 
 export async function seedClinicians() {
+  if (isHardResetActive()) {
+    return;
+  }
   const hashedPassword = bcrypt.hashSync('password123', 10);
 
   for (const item of INITIAL_STAFF) {

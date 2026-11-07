@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { logAudit } from '../utils/auditHelper.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -209,5 +210,17 @@ router.get('/analytics', (req: Request, res: Response) => {
     }
   });
 });
+
+export function resetAssetsMemoryState() {
+  assets.length = 0;
+  workOrders.length = 0;
+  calibrations.length = 0;
+  generatorLogs.length = 0;
+  medicalGasLogs.length = 0;
+}
+
+if (isHardResetActive()) {
+  resetAssetsMemoryState();
+}
 
 export default router;

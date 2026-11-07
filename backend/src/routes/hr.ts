@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { loadEmployeeMetadata, saveEmployeeMetadata } from '../utils/metadataHelper.js';
 import { cashierShifts, syncShiftBalances, ensureShiftsInitialized } from './billing.js';
 import { addPayrollJournalVoucher } from './finance.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -5773,6 +5774,40 @@ try {
   });
 } catch (e) {
   console.error('Error synchronizing initial leave shifts to relievers:', e);
+}
+
+export function resetHRMemoryState() {
+  employees.length = 0;
+  vacancies.length = 0;
+  rosterShifts.length = 0;
+  attendanceLogs.length = 0;
+  leaveRequests.length = 0;
+  appraisals.length = 0;
+  cpdRecords.length = 0;
+  payrollHistory.length = 0;
+  adminTimesheets.length = 0;
+  bishopAuditLog.length = 0;
+  governanceRisks.length = 0;
+  timesheets.length = 0;
+  internalRequests.length = 0;
+  adminMessages.length = 0;
+  adminTasks.length = 0;
+  internalMemos.length = 0;
+  for (const key of Object.keys(userSignatures)) {
+    delete userSignatures[key];
+  }
+  for (const key of Object.keys(STAFF_ROSTER_SCHEDULES)) {
+    delete STAFF_ROSTER_SCHEDULES[key];
+  }
+  try {
+    saveEmployeeMetadata({});
+  } catch (e) {
+    // ignore metadata write errors
+  }
+}
+
+if (isHardResetActive()) {
+  resetHRMemoryState();
 }
 
 export default router;

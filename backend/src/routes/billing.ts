@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 
 import { logAudit } from '../utils/auditHelper.js';
 import { recordShiftClockInAttendance, recordShiftClockOutAttendance } from './hr.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -1693,6 +1694,7 @@ router.post('/payments', async (req: Request, res: Response) => {
 });
 
 export async function ensurePaymentsInitialized() {
+  if (isHardResetActive()) return payments;
   if (payments.length > 0) return payments;
   // Synthesize realistic recent receipts from paid hospital invoices
   const allInvoices = await fetchAllInvoices();
@@ -1829,6 +1831,7 @@ export function syncShiftBalances() {
 }
 
 export function ensureShiftsInitialized() {
+  if (isHardResetActive()) return;
   if (cashierShifts.length === 0) {
     const cashPayments = payments.filter(p => p.methods?.some((m: any) => m.method === 'CASH'));
     const cashTill = cashPayments.reduce((s, p) => s + (p.methods.find((m: any) => m.method === 'CASH')?.amount || 0), 0);
@@ -3509,5 +3512,18 @@ router.post('/patients/:patientId/wallet/deduct', async (req: Request, res: Resp
     res.status(500).json({ success: false, message: 'Failed to deduct from wallet' });
   }
 });
+
+export function resetBillingMemoryState() {
+  invoices.length = 0;
+  payments.length = 0;
+  cashierShifts.length = 0;
+  refunds.length = 0;
+  claims.length = 0;
+  customPayers.length = 0;
+}
+
+if (isHardResetActive()) {
+  resetBillingMemoryState();
+}
 
 export default router;

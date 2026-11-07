@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { authMiddleware } from '../middleware/auth.js';
 import { autoAdvanceVisitToStatus, autoAdvanceVisitTask } from './workflow.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -853,7 +854,7 @@ router.get('/inventory', authMiddleware, async (req, res, next) => {
     
     // Auto-seed standard reagents if fewer than 10 items exist in the database
     const totalCount = await prisma.labInventoryItem.count();
-    if (totalCount < 10) {
+    if (totalCount < 10 && !isHardResetActive()) {
       for (const item of STANDARD_LAB_INVENTORY) {
         await prisma.labInventoryItem.upsert({
           where: { itemCode: item.itemCode },
@@ -1021,7 +1022,7 @@ router.get('/equipment', authMiddleware, async (req, res, next) => {
     if (status) where.status = status;
 
     const count = await prisma.labEquipment.count();
-    if (count === 0) {
+    if (count === 0 && !isHardResetActive()) {
       // Auto-seed default clinical analyzers
       const now = new Date();
       const in12Days = new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000);

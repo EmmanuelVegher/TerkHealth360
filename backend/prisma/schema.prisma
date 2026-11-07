@@ -5043,3 +5043,249 @@ model Dhis2Submission {
   @@map("dhis2_submissions")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Federal Ministry of Health (FMoH) Health Facility Registry (HFR) Master Index
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FederalHealthFacility {
+  id                          String    @id @default(uuid())
+  registryId                  String?   @map("registry_id")
+  uniqueId                    String    @unique @map("unique_id")
+  stateUniqueId               String?   @map("state_unique_id")
+  registrationNo              String?   @map("registration_no")
+  facilityName                String    @map("facility_name")
+  altFacilityName             String?   @map("alt_facility_name")
+  stateId                     String?   @map("state_id")
+  stateName                   String    @map("state_name")
+  lgaId                       String?   @map("lga_id")
+  lgaName                     String    @map("lga_name")
+  wardId                      String?   @map("ward_id")
+  wardName                    String    @map("ward_name")
+  facilityLevelName           String?   @map("facility_level_name")
+  ownershipName               String?   @map("ownership_name")
+  ownershipType               String?   @map("ownership_type")
+  physicalLocation            String?   @map("physical_location") @db.Text
+  postalAddress               String?   @map("postal_address") @db.Text
+  longitude                   Float?
+  latitude                    Float?
+  phoneNumber                 String?   @map("phone_number")
+  alternateNumber             String?   @map("alternate_number")
+  emailAddress                String?   @map("email_address")
+  website                     String?
+  operationalDays             String?   @map("operational_days")
+  operationalHours            String?   @map("operational_hours")
+  operationalStatus           String?   @map("operational_status")
+  registrationStatus          String?   @map("registration_status")
+  licenseStatus               String?   @map("license_status")
+  outpatient                  String?
+  inpatient                   String?
+  doctors                     Int?
+  pharmacists                 Int?
+  dentist                     Int?
+  pharmacyTechnicians         Int?      @map("pharmacy_technicians")
+  nurses                      Int?
+  labScientists               Int?      @map("lab_scientists")
+  midwifes                    Int?
+  labTechnicians              Int?      @map("lab_technicians")
+  nurseMidwife                Int?      @map("nurse_midwife")
+  himOfficers                 Int?      @map("him_officers")
+  communityHealthOfficer      Int?      @map("community_health_officer")
+  communityExtensionWorkers   Int?      @map("community_extension_workers")
+  junCommunityExtensionWorker Int?      @map("jun_community_extension_worker")
+  dentalTechnicians           Int?      @map("dental_technicians")
+  envHealthOfficers           Int?      @map("env_health_officers")
+  attendants                  Int?
+  beds                        Int?
+  onsiteLaboratory            String?   @map("onsite_laboratory")
+  onsiteImaging               String?   @map("onsite_imaging")
+  onsitePharmacy              String?   @map("onsite_pharmacy")
+  mortuaryServices            String?   @map("mortuary_services")
+  ambulanceServices           String?   @map("ambulance_services")
+  dhis2Synced                 String?   @map("dhis2_synced")
+  rawMetadata                 Json?     @map("raw_metadata")
+  isSelectedHospital          Boolean   @default(false) @map("is_selected_hospital")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+
+  @@index([stateName])
+  @@index([lgaName])
+  @@index([wardName])
+  @@index([facilityName])
+  @@index([stateName, lgaName, wardName])
+  @@index([isSelectedHospital])
+  @@map("federal_health_facilities")
+}
+
+model DmsDocument {
+  id                  String        @id
+  name                String
+  category            String        @default("POLICY_SOP")
+  mimeType            String        @default("application/pdf") @map("mime_type")
+  fileSize            BigInt?       @default(1048576) @map("file_size")
+  fileUrl             String?       @map("file_url")
+  filePath            String?       @map("file_path")
+  department          String        @default("Administration")
+  creator             String        @default("System Admin")
+  creatorId           String?       @map("creator_id")
+  version             String        @default("1.0")
+  status              String        @default("PUBLISHED")
+  classification      String        @default("INTERNAL")
+  retentionPeriodYears Int          @default(7) @map("retention_period_years")
+  isLegalHold         Boolean       @default(false) @map("is_legal_hold")
+  legalHoldReason     String?       @map("legal_hold_reason")
+  legalHoldDate       DateTime?     @map("legal_hold_date")
+  ocrText             String?       @map("ocr_text")
+  tags                String?
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  workflows           DmsWorkflow[]
+  signatures          DmsSignature[]
+
+  @@index([category])
+  @@index([department])
+  @@index([status])
+  @@index([isLegalHold])
+  @@index([createdAt])
+  @@map("dms_documents")
+}
+
+model DmsDigitalForm {
+  id               String               @id
+  title            String
+  description      String?
+  department       String               @default("Administration")
+  creator          String               @default("Quality Assurance Officer")
+  creatorId        String?              @map("creator_id")
+  version          String               @default("1.0")
+  status           String               @default("PUBLISHED")
+  inputsCount      Int                  @default(10) @map("inputs_count")
+  fieldsSchema     Json?                @map("fields_schema")
+  submissionsCount Int                  @default(0) @map("submissions_count")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  submissions      DmsFormSubmission[]
+
+  @@index([department])
+  @@index([status])
+  @@map("dms_digital_forms")
+}
+
+model DmsFormSubmission {
+  id             String         @id
+  formId         String         @map("form_id")
+  submittedBy    String         @default("Anonymous Staff") @map("submitted_by")
+  submitterId    String?        @map("submitter_id")
+  department     String?
+  submissionData Json           @map("submission_data")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  form           DmsDigitalForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([createdAt])
+  @@map("dms_form_submissions")
+}
+
+model DmsWorkflow {
+  id            String      @id
+  docId         String      @map("doc_id")
+  docName       String      @map("doc_name")
+  stage         String      @default("MEDICAL_DIRECTOR_REVIEW")
+  status        String      @default("PENDING_APPROVAL")
+  assignee      String      @default("Medical Director")
+  assigneeId    String?     @map("assignee_id")
+  comments      String?
+  reviewNotes   String?     @map("review_notes")
+  dateInitiated DateTime    @default(now()) @map("date_initiated")
+  dateCompleted DateTime?   @map("date_completed")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  document      DmsDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([docId])
+  @@index([status])
+  @@map("dms_workflows")
+}
+
+model DmsSignature {
+  id                 String      @id
+  docId              String      @map("doc_id")
+  docName            String?     @map("doc_name")
+  workflowId         String?     @map("workflow_id")
+  signer             String
+  signerId           String?     @map("signer_id")
+  role               String
+  timestamp          DateTime    @default(now())
+  hash               String
+  certificateDetails String?     @map("certificate_details")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  document           DmsDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([docId])
+  @@index([hash])
+  @@map("dms_signatures")
+}
+
+model SecurityDevice {
+  id               String    @id
+  name             String
+  type             String    @default("DESKTOP") // DESKTOP | LAPTOP | TABLET | KIOSK | SERVER
+  os               String    @default("Windows 11 Enterprise")
+  ipAddress        String?   @map("ip_address")
+  macAddress       String?   @map("mac_address")
+  trustStatus      String    @default("TRUSTED") @map("trust_status") // TRUSTED | QUARANTINED | REVOKED | PENDING_VERIFICATION
+  lastPatchDate    DateTime? @default(now()) @map("last_patch_date")
+  encryptionActive Boolean   @default(true) @map("encryption_active")
+  enrolledBy       String?   @default("System Security Admin") @map("enrolled_by")
+  department       String?   @default("Administration")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([trustStatus])
+  @@index([type])
+  @@map("security_devices")
+}
+
+model SecurityIncident {
+  id          String    @id
+  sourceIp    String    @map("source_ip")
+  eventName   String    @map("event_name")
+  severity    String    @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
+  targetUser  String    @map("target_user")
+  status      String    @default("FLAGGED") // FLAGGED | BLOCKED | UNDER_INVESTIGATION | RESOLVED | FALSE_POSITIVE
+  mitigation  String?   @db.Text
+  resolvedBy  String?   @map("resolved_by")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@map("security_incidents")
+}
+
+model AccessCertification {
+  id           String    @id
+  userId       String?   @map("user_id")
+  username     String
+  role         String
+  department   String
+  reviewer     String
+  status       String    @default("PENDING_REVIEW") // PENDING_REVIEW | CERTIFIED | REVOKED | ESCALATED
+  dateReviewed DateTime? @map("date_reviewed")
+  campaignName String?   @default("Q4 2026 Statutory Privilege Audit") @map("campaign_name")
+  comments     String?   @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([department])
+  @@map("access_certifications")
+}
+
+

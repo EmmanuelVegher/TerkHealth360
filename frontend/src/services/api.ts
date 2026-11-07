@@ -52,6 +52,8 @@ api.interceptors.response.use(
       (config as any)?.skipOfflineQueue ||
       url.includes('/auth/') ||
       url.includes('/sync') ||
+      url.includes('/system/truncate-database') ||
+      url.includes('/architecture/infra/backups') ||
       url.includes('/records-migration/extract-folder') ||
       url.includes('/records-migration/check-patient-match') ||
       url.includes('/medgemma') ||

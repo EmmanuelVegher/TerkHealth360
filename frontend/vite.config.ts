@@ -3,8 +3,14 @@ import react from '@vitejs/plugin-react';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import path from 'path';
 
+// Enable self-signed HTTPS only when explicitly required via VITE_HTTPS=true
+const useHttps = process.env.VITE_HTTPS === 'true';
+
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [
+    react(),
+    ...(useHttps ? [basicSsl()] : []),
+  ],
   // Use './' so assets use relative paths, which work under file:// (Electron)
   base: './',
   resolve: {
@@ -48,6 +54,8 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
       },
       '/fhir': {
         target: 'http://127.0.0.1:3000',

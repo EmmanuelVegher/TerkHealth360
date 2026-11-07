@@ -3,11 +3,18 @@ import { getLayer, updateLayerHealth, recalculateActiveLayer, DbLayer } from './
 import dotenv from 'dotenv';
 dotenv.config();
 
-function addConnectionLimit(url: string, limit = 5): string {
+function addConnectionLimit(url: string, limit = 25): string {
   if (!url) return '';
-  if (url.includes('connection_limit')) return url;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}connection_limit=${limit}`;
+  let result = url;
+  if (!result.includes('connection_limit')) {
+    const separator = result.includes('?') ? '&' : '?';
+    result = `${result}${separator}connection_limit=${limit}`;
+  }
+  if (!result.includes('pool_timeout')) {
+    const separator = result.includes('?') ? '&' : '?';
+    result = `${result}${separator}pool_timeout=60`;
+  }
+  return result;
 }
 
 const rawNeonUrl = (process.env.NEON_DATABASE_URL || '').replace(/&?channel_binding=[^&]*/, '');
@@ -17,9 +24,9 @@ const neonUrl = rawNeonUrl
       : `${rawNeonUrl}${rawNeonUrl.includes('?') ? '&' : '?'}connect_timeout=15`)
   : '';
 
-const primaryUrl = addConnectionLimit(process.env.DATABASE_URL || neonUrl || '', 5);
-const standbyUrl = process.env.STANDBY_DATABASE_URL ? addConnectionLimit(process.env.STANDBY_DATABASE_URL, 5) : '';
-const cloudUrl = neonUrl ? addConnectionLimit(neonUrl, 5) : '';
+const primaryUrl = addConnectionLimit(process.env.DATABASE_URL || neonUrl || '', 25);
+const standbyUrl = process.env.STANDBY_DATABASE_URL ? addConnectionLimit(process.env.STANDBY_DATABASE_URL, 15) : '';
+const cloudUrl = neonUrl ? addConnectionLimit(neonUrl, 10) : '';
 
 const primaryClient = new PrismaClient({ datasources: { db: { url: primaryUrl } } });
 

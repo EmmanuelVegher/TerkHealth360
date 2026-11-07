@@ -124,10 +124,15 @@ router.patch('/me/password', authMiddleware, async (req: any, res, next) => {
 });
 
 import { getHREmployees } from './hr.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 let staffSynced = false;
 
 export async function ensureAllStaffUsersSynced() {
+  if (isHardResetActive()) {
+    staffSynced = true;
+    return;
+  }
   try {
     const hrEmployees = getHREmployees();
     const defaultHash = await bcrypt.hash('password123', 10);

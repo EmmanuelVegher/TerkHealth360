@@ -1020,10 +1020,11 @@ const LIMS = () => {
       ],
     };
   };
-  const [orders, setOrders] = useState<LabOrder[]>(DEFAULT_DEMO_ORDERS);
+  const isHardReset = () => localStorage.getItem('hard_reset_active') === 'true';
+  const [orders, setOrders] = useState<LabOrder[]>(() => isHardReset() ? [] : DEFAULT_DEMO_ORDERS);
   const [catalog, setCatalog] = useState<CatalogTest[]>(DEFAULT_DEMO_CATALOG);
-  const [inventory, setInventory] = useState<InventoryItem[]>(DEFAULT_DEMO_INVENTORY);
-  const [equipment, setEquipment] = useState<Equipment[]>(DEFAULT_DEMO_EQUIPMENT);
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => isHardReset() ? [] : DEFAULT_DEMO_INVENTORY);
+  const [equipment, setEquipment] = useState<Equipment[]>(() => isHardReset() ? [] : DEFAULT_DEMO_EQUIPMENT);
   const [qcRecords, setQcRecords] = useState<QCRecord[]>([]);
   const [criticalAlerts, setCriticalAlerts] = useState<LabCriticalAlert[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -1362,11 +1363,13 @@ const LIMS = () => {
       if (priorityFilter) params.priority = priorityFilter;
       const { data } = await axios.get(`${API}/orders`, { headers: getHeaders(), params });
       let mergedOrders = Array.isArray(data) ? [...data] : [];
-      DEFAULT_DEMO_ORDERS.forEach(demo => {
-        if (!mergedOrders.some((o: any) => o.id === demo.id || o.orderNumber === demo.orderNumber)) {
-          mergedOrders.push(demo);
-        }
-      });
+      if (!isHardReset()) {
+        DEFAULT_DEMO_ORDERS.forEach(demo => {
+          if (!mergedOrders.some((o: any) => o.id === demo.id || o.orderNumber === demo.orderNumber)) {
+            mergedOrders.push(demo);
+          }
+        });
+      }
       setOrders(mergedOrders);
       
       // Fetch visits with IN_LABORATORY status (walk-ins registered via Walk-in Client button)
@@ -1389,7 +1392,7 @@ const LIMS = () => {
       const activeVisitIds = new Set(mergedOrders.filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'COMPLETED').map((o: any) => o.visitId));
       setWaitingPatients([...mergedMap.values()].filter((v: any) => !activeVisitIds.has(v.id)));
     } catch { 
-      setOrders(DEFAULT_DEMO_ORDERS);
+      setOrders(isHardReset() ? [] : DEFAULT_DEMO_ORDERS);
       if (!isBackground) enqueueSnackbar('Failed to load lab orders', { variant: 'error' }); 
     } finally {
       if (!isBackground) setLoading(false);
@@ -1413,27 +1416,29 @@ const LIMS = () => {
     try {
       const { data } = await axios.get(`${API}/inventory`, { headers: getHeaders() });
       let serverItems = Array.isArray(data) ? [...data] : (Array.isArray(data?.data) ? [...data.data] : []);
-      DEFAULT_DEMO_INVENTORY.forEach(demo => {
-        if (!serverItems.some((i: any) => i.itemCode === demo.itemCode || i.id === demo.id)) {
-          serverItems.push(demo);
-        }
-      });
+      if (!isHardReset()) {
+        DEFAULT_DEMO_INVENTORY.forEach(demo => {
+          if (!serverItems.some((i: any) => i.itemCode === demo.itemCode || i.id === demo.id)) {
+            serverItems.push(demo);
+          }
+        });
+      }
       setInventory(serverItems);
     } catch {
-      setInventory(DEFAULT_DEMO_INVENTORY);
+      setInventory(isHardReset() ? [] : DEFAULT_DEMO_INVENTORY);
     }
   }, []);
 
   const fetchEquipment = useCallback(async () => {
     try {
       const { data } = await axios.get(`${API}/equipment`, { headers: getHeaders() });
-      if (Array.isArray(data) && data.length > 0) {
-        setEquipment(data);
-      } else if (Array.isArray(data?.data) && data.data.length > 0) {
-        setEquipment(data.data);
+      if (Array.isArray(data)) {
+        setEquipment(data.length > 0 || isHardReset() ? data : DEFAULT_DEMO_EQUIPMENT);
+      } else if (Array.isArray(data?.data)) {
+        setEquipment(data.data.length > 0 || isHardReset() ? data.data : DEFAULT_DEMO_EQUIPMENT);
       }
     } catch {
-      // Retain DEFAULT_DEMO_EQUIPMENT
+      if (isHardReset()) setEquipment([]);
     }
   }, []);
 
@@ -1448,9 +1453,12 @@ const LIMS = () => {
     try {
       const { data } = await axios.get(`${API}/critical-alerts`, { headers: getHeaders() });
       const serverAlerts = Array.isArray(data) ? data : [];
-      setCriticalAlerts(prev => derivePanicAlertsFromOrders(orders.length > 0 ? orders : DEFAULT_DEMO_ORDERS, serverAlerts));
+      const fallbackOrders = isHardReset() ? [] : DEFAULT_DEMO_ORDERS;
+      setCriticalAlerts(prev => derivePanicAlertsFromOrders(orders.length > 0 ? orders : fallbackOrders, serverAlerts));
     } catch {
-      setCriticalAlerts(prev => derivePanicAlertsFromOrders(orders.length > 0 ? orders : DEFAULT_DEMO_ORDERS, DEFAULT_PANIC_ALERTS));
+      const fallbackOrders = isHardReset() ? [] : DEFAULT_DEMO_ORDERS;
+      const fallbackAlerts = isHardReset() ? [] : DEFAULT_PANIC_ALERTS;
+      setCriticalAlerts(prev => derivePanicAlertsFromOrders(orders.length > 0 ? orders : fallbackOrders, fallbackAlerts));
     }
   }, []);
 

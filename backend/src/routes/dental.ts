@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -490,7 +491,7 @@ async function seedDentalLabOrdersIfEmpty() {
 // List all digital dental lab prescription slips from PostgreSQL database
 router.get('/lab-orders', authMiddleware, async (req: Request, res: Response) => {
   try {
-    await seedDentalLabOrdersIfEmpty();
+    if (!isHardResetActive()) await seedDentalLabOrdersIfEmpty();
 
     const { patientId, dentalEncounterId, status, search } = req.query as {
       patientId?: string;
@@ -961,7 +962,7 @@ function computeDentalConsumables(items: Array<{ procedureName?: string; cdtCode
 // Query treatment plan items from PostgreSQL with filters (patient, phase, status, search)
 router.get('/treatment-plans', authMiddleware, async (req: Request, res: Response) => {
   try {
-    await seedDentalTreatmentPlansIfEmpty();
+    if (!isHardResetActive()) await seedDentalTreatmentPlansIfEmpty();
 
     const { patientId, dentalEncounterId, phase, status, search } = req.query as {
       patientId?: string;

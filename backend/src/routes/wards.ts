@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
     });
 
     // Auto-seed default wards if empty
-    if (wards.length === 0) {
+    if (wards.length === 0 && !isHardResetActive()) {
       const defaultWards = [
         { name: 'General Ward', wardCategory: 'GENERAL', type: 'GENERAL', capacity: 10, description: 'General Medical & Surgical Inpatient Ward', color: '#3f51b5' },
         { name: 'ICU (Intensive Care Unit)', wardCategory: 'ICU', type: 'ICU', capacity: 6, description: 'Intensive Critical Care Monitoring Unit', color: '#f44336' },

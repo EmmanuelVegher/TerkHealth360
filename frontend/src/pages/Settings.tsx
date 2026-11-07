@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 import {
   Card, CardContent, Grid, Typography, TextField, Button, Box, Divider,
@@ -11,7 +11,7 @@ import {
   Visibility, VisibilityOff, MedicalServices, Edit, Bed, LocalHospital, SwapHoriz, PersonPin, Psychology,
   MemoryOutlined, SmartToy, Circle, Biotech, Download, CheckCircle, CheckCircleOutline, DeleteOutline,
   Refresh, CalendarMonth, ArrowForward, AutoAwesome, CloudQueue, CameraAlt, Key,
-  CloudSync, Wifi, WifiOff, SyncAlt, CloudDownload
+  CloudSync, Wifi, WifiOff, SyncAlt, CloudDownload, FolderSpecial, DeleteForever, WarningAmber
 } from '@mui/icons-material';
 import { NairaCircleIcon } from '../components/NairaIcon';
 import { useSnackbar } from 'notistack';
@@ -21,10 +21,169 @@ import { WorkflowBuilder } from '../components/WorkflowBuilder';
 import { ModuleConfig } from '../components/ModuleConfig';
 import { PrintTemplateConfig } from '../components/PrintTemplateConfig';
 import UniversalInteropStudio from '../components/UniversalInteropStudio';
+import RecordMigration from './RecordMigration';
+import SmartFhirMigrationStudio from '../components/SmartFhirMigrationStudio';
+import FederalHospitalRegistrySelector from '../components/FederalHospitalRegistrySelector';
+import LoginSlideshowManager from '../components/LoginSlideshowManager';
 
 const Settings = () => {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // ── Hospital Record & Data Migration Station State ─────────────────────────
+  const [paperModalOpen, setPaperModalOpen] = useState(false);
+  const [activeMigrationPathway, setActiveMigrationPathway] = useState<'PAPER' | 'SMART_FHIR'>(() => {
+    return searchParams.get('type') === 'paper' ? 'PAPER' : 'SMART_FHIR';
+  });
+
+  // ── Hospital Deployment Reset & Database Truncation State ──────────────────
+  const [truncateStats, setTruncateStats] = useState<any>({
+    patientCount: 0,
+    encounterCount: 0,
+    visitCount: 0,
+    admissionCount: 0,
+    prescriptionCount: 0,
+    invoiceCount: 0,
+    staffCount: 0,
+    wardCount: 0,
+    totalBedsCount: 0,
+    totalInventoryCount: 0,
+    totalRecords: 0
+  });
+  const [truncateModalOpen, setTruncateModalOpen] = useState(false);
+  const [truncateConfirmPhrase, setTruncateConfirmPhrase] = useState('');
+  const [preserveStaffAccounts, setPreserveStaffAccounts] = useState(true);
+  const [newDeployHospitalName, setNewDeployHospitalName] = useState('');
+  const [newDeployHospitalAddress, setNewDeployHospitalAddress] = useState('');
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
+  const [isTruncating, setIsTruncating] = useState(false);
+  const [truncateSuccessData, setTruncateSuccessData] = useState<any>(null);
+
+  // ── Hard Reset (Full Factory Wipe) State ───────────────────────────────────
+  const [hardResetModalOpen, setHardResetModalOpen] = useState(false);
+  const [hardResetConfirmPhrase, setHardResetConfirmPhrase] = useState('');
+  const [isHardResetting, setIsHardResetting] = useState(false);
+  const [hardResetSuccessData, setHardResetSuccessData] = useState<any>(null);
+
+  const fetchTruncateStats = async () => {
+    try {
+      const res = await api.get('/system/truncate-stats');
+      if (res.data?.ok && res.data?.data) {
+        setTruncateStats(res.data.data);
+        if (res.data.data.hardResetActive) {
+          localStorage.setItem('hard_reset_active', 'true');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch truncate stats:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchTruncateStats();
+  }, []);
+
+  const handleExecuteTruncate = async () => {
+    if (truncateConfirmPhrase.trim().toUpperCase() !== 'TRUNCATE-DATA') {
+      enqueueSnackbar('Please type TRUNCATE-DATA to confirm truncation', { variant: 'warning' });
+      return;
+    }
+
+    setIsTruncating(true);
+    try {
+      const res = await api.post('/system/truncate-database', {
+        confirmation: truncateConfirmPhrase.trim().toUpperCase(),
+        preserveUsers: preserveStaffAccounts,
+        newHospitalName: newDeployHospitalName.trim() || undefined,
+        newHospitalAddress: newDeployHospitalAddress.trim() || undefined,
+        autoBackup: autoBackupEnabled
+      }, {
+        timeout: 0, // No time limit regardless of database size
+        skipOfflineQueue: true
+      } as any);
+
+      if (res.data?.ok) {
+        setTruncateSuccessData(res.data);
+        enqueueSnackbar('Database successfully truncated! Ready for new hospital deployment.', { variant: 'success' });
+        fetchTruncateStats();
+        window.dispatchEvent(new CustomEvent('hospital-config-updated'));
+      }
+    } catch (err: any) {
+      console.error('Truncation failed:', err);
+      enqueueSnackbar(err.response?.data?.message || 'Failed to truncate database', { variant: 'error' });
+    } finally {
+      setIsTruncating(false);
+    }
+  };
+
+  const handleExecuteHardReset = async () => {
+    if (hardResetConfirmPhrase.trim().toUpperCase() !== 'HARD-RESET') {
+      enqueueSnackbar('Please type HARD-RESET to confirm full factory wipe', { variant: 'warning' });
+      return;
+    }
+
+    setIsHardResetting(true);
+    try {
+      const res = await api.post('/system/hard-reset', {
+        confirmation: 'HARD-RESET',
+        newHospitalName: newDeployHospitalName.trim() || undefined,
+        newHospitalAddress: newDeployHospitalAddress.trim() || undefined,
+        autoBackup: autoBackupEnabled
+      }, {
+        timeout: 0, // No time limit regardless of database size
+        skipOfflineQueue: true
+      } as any);
+
+      if (res.data?.ok) {
+        localStorage.setItem('hard_reset_active', 'true');
+        // Clear cached module localStorage records (Pathology, Mortuary, Archive, IHC, Deceased Queue)
+        const keysToClear = [
+          'smart_hospital_pathology_archive_v2',
+          'smart_hospital_archive_locators_v2',
+          'smart_hospital_pathology_ihc_v3',
+          'faith_pathology_saved_reports_v2',
+          'smart_hospital_mortuary_autopsies_v1',
+          'smart_hospital_mortuary_releases_v1',
+          'smart_hospital_deceased_queue_v1'
+        ];
+        keysToClear.forEach(k => localStorage.removeItem(k));
+
+        setHardResetSuccessData(res.data);
+        enqueueSnackbar('Hard Reset complete! All staff, rosters, wards, inventories, and patient records wiped (Super Admin & Data Dictionary preserved).', {
+          variant: 'success',
+          autoHideDuration: 6000
+        });
+        fetchTruncateStats();
+        fetchWards();
+        fetchNurseShifts();
+        window.dispatchEvent(new CustomEvent('hospital-config-updated'));
+      }
+    } catch (err: any) {
+      console.error('Hard reset failed:', err);
+      enqueueSnackbar(err.response?.data?.message || 'Failed to execute Hard Reset', { variant: 'error' });
+    } finally {
+      setIsHardResetting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchParams.get('modal') === 'paper') {
+      setPaperModalOpen(true);
+    }
+    if (searchParams.get('type') === 'paper') {
+      setActiveMigrationPathway('PAPER');
+    } else if (searchParams.get('type') === 'smart-fhir') {
+      setActiveMigrationPathway('SMART_FHIR');
+    }
+    if (searchParams.get('section') === 'migration') {
+      const el = document.getElementById('hospital-migration-hub');
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 300);
+      }
+    }
+  }, [searchParams]);
+
   // Registration Categories & Tariff Configuration
   const defaultCategories = [
     { code: 'INDIVIDUAL', name: 'Individual Account', fee: 1500 },
@@ -478,6 +637,8 @@ const Settings = () => {
   // Hospital General Info State
   const [hospitalInfo, setHospitalInfo] = useState({
     name: 'Faith Foundation Mission Hospital, Nsukka',
+    subtitle: 'Mission Hospital · Jehovah Rapha',
+    mission: 'Empowering clinical excellence through integrated medical records and compassionate care.',
     email: 'admin@hospital.com',
     address: 'No. 20 Ogurugu Road Nsukka, Enugu State, Nigeria',
     phone: '',
@@ -497,6 +658,8 @@ const Settings = () => {
         setHospitalInfo(prev => ({
           ...prev,
           name:            get('HOSPITAL_NAME')        || prev.name,
+          subtitle:        get('HOSPITAL_SUBTITLE')    || prev.subtitle,
+          mission:         get('HOSPITAL_MISSION')     || prev.mission,
           email:           get('HOSPITAL_EMAIL')       || prev.email,
           address:         get('HOSPITAL_ADDRESS')     || prev.address,
           phone:           get('HOSPITAL_PHONE')       || prev.phone,
@@ -513,15 +676,21 @@ const Settings = () => {
     setSavingHospital(true);
     try {
       await Promise.all([
-        api.put('/config/modules/HOSPITAL_NAME',    { description: hospitalInfo.name,    isActive: true }),
-        api.put('/config/modules/HOSPITAL_EMAIL',   { description: hospitalInfo.email,   isActive: true }),
-        api.put('/config/modules/HOSPITAL_ADDRESS', { description: hospitalInfo.address, isActive: true }),
-        api.put('/config/modules/HOSPITAL_PHONE',   { description: hospitalInfo.phone,   isActive: true }),
-        api.put('/config/modules/HOSPITAL_WEBSITE', { description: hospitalInfo.website, isActive: true }),
-        api.put('/config/modules/OPENMRS_BASE_URL', { description: hospitalInfo.openmrsUrl, isActive: true }),
-        api.put('/config/modules/OPENMRS_USERNAME', { description: hospitalInfo.openmrsUsername, isActive: true }),
-        api.put('/config/modules/OPENMRS_PASSWORD', { description: hospitalInfo.openmrsPassword, isActive: true }),
+        api.put('/config/modules/HOSPITAL_NAME',     { description: hospitalInfo.name,     isActive: true }),
+        api.put('/config/modules/HOSPITAL_SUBTITLE', { description: hospitalInfo.subtitle, isActive: true }),
+        api.put('/config/modules/HOSPITAL_MISSION',  { description: hospitalInfo.mission,  isActive: true }),
+        api.put('/config/modules/HOSPITAL_EMAIL',    { description: hospitalInfo.email,    isActive: true }),
+        api.put('/config/modules/HOSPITAL_ADDRESS',  { description: hospitalInfo.address,  isActive: true }),
+        api.put('/config/modules/HOSPITAL_PHONE',    { description: hospitalInfo.phone,    isActive: true }),
+        api.put('/config/modules/HOSPITAL_WEBSITE',  { description: hospitalInfo.website,  isActive: true }),
+        api.put('/config/modules/OPENMRS_BASE_URL',  { description: hospitalInfo.openmrsUrl, isActive: true }),
+        api.put('/config/modules/OPENMRS_USERNAME',  { description: hospitalInfo.openmrsUsername, isActive: true }),
+        api.put('/config/modules/OPENMRS_PASSWORD',  { description: hospitalInfo.openmrsPassword, isActive: true }),
       ]);
+      localStorage.setItem('app_hospital_name', hospitalInfo.name);
+      localStorage.setItem('app_hospital_subtitle', hospitalInfo.subtitle);
+      localStorage.setItem('app_hospital_mission', hospitalInfo.mission);
+      window.dispatchEvent(new Event('hospital-config-updated'));
       if (hospitalInfo.openmrsUrl) {
         api.post('/nmrs/config', {
           ...nmrsConfig,
@@ -930,6 +1099,186 @@ const Settings = () => {
           <ModuleConfig />
         </Grid>
 
+        {/* ── Hospital Deployment Reset & Database Truncation Station ── */}
+        <Grid item xs={12}>
+          <Card sx={{
+            border: '1.5px solid #ef4444',
+            boxShadow: '0 8px 32px rgba(239, 68, 68, 0.08)',
+            borderRadius: 3,
+            overflow: 'hidden'
+          }}>
+            <Box sx={{
+              background: 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)',
+              p: 2.5,
+              color: '#ffffff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 46, height: 46 }}>
+                  <DeleteForever sx={{ color: '#fff', fontSize: 28 }} />
+                </Avatar>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="h6" fontWeight={800} sx={{ color: '#fff' }}>
+                      Hospital Deployment Reset & Database Truncation
+                    </Typography>
+                    <Chip
+                      label="Deployment Tooling"
+                      size="small"
+                      sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800, fontSize: '0.65rem' }}
+                    />
+                  </Box>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', display: 'block' }}>
+                    Truncate patient records, clinical encounters, admissions, and financial logs to prepare this system for a fresh hospital installation
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                <Button
+                  variant="contained"
+                  color="inherit"
+                  startIcon={<DeleteForever sx={{ color: '#b91c1c' }} />}
+                  onClick={() => {
+                    setTruncateConfirmPhrase('');
+                    setTruncateSuccessData(null);
+                    setTruncateModalOpen(true);
+                  }}
+                  sx={{
+                    bgcolor: '#ffffff',
+                    color: '#b91c1c',
+                    fontWeight: 800,
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    px: 2.5,
+                    py: 1,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    '&:hover': { bgcolor: '#fef2f2' }
+                  }}
+                >
+                  Truncate Database for New Hospital
+                </Button>
+
+                <Button
+                  variant="contained"
+                  startIcon={<WarningAmber sx={{ color: '#fff' }} />}
+                  onClick={() => {
+                    setHardResetConfirmPhrase('');
+                    setHardResetSuccessData(null);
+                    setHardResetModalOpen(true);
+                  }}
+                  sx={{
+                    bgcolor: '#450a0a',
+                    color: '#ffffff',
+                    border: '1.5px solid #fca5a5',
+                    fontWeight: 800,
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    px: 2.5,
+                    py: 1,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                    '&:hover': { bgcolor: '#1c0404', borderColor: '#ffffff' }
+                  }}
+                >
+                  Hard Reset
+                </Button>
+              </Stack>
+            </Box>
+
+            <CardContent sx={{ p: 3, bgcolor: '#fff5f5' }}>
+              <Grid container spacing={2.5} alignItems="center">
+                <Grid item xs={12} md={8}>
+                  <Typography variant="subtitle2" fontWeight={800} color="#7f1d1d" mb={0.5}>
+                    Current Database Footprint Eligible for Truncation / Hard Reset:
+                  </Typography>
+                  <Typography variant="body2" color="#991b1b" mb={2}>
+                    <strong>Standard Truncate</strong> clears clinical encounters, EMR visits, lab orders, prescriptions, and billing transactions while preserving staff, wards, and stock. <strong>Hard Reset</strong> additionally removes all staff (except Super Admin), duty rosters, ward/bed maps, external referrals, pathology, mortuary, cashier, laboratory, and pharmacy inventories—leaving only Super Admin, the Data Dictionary, and core metadata.
+                  </Typography>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      label={`${truncateStats.patientCount?.toLocaleString() || 0} Patients`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.encounterCount?.toLocaleString() || 0} Encounters`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.visitCount?.toLocaleString() || 0} Visits`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.admissionCount?.toLocaleString() || 0} Admissions`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.prescriptionCount?.toLocaleString() || 0} Prescriptions`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.invoiceCount?.toLocaleString() || 0} Bills/Invoices`}
+                      size="small"
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.staffCount?.toLocaleString() || 0} Staff & Roster`}
+                      size="small"
+                      sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.wardCount?.toLocaleString() || 0} Wards / ${truncateStats.totalBedsCount?.toLocaleString() || 0} Beds`}
+                      size="small"
+                      sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.totalInventoryCount?.toLocaleString() || 0} Pharmacy & Lab Inventory`}
+                      size="small"
+                      sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 700 }}
+                    />
+                    <Chip
+                      label={`${truncateStats.totalRecords?.toLocaleString() || 0} Clinical Records`}
+                      size="small"
+                      sx={{ bgcolor: '#b91c1c', color: '#fff', fontWeight: 800 }}
+                    />
+                  </Stack>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Box sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: '#ffffff',
+                    border: '1px solid #fecaca',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Shield sx={{ fontSize: 18, color: '#059669' }} />
+                      <Typography variant="caption" fontWeight={800} color="#065f46">
+                        AUTOMATIC PRE-RESET SNAPSHOT
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      A full PostgreSQL database dump (.dump) will be automatically created and preserved in the Disaster Recovery storage before any records are cleared.
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
         <Grid item xs={12}>
           <WorkflowBuilder />
         </Grid>
@@ -1271,9 +1620,293 @@ const Settings = () => {
           </Card>
         </Grid>
 
-        {/* Universal Database & Application Interoperability Studio */}
+        {/* ── Hospital Record & Data Migration Hub ── */}
+        <Grid item xs={12} id="hospital-migration-hub">
+          <Box sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" mb={0.5}>
+              <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                <SyncAlt />
+              </Avatar>
+              <Box>
+                <Typography variant="h5" fontWeight={800} color="text.primary">
+                  Hospital Record & Data Migration Station
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Choose your facility&apos;s migration pathway — whether converting physical paper records or migrating from an existing electronic database/application.
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+
+          {/* TWO SEPARATE MIGRATION PATHWAY CARDS */}
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            {/* Card 1: Manual Migration (No Existing Database) */}
+            <Grid item xs={12} md={6}>
+              <Card
+                onClick={() => {
+                  setActiveMigrationPathway('PAPER');
+                  setPaperModalOpen(true);
+                }}
+                sx={{
+                  height: '100%',
+                  cursor: 'pointer',
+                  borderRadius: 3,
+                  transition: 'all 0.25s ease-in-out',
+                  border: activeMigrationPathway === 'PAPER' ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                  boxShadow: activeMigrationPathway === 'PAPER' ? '0 12px 32px rgba(2, 132, 199, 0.16)' : '0 4px 16px rgba(0,0,0,0.04)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&:hover': {
+                    borderColor: '#0284c7',
+                    transform: 'translateY(-3px)',
+                    boxShadow: '0 16px 36px rgba(2, 132, 199, 0.18)'
+                  }
+                }}
+              >
+                <Box
+                  sx={{
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    p: 2.5,
+                    color: '#fff'
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Avatar sx={{ bgcolor: '#0284c7', width: 44, height: 44 }}>
+                      <CameraAlt />
+                    </Avatar>
+                    <Chip
+                      size="small"
+                      label="Pathway 1: Paper-to-Digital"
+                      sx={{ bgcolor: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', fontWeight: 800 }}
+                    />
+                  </Stack>
+                  <Typography variant="h6" fontWeight={800} sx={{ mt: 2 }}>
+                    Manual Paper & Folder Migration
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                    For hospitals that are completely on paper and do not have any existing database
+                  </Typography>
+                </Box>
+
+                <CardContent sx={{ p: 2.5 }}>
+                  <Typography variant="body2" color="text.secondary" paragraph>
+                    Digitize physical paper case folders, triage charts, clinical SOAP notes, prescriptions, and lab sheets directly into structured electronic health records using Multimodal AI OCR and live camera scanning.
+                  </Typography>
+
+                  <Stack spacing={1} mb={3}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        Multi-page camera capture & file uploader
+                      </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        AI automated SOAP date sequencing & vitals chart extraction
+                      </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        Faith Foundation & Anglican Diocese folder presets
+                      </Typography>
+                    </Stack>
+                  </Stack>
+
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      startIcon={<FolderSpecial />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMigrationPathway('PAPER');
+                        setPaperModalOpen(true);
+                      }}
+                      sx={{
+                        bgcolor: '#0f172a',
+                        '&:hover': { bgcolor: '#1e293b' },
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        py: 1,
+                        borderRadius: 2
+                      }}
+                    >
+                      Open Manual Migration Modal
+                    </Button>
+                    <Tooltip title="Open in separate full window (/record-migration)">
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/record-migration');
+                        }}
+                        sx={{ border: '1px solid #cbd5e1', borderRadius: 2 }}
+                      >
+                        <ArrowForward fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Card 2: Existing Database & Application Migration (REST / FHIR with SMART) */}
+            <Grid item xs={12} md={6}>
+              <Card
+                onClick={() => setActiveMigrationPathway('SMART_FHIR')}
+                sx={{
+                  height: '100%',
+                  cursor: 'pointer',
+                  borderRadius: 3,
+                  transition: 'all 0.25s ease-in-out',
+                  border: activeMigrationPathway === 'SMART_FHIR' ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                  boxShadow: activeMigrationPathway === 'SMART_FHIR' ? '0 12px 32px rgba(2, 132, 199, 0.16)' : '0 4px 16px rgba(0,0,0,0.04)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&:hover': {
+                    borderColor: '#0284c7',
+                    transform: 'translateY(-3px)',
+                    boxShadow: '0 16px 36px rgba(2, 132, 199, 0.18)'
+                  }
+                }}
+              >
+                <Box
+                  sx={{
+                    background: 'linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)',
+                    p: 2.5,
+                    color: '#fff'
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Avatar sx={{ bgcolor: '#38bdf8', width: 44, height: 44 }}>
+                      <Storage sx={{ color: '#0c4a6e' }} />
+                    </Avatar>
+                    <Chip
+                      size="small"
+                      label="Pathway 2: Interoperable Electronic"
+                      sx={{ bgcolor: 'rgba(255, 255, 255, 0.2)', color: '#fff', fontWeight: 800 }}
+                    />
+                  </Stack>
+                  <Typography variant="h6" fontWeight={800} sx={{ mt: 2 }}>
+                    Existing Database & Application Migration
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#bae6fd' }}>
+                    For hospitals with another application or existing database (REST / SMART on FHIR)
+                  </Typography>
+                </Box>
+
+                <CardContent sx={{ p: 2.5 }}>
+                  <Typography variant="body2" color="text.secondary" paragraph>
+                    Communicate via standard REST and SMART on FHIR R4 protocols, or directly connect to existing databases (MySQL, PostgreSQL, MSSQL, Oracle, OpenMRS) to map and import records automatically.
+                  </Typography>
+
+                  <Stack spacing={1} mb={3}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        SMART on FHIR OAuth 2.0 Token Exchange & Conformance
+                      </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        REST API & FHIR Transaction / Batch Bundle Ingestion
+                      </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CheckCircle sx={{ fontSize: 18, color: '#0284c7' }} />
+                      <Typography variant="body2" fontWeight={600}>
+                        Universal Direct SQL Table Introspection & Field Mapping
+                      </Typography>
+                    </Stack>
+                  </Stack>
+
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    startIcon={<SyncAlt />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMigrationPathway('SMART_FHIR');
+                    }}
+                    sx={{
+                      bgcolor: activeMigrationPathway === 'SMART_FHIR' ? '#0369a1' : '#0284c7',
+                      '&:hover': { bgcolor: '#0369a1' },
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      py: 1,
+                      borderRadius: 2
+                    }}
+                  >
+                    {activeMigrationPathway === 'SMART_FHIR' ? 'Active: REST & SMART on FHIR Studio' : 'Open REST / SMART on FHIR Section'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* ACTIVE EXPANDED SECTION FOR EXISTING DATABASE & APPLICATION MIGRATION */}
+          {activeMigrationPathway === 'SMART_FHIR' && (
+            <Box sx={{ mt: 2 }}>
+              <SmartFhirMigrationStudio onSwitchToPaper={() => {
+                setActiveMigrationPathway('PAPER');
+                setPaperModalOpen(true);
+              }} />
+            </Box>
+          )}
+
+          {/* MODAL SECTION FOR MANUAL PAPER MIGRATION */}
+          <Dialog
+            fullScreen
+            open={paperModalOpen}
+            onClose={() => setPaperModalOpen(false)}
+            PaperProps={{
+              sx: { bgcolor: '#f8fafc' }
+            }}
+          >
+            <RecordMigration
+              isModal={true}
+              onClose={() => setPaperModalOpen(false)}
+              onSwitchToSmartFhir={() => {
+                setPaperModalOpen(false);
+                setActiveMigrationPathway('SMART_FHIR');
+              }}
+            />
+          </Dialog>
+        </Grid>
+
+        {/* Federal Ministry of Health (HFR) Facility Linking & Deployment Switcher */}
         <Grid item xs={12}>
-          <UniversalInteropStudio />
+          <FederalHospitalRegistrySelector
+            onHospitalSelected={(facility) => {
+              const sub = facility.facilityLevelName
+                ? `${facility.facilityLevelName} Hospital · ${facility.lgaName}`
+                : `${facility.lgaName}, ${facility.stateName}`;
+              const mission = `Delivering compassionate, evidence-based healthcare to ${facility.lgaName} and surrounding communities.`;
+              setHospitalInfo(prev => ({
+                ...prev,
+                name: facility.facilityName,
+                subtitle: sub,
+                mission: mission,
+                email: facility.emailAddress || prev.email,
+                phone: facility.phoneNumber || prev.phone,
+                address: facility.physicalLocation || prev.address,
+                website: facility.website || prev.website,
+              }));
+              localStorage.setItem('app_hospital_name', facility.facilityName);
+              localStorage.setItem('app_hospital_subtitle', sub);
+              localStorage.setItem('app_hospital_mission', mission);
+              window.dispatchEvent(new Event('hospital-config-updated'));
+              setNmrsConfig((prev: any) => ({
+                ...prev,
+                facilityName: facility.facilityName,
+                facilityNhfrCode: facility.uniqueId,
+                stateName: facility.stateName,
+                lgaName: facility.lgaName,
+              }));
+            }}
+          />
         </Grid>
 
         <Grid item xs={12} md={6}>
@@ -1288,6 +1921,18 @@ const Settings = () => {
                 margin="dense" label="Hospital Name" fullWidth
                 value={hospitalInfo.name}
                 onChange={e => setHospitalInfo(p => ({ ...p, name: e.target.value }))}
+              />
+              <TextField
+                margin="dense" label="Hospital Subtitle / Tagline" fullWidth
+                value={hospitalInfo.subtitle}
+                onChange={e => setHospitalInfo(p => ({ ...p, subtitle: e.target.value }))}
+                helperText="Displayed in the sidebar top header and login page subtitle"
+              />
+              <TextField
+                margin="dense" label="Hospital Mission Statement" fullWidth multiline rows={2}
+                value={hospitalInfo.mission}
+                onChange={e => setHospitalInfo(p => ({ ...p, mission: e.target.value }))}
+                helperText="Displayed prominently on the login screen entrance"
               />
               <TextField
                 margin="dense" label="Contact Email" fullWidth
@@ -1347,6 +1992,12 @@ const Settings = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Login Page Slideshow & Photography Manager */}
+        <Grid item xs={12}>
+          <LoginSlideshowManager />
+        </Grid>
+
         {/* Security & Access Settings */}
         <Grid item xs={12} md={6}>
         <Card sx={{ border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
@@ -2900,6 +3551,438 @@ const Settings = () => {
         <DialogActions>
           <Button onClick={() => setEditWardModalOpen(false)}>Cancel</Button>
           <Button onClick={handleUpdateWard} variant="contained">Save Changes</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Confirm Truncate Database for New Hospital Deployment */}
+      <Dialog
+        open={truncateModalOpen}
+        onClose={() => !isTruncating && setTruncateModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#fef2f2', color: '#991b1b', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningAmber sx={{ color: '#dc2626', fontSize: 26 }} />
+          Hospital Database Truncation & Factory Reset
+        </DialogTitle>
+
+        <DialogContent sx={{ mt: 2 }}>
+          {truncateSuccessData ? (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <CheckCircle sx={{ color: '#059669', fontSize: 56, mb: 1.5 }} />
+              <Typography variant="h6" fontWeight={800} color="#065f46" gutterBottom>
+                Database Successfully Truncated & Sanitized!
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {truncateSuccessData.message}
+              </Typography>
+              {truncateSuccessData.backupFilename && (
+                <Alert severity="success" sx={{ textAlign: 'left', borderRadius: 2 }}>
+                  Pre-reset disaster recovery snapshot saved: <strong>{truncateSuccessData.backupFilename}</strong>
+                </Alert>
+              )}
+            </Box>
+          ) : (
+            <Stack spacing={2.5}>
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                <strong>CRITICAL ACTION:</strong> This will truncate all clinical encounters, visits, patient profiles, prescriptions, and financial data so that the new hospital can start with a clean record slate.
+              </Alert>
+
+              <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={1}>
+                  What will be truncated:
+                </Typography>
+                <Grid container spacing={1}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.patientCount?.toLocaleString() || 0} Patient Records & Profiles
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.encounterCount?.toLocaleString() || 0} Clinical Encounters & SOAP Notes
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.visitCount?.toLocaleString() || 0} Front-Desk Visits & Triage
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.admissionCount?.toLocaleString() || 0} Inpatient Ward Admissions
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.prescriptionCount?.toLocaleString() || 0} Prescriptions & Dispensary Logs
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ {truncateStats.invoiceCount?.toLocaleString() || 0} Bills, Invoices & HMO Claims
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ Lab Results & Radiology Studies
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                      ✕ Audit Trails & Security Sessions
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Box sx={{ p: 2, bgcolor: '#ecfdf5', borderRadius: 2, border: '1px solid #a7f3d0' }}>
+                <Typography variant="subtitle2" fontWeight={800} color="#047857" mb={0.5}>
+                  ✓ What will be preserved:
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block' }}>
+                  • Administrator & clinician accounts so you can log in immediately
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block' }}>
+                  • Hospital departments, system modules & role permissions (RBAC)
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block' }}>
+                  • ICD-10 medical dictionaries & lab test catalog
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block' }}>
+                  • Physical wards & hospital bed infrastructure
+                </Typography>
+              </Box>
+
+              {/* Optional New Hospital Info */}
+              <Box>
+                <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={1}>
+                  New Hospital Details (Optional):
+                </Typography>
+                <Stack spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Hospital Facility Name"
+                    placeholder="e.g. Grace Memorial Specialist Hospital"
+                    value={newDeployHospitalName}
+                    onChange={e => setNewDeployHospitalName(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Hospital Physical Address / City"
+                    placeholder="e.g. 15 Hospital Road, Enugu, Nigeria"
+                    value={newDeployHospitalAddress}
+                    onChange={e => setNewDeployHospitalAddress(e.target.value)}
+                  />
+                </Stack>
+              </Box>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={preserveStaffAccounts}
+                    onChange={e => setPreserveStaffAccounts(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      Preserve Staff Accounts
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Keep doctor and nurse user accounts so clinicians can log in right away (uncheck to keep superadmin only).
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={autoBackupEnabled}
+                    onChange={e => setAutoBackupEnabled(e.target.checked)}
+                    color="secondary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      Generate Pre-Truncate Disaster Recovery Archive (.dump)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Full DR snapshots are already safely archived under Infrastructure & Security. Leave unchecked for instant 1-second reset.
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              {/* Confirmation Phrase Input */}
+              <Box>
+                <Typography variant="body2" fontWeight={700} color="text.primary" mb={0.5}>
+                  To confirm, type <strong style={{ color: '#dc2626' }}>TRUNCATE-DATA</strong> below:
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Type TRUNCATE-DATA"
+                  value={truncateConfirmPhrase}
+                  onChange={e => setTruncateConfirmPhrase(e.target.value)}
+                  error={truncateConfirmPhrase.length > 0 && truncateConfirmPhrase.trim().toUpperCase() !== 'TRUNCATE-DATA'}
+                  helperText={
+                    truncateConfirmPhrase.length > 0 && truncateConfirmPhrase.trim().toUpperCase() !== 'TRUNCATE-DATA'
+                      ? 'Phrase must match TRUNCATE-DATA exactly'
+                      : ''
+                  }
+                />
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+          {truncateSuccessData ? (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setTruncateModalOpen(false);
+                setTruncateSuccessData(null);
+                setTruncateConfirmPhrase('');
+              }}
+              sx={{ bgcolor: '#059669', fontWeight: 800 }}
+            >
+              Done & Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={() => setTruncateModalOpen(false)}
+                disabled={isTruncating}
+                sx={{ textTransform: 'none', fontWeight: 700 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={isTruncating ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <DeleteForever />}
+                disabled={isTruncating || truncateConfirmPhrase.trim().toUpperCase() !== 'TRUNCATE-DATA'}
+                onClick={handleExecuteTruncate}
+                sx={{
+                  bgcolor: '#dc2626',
+                  '&:hover': { bgcolor: '#b91c1c' },
+                  textTransform: 'none',
+                  fontWeight: 800,
+                  px: 2.5
+                }}
+              >
+                {isTruncating
+                  ? autoBackupEnabled
+                    ? 'Creating Backup & Truncating...'
+                    : 'Truncating Database...'
+                  : 'Confirm & Truncate Database'}
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Confirm Hard Reset (Full Factory Wipe) */}
+      <Dialog
+        open={hardResetModalOpen}
+        onClose={() => !isHardResetting && setHardResetModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#450a0a', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningAmber sx={{ color: '#fca5a5', fontSize: 28 }} />
+          Hard Reset — Complete Hospital Factory Wipe
+        </DialogTitle>
+
+        <DialogContent sx={{ mt: 2 }}>
+          {hardResetSuccessData ? (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <CheckCircle sx={{ color: '#059669', fontSize: 56, mb: 1.5 }} />
+              <Typography variant="h6" fontWeight={800} color="#065f46" gutterBottom>
+                Hard Reset Successfully Completed!
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {hardResetSuccessData.message}
+              </Typography>
+              {hardResetSuccessData.backupFilename && (
+                <Alert severity="success" sx={{ textAlign: 'left', borderRadius: 2 }}>
+                  Pre-reset disaster recovery snapshot reference: <strong>{hardResetSuccessData.backupFilename}</strong>
+                </Alert>
+              )}
+            </Box>
+          ) : (
+            <Stack spacing={2.5}>
+              <Alert severity="error" sx={{ borderRadius: 2, bgcolor: '#fef2f2', border: '1px solid #f87171' }}>
+                <strong>EXTREME ACTION — FULL FACTORY WIPE:</strong> This will permanently wipe all staff accounts (except Super Admin), duty rosters, ward & bed maps, all external and internal patient records, Pathology, Mortuary, Cashier, Laboratory, and Pharmacy including all inventories.
+              </Alert>
+
+              <Box sx={{ p: 2, bgcolor: '#fff1f2', borderRadius: 2, border: '1px solid #fecdd3' }}>
+                <Typography variant="subtitle2" fontWeight={800} color="#881337" mb={1}>
+                  Everything that will be completely wiped & reset to zero:
+                </Typography>
+                <Grid container spacing={1}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ All Staff & User Accounts (except Super Admin)
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Duty Roster, Shift Schedules & Staff Name Tables
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ All Ward & Bed Maps (IPD, ICU, Emergency, Labour, Theatre)
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ All External & Internal Patient Records Across All Pages
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Pathology Ward (Histology, Cytology, IHC, Archive & Referrals)
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Mortuary Admissions, Autopsies, Embalming & Cold Vault Occupancy
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Cashier Shifts, Invoices, Payments, Wallets & HMO Claims
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Laboratory Orders, Specimens, Results, Analyzers & Reagents
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ Pharmacy Prescriptions, Dispensary, Warehouses & All Inventories
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: '#be123c', fontWeight: 700 }}>
+                      ✕ HR Attendance, Leave, Payroll, Appraisals & Audit Trails
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Box sx={{ p: 2, bgcolor: '#ecfdf5', borderRadius: 2, border: '1px solid #a7f3d0' }}>
+                <Typography variant="subtitle2" fontWeight={800} color="#047857" mb={0.5}>
+                  ✓ What will be preserved (Metadata & Root Login Only):
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block', fontWeight: 600 }}>
+                  • Super Admin Login Account (username: <strong>superadmin</strong>)
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block', fontWeight: 600 }}>
+                  • Data Dictionary (ICD-10/11, LOINC, SNOMED Terminology Concepts & Code Mappings)
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block', fontWeight: 600 }}>
+                  • Service & Procedure Tariffs, Lab Test Catalog & Radiology Catalog
+                </Typography>
+                <Typography variant="caption" color="#065f46" sx={{ display: 'block', fontWeight: 600 }}>
+                  • Federal Health Facilities Registry, Banks Metadata, RBAC Roles & Base Departments
+                </Typography>
+              </Box>
+
+              {/* Optional New Hospital Info */}
+              <Box>
+                <Typography variant="subtitle2" fontWeight={800} color="text.primary" mb={1}>
+                  New Hospital Details (Optional):
+                </Typography>
+                <Stack spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Hospital Facility Name"
+                    placeholder="e.g. Grace Memorial Specialist Hospital"
+                    value={newDeployHospitalName}
+                    onChange={e => setNewDeployHospitalName(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Hospital Physical Address / City"
+                    placeholder="e.g. 15 Hospital Road, Enugu, Nigeria"
+                    value={newDeployHospitalAddress}
+                    onChange={e => setNewDeployHospitalAddress(e.target.value)}
+                  />
+                </Stack>
+              </Box>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={autoBackupEnabled}
+                    onChange={e => setAutoBackupEnabled(e.target.checked)}
+                    color="secondary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      Generate Pre-Reset Disaster Recovery Archive (.dump)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Leave unchecked for instant 1-second factory wipe.
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              {/* Confirmation Phrase Input */}
+              <Box>
+                <Typography variant="body2" fontWeight={700} color="text.primary" mb={0.5}>
+                  To confirm, type <strong style={{ color: '#991b1b' }}>HARD-RESET</strong> below:
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Type HARD-RESET"
+                  value={hardResetConfirmPhrase}
+                  onChange={e => setHardResetConfirmPhrase(e.target.value)}
+                  error={hardResetConfirmPhrase.length > 0 && hardResetConfirmPhrase.trim().toUpperCase() !== 'HARD-RESET'}
+                  helperText={
+                    hardResetConfirmPhrase.length > 0 && hardResetConfirmPhrase.trim().toUpperCase() !== 'HARD-RESET'
+                      ? 'Phrase must match HARD-RESET exactly'
+                      : ''
+                  }
+                />
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+          {hardResetSuccessData ? (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setHardResetModalOpen(false);
+                setHardResetSuccessData(null);
+                setHardResetConfirmPhrase('');
+              }}
+              sx={{ bgcolor: '#059669', fontWeight: 800 }}
+            >
+              Done & Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={() => setHardResetModalOpen(false)}
+                disabled={isHardResetting}
+                sx={{ textTransform: 'none', fontWeight: 700 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={isHardResetting ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <DeleteForever />}
+                disabled={isHardResetting || hardResetConfirmPhrase.trim().toUpperCase() !== 'HARD-RESET'}
+                onClick={handleExecuteHardReset}
+                sx={{
+                  bgcolor: '#7f1d1d',
+                  '&:hover': { bgcolor: '#450a0a' },
+                  textTransform: 'none',
+                  fontWeight: 800,
+                  px: 2.5
+                }}
+              >
+                {isHardResetting
+                  ? autoBackupEnabled
+                    ? 'Creating Backup & Executing Hard Reset...'
+                    : 'Executing Hard Reset...'
+                  : 'Confirm & Execute Hard Reset'}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
     </div>

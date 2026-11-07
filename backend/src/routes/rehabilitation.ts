@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { logAudit } from '../utils/auditHelper.js';
 import { invoices } from './billing.js';
+import { isHardResetActive } from '../utils/resetState.js';
 
 const router = Router();
 import { prisma } from '../prisma.js';
@@ -1950,5 +1951,24 @@ router.post('/equipment/:id/assign', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Failed to assign equipment' });
   }
 });
+
+export function resetRehabMemoryState() {
+  rehabEpisodes.length = 0;
+  therapySessions.length = 0;
+  homeVisits.length = 0;
+  pendingReferrals.length = 0;
+  dailySchedule.length = 0;
+  physioEquipment.forEach((e: any) => {
+    e.assignedPatient = null;
+    e.totalSessionsRun = 0;
+  });
+  for (const key of Object.keys(patientWallets)) {
+    delete patientWallets[key];
+  }
+}
+
+if (isHardResetActive()) {
+  resetRehabMemoryState();
+}
 
 export default router;

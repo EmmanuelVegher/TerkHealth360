@@ -294,8 +294,8 @@ function App() {
         <Route path="audit-logs"   element={<AuditLogs />} />
         <Route path="security-iam" element={<SecurityIAM />} />
         <Route path="security-iam/*" element={<SecurityIAM />} />
-        <Route path="analytics"    element={<EnterpriseAnalytics />} />
-        <Route path="analytics/*"  element={<EnterpriseAnalytics />} />
+        {/* <Route path="analytics"    element={<EnterpriseAnalytics />} /> */}
+        {/* <Route path="analytics/*"  element={<EnterpriseAnalytics />} /> */}
         <Route path="mortuary"     element={<MortuaryFuneral />} />
         <Route path="mortuary/*"   element={<MortuaryFuneral />} />
         <Route path="rehabilitation" element={<RehabilitationPhysio />} />
