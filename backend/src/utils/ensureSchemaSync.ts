@@ -124,7 +124,69 @@ export async function ensureSchemaSync(): Promise<void> {
       created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS dhis2_submissions_period_idx ON dhis2_submissions(period)`,
-    `CREATE INDEX IF NOT EXISTS dhis2_submissions_status_created_at_idx ON dhis2_submissions(status, created_at)`
+    `CREATE INDEX IF NOT EXISTS dhis2_submissions_status_created_at_idx ON dhis2_submissions(status, created_at)`,
+
+    // 9. Universal Interop Database Connectors
+    `CREATE TABLE IF NOT EXISTS interop_db_connectors (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      dialect TEXT NOT NULL,
+      host TEXT,
+      port INT,
+      database_name TEXT NOT NULL,
+      username TEXT,
+      password TEXT,
+      options JSONB DEFAULT '{}'::jsonb,
+      status TEXT DEFAULT 'CONNECTED',
+      last_introspected_at TIMESTAMP WITHOUT TIME ZONE,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+    )`,
+
+    // 10. Universal Interop Table Mappings
+    `CREATE TABLE IF NOT EXISTS interop_db_mappings (
+      id TEXT PRIMARY KEY,
+      connector_id TEXT NOT NULL,
+      source_table TEXT NOT NULL,
+      source_query TEXT,
+      target_table TEXT,
+      target_entity TEXT NOT NULL,
+      field_mappings JSONB DEFAULT '[]'::jsonb,
+      filter_condition TEXT,
+      sync_mode TEXT DEFAULT 'MANUAL',
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+    )`,
+
+    // 11. Universal Interop Application Endpoints
+    `CREATE TABLE IF NOT EXISTS interop_app_endpoints (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      app_type TEXT NOT NULL,
+      endpoint_token TEXT UNIQUE NOT NULL,
+      secret_key TEXT,
+      target_entity TEXT NOT NULL,
+      payload_format TEXT DEFAULT 'JSON',
+      field_mappings JSONB DEFAULT '[]'::jsonb,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+    )`,
+
+    // 12. Universal Interop Ingest Audit Logs
+    `CREATE TABLE IF NOT EXISTS interop_ingest_logs (
+      id TEXT PRIMARY KEY,
+      endpoint_token TEXT,
+      source_type TEXT,
+      source_name TEXT,
+      target_entity TEXT,
+      records_ingested INT DEFAULT 0,
+      processing_ms INT DEFAULT 0,
+      status TEXT DEFAULT 'SUCCESS',
+      error_message TEXT,
+      payload JSONB,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+    )`
   ];
 
   for (const sql of statements) {

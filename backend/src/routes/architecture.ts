@@ -3,15 +3,17 @@ import { z } from 'zod';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import { exec, execSync } from 'child_process';
+import { exec, execFile, execSync } from 'child_process';
 import util from 'util';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { prisma } from '../prisma.js';
 import { logAudit } from '../utils/auditHelper.js';
 import { setHardResetActive } from '../utils/resetState.js';
+import { ensureSchemaSync } from '../utils/ensureSchemaSync.js';
 
 const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,40 +44,66 @@ const uploadBackupFile = multer({
   limits: { fileSize: 10 * 1024 * 1024 * 1024 } // Up to 10 GB backup archive
 });
 
-const getPgBinaries = () => {
-  const pgDumpCandidates = [
-    '/usr/local/Cellar/postgresql@16/16.9/bin/pg_dump',
-    '/usr/local/bin/pg_dump',
-    '/opt/homebrew/bin/pg_dump',
-    'pg_dump'
-  ];
-  const pgRestoreCandidates = [
-    '/usr/local/Cellar/postgresql@16/16.9/bin/pg_restore',
-    '/usr/local/bin/pg_restore',
-    '/opt/homebrew/bin/pg_restore',
-    'pg_restore'
-  ];
-  const psqlCandidates = [
-    '/usr/local/Cellar/postgresql@16/16.9/bin/psql',
-    '/usr/local/bin/psql',
-    '/opt/homebrew/bin/psql',
-    'psql'
-  ];
+export const getPgBinaries = () => {
+  const isWin = process.platform === 'win32';
 
-  let pgDumpPath = 'pg_dump';
-  for (const c of pgDumpCandidates) {
-    if (fs.existsSync(c)) { pgDumpPath = c; break; }
-  }
+  const candidateDirs: string[] = [
+    process.env.PG_BIN_PATH || '',
+    process.env.PGBIN || '',
+    process.env.POSTGRES_BIN || '',
+    process.env.POSTGRES_PATH ? path.join(process.env.POSTGRES_PATH, 'bin') : '',
+    // Windows PostgreSQL standard install paths (PG 18 down to 10)
+    'C:\\Program Files\\PostgreSQL\\18\\bin',
+    'C:\\Program Files\\PostgreSQL\\17\\bin',
+    'C:\\Program Files\\PostgreSQL\\16\\bin',
+    'C:\\Program Files\\PostgreSQL\\15\\bin',
+    'C:\\Program Files\\PostgreSQL\\14\\bin',
+    'C:\\Program Files\\PostgreSQL\\13\\bin',
+    'C:\\Program Files\\PostgreSQL\\12\\bin',
+    'C:\\Program Files\\PostgreSQL\\11\\bin',
+    'C:\\Program Files\\PostgreSQL\\10\\bin',
+    'C:\\Program Files (x86)\\PostgreSQL\\18\\bin',
+    'C:\\Program Files (x86)\\PostgreSQL\\17\\bin',
+    'C:\\Program Files (x86)\\PostgreSQL\\16\\bin',
+    'C:\\Program Files (x86)\\PostgreSQL\\15\\bin',
+    'C:\\Program Files (x86)\\PostgreSQL\\14\\bin',
+    // macOS Homebrew / MacPorts
+    '/opt/homebrew/bin',
+    '/opt/homebrew/opt/postgresql@17/bin',
+    '/opt/homebrew/opt/postgresql@16/bin',
+    '/opt/homebrew/opt/postgresql@15/bin',
+    '/opt/homebrew/opt/postgresql@14/bin',
+    '/usr/local/bin',
+    '/usr/local/Cellar/postgresql@16/16.9/bin',
+    '/usr/local/Cellar/postgresql@17/bin',
+    // Linux standard locations
+    '/usr/bin',
+    '/usr/lib/postgresql/17/bin',
+    '/usr/lib/postgresql/16/bin',
+    '/usr/lib/postgresql/15/bin',
+    '/usr/lib/postgresql/14/bin',
+  ].filter(Boolean);
 
-  let pgRestorePath = 'pg_restore';
-  for (const c of pgRestoreCandidates) {
-    if (fs.existsSync(c)) { pgRestorePath = c; break; }
-  }
+  const resolveBinary = (binName: string): string => {
+    const fileVariants = isWin ? [`${binName}.exe`, binName] : [binName];
 
-  let psqlPath = 'psql';
-  for (const c of psqlCandidates) {
-    if (fs.existsSync(c)) { psqlPath = c; break; }
-  }
+    for (const dir of candidateDirs) {
+      for (const variant of fileVariants) {
+        const fullCandidate = path.isAbsolute(dir) ? path.join(dir, variant) : path.resolve(dir, variant);
+        try {
+          if (fs.existsSync(fullCandidate)) {
+            return fullCandidate;
+          }
+        } catch {}
+      }
+    }
+
+    return isWin ? `${binName}.exe` : binName;
+  };
+
+  const pgDumpPath = resolveBinary('pg_dump');
+  const pgRestorePath = resolveBinary('pg_restore');
+  const psqlPath = resolveBinary('psql');
 
   return { pgDumpPath, pgRestorePath, psqlPath };
 };
@@ -781,6 +809,9 @@ async function executeDatabaseRestoreFromFile(
   targetPath: string,
   mode: 'APPLY_RESTORE' | 'VERIFY_INTEGRITY' = 'APPLY_RESTORE'
 ) {
+  // Ensure all latest schema definitions and columns exist before applying restore
+  await ensureSchemaSync().catch((e) => console.warn('[Restore] Schema pre-sync notice:', e.message));
+
   const { pgRestorePath, psqlPath } = getPgBinaries();
   const conn = getDbConnectionInfo();
 
@@ -792,7 +823,7 @@ async function executeDatabaseRestoreFromFile(
   let tocContent = '';
 
   if (targetPath.endsWith('.dump')) {
-    const { stdout } = await execAsync(`"${pgRestorePath}" --list "${targetPath}"`, {
+    const { stdout } = await execFileAsync(pgRestorePath, ['--list', targetPath], {
       timeout: 30000,
       maxBuffer: 1024 * 1024 * 20
     });
@@ -867,8 +898,20 @@ async function executeDatabaseRestoreFromFile(
 
         // 2. Run pg_restore to copy all table data from the backup archive into PostgreSQL
         try {
-          await execAsync(
-            `"${pgRestorePath}" -h ${conn.host} -p ${conn.port} -U ${conn.user} -d ${conn.database} --data-only --disable-triggers --no-owner --no-privileges -L "${tocFilePath}" "${targetPath}"`,
+          await execFileAsync(
+            pgRestorePath,
+            [
+              '-h', String(conn.host),
+              '-p', String(conn.port),
+              '-U', String(conn.user),
+              '-d', String(conn.database),
+              '--data-only',
+              '--disable-triggers',
+              '--no-owner',
+              '--no-privileges',
+              '-L', tocFilePath,
+              targetPath
+            ],
             {
               env: { ...process.env, PGPASSWORD: conn.password },
               timeout: 0,
@@ -890,8 +933,15 @@ async function executeDatabaseRestoreFromFile(
       }
     } else if (targetPath.endsWith('.sql')) {
       // Execute SQL script via psql
-      await execAsync(
-        `"${psqlPath}" -h ${conn.host} -p ${conn.port} -U ${conn.user} -d ${conn.database} -f "${targetPath}"`,
+      await execFileAsync(
+        psqlPath,
+        [
+          '-h', String(conn.host),
+          '-p', String(conn.port),
+          '-U', String(conn.user),
+          '-d', String(conn.database),
+          '-f', targetPath
+        ],
         {
           env: { ...process.env, PGPASSWORD: conn.password },
           timeout: 0,
@@ -964,23 +1014,23 @@ export async function createDatabaseBackupSnapshot(options: {
     : `BAK-${Date.now().toString().slice(-6)}`;
 
   let filename = '';
-  let cmd = '';
+  let dumpArgs: string[] = [];
 
   if (backupType === 'SCHEMA_CONFIG_DUMP') {
     filename = `ff_mission_hospital_schema_${timestampStr}.sql`;
     const fullPath = path.join(BACKUPS_DIR, filename);
-    cmd = `"${pgDumpPath}" -h ${conn.host} -p ${conn.port} -U ${conn.user} -d ${conn.database} --schema-only -f "${fullPath}"`;
+    dumpArgs = ['-h', String(conn.host), '-p', String(conn.port), '-U', String(conn.user), '-d', String(conn.database), '--schema-only', '-f', fullPath];
   } else {
     filename = isAutomatedDaily
       ? `auto_daily_backup_${timestampStr}.dump`
       : `ff_mission_hospital_${timestampStr}.dump`;
     const fullPath = path.join(BACKUPS_DIR, filename);
-    cmd = `"${pgDumpPath}" -h ${conn.host} -p ${conn.port} -U ${conn.user} -d ${conn.database} -Fc --exclude-table-data=sync_queue -f "${fullPath}"`;
+    dumpArgs = ['-h', String(conn.host), '-p', String(conn.port), '-U', String(conn.user), '-d', String(conn.database), '-Fc', '--exclude-table-data=sync_queue', '-f', fullPath];
   }
 
   const fullPath = path.join(BACKUPS_DIR, filename);
 
-  await execAsync(cmd, {
+  await execFileAsync(pgDumpPath, dumpArgs, {
     env: { ...process.env, PGPASSWORD: conn.password },
     timeout: 0,
     maxBuffer: 1024 * 1024 * 50
@@ -994,7 +1044,7 @@ export async function createDatabaseBackupSnapshot(options: {
 
     if (filename.endsWith('.dump')) {
       try {
-        const { stdout } = await execAsync(`"${pgRestorePath}" --list "${fullPath}"`, {
+        const { stdout } = await execFileAsync(pgRestorePath, ['--list', fullPath], {
           timeout: 15000,
           maxBuffer: 1024 * 1024 * 10
         });

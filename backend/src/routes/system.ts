@@ -12,11 +12,12 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { exec, execSync } from 'child_process';
+import { exec, execFile, execSync } from 'child_process';
 import util from 'util';
 import { fileURLToPath } from 'url';
 
 const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 import { getHealthSnapshot }         from '../services/healthMonitor.js';
 import { getLayer, setLayer, type DbLayer } from '../services/connectionManager.js';
 import { getSyncStatus, reverseSyncFromCloud } from '../services/syncService.js';
@@ -31,7 +32,7 @@ import { resetRehabMemoryState } from './rehabilitation.js';
 import { resetCRMMemoryState } from './crm.js';
 import { resetAssetsMemoryState } from './assets.js';
 import { resetNotificationsMemoryState } from './notifications.js';
-import { enforceBackupRetention } from './architecture.js';
+import { enforceBackupRetention, getPgBinaries } from './architecture.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -448,22 +449,16 @@ router.post('/truncate-database', async (req: Request, res: Response) => {
 
     if (autoBackup) {
       try {
-        const pgDumpCandidates = [
-          '/usr/local/Cellar/postgresql@16/16.9/bin/pg_dump',
-          '/usr/local/bin/pg_dump',
-          '/opt/homebrew/bin/pg_dump',
-          'pg_dump'
-        ];
-        let pgDumpPath = 'pg_dump';
-        for (const c of pgDumpCandidates) {
-          if (fs.existsSync(c)) { pgDumpPath = c; break; }
-        }
-
-        await execAsync(`"${pgDumpPath}" -h ${conn.host} -p ${conn.port} -U ${conn.user} -d ${conn.database} -Fc --exclude-table-data=sync_queue -f "${fullBackupPath}"`, {
-          env: { ...process.env, PGPASSWORD: conn.password },
-          timeout: 0, // No time limit regardless of database size
-          maxBuffer: 1024 * 1024 * 50
-        });
+        const { pgDumpPath } = getPgBinaries();
+        await execFileAsync(
+          pgDumpPath,
+          ['-h', String(conn.host), '-p', String(conn.port), '-U', String(conn.user), '-d', String(conn.database), '-Fc', '--exclude-table-data=sync_queue', '-f', fullBackupPath],
+          {
+            env: { ...process.env, PGPASSWORD: conn.password },
+            timeout: 0, // No time limit regardless of database size
+            maxBuffer: 1024 * 1024 * 50
+          }
+        );
         backupSuccess = true;
         actualBackupFilename = backupFilename;
       } catch (dumpErr: any) {
