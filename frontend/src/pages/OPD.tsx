@@ -258,15 +258,28 @@ const OPD = () => {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const userRole = ((user as any)?.role || '').toUpperCase();
+  const isAdminOrSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
 
   const [open, setOpen]             = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openApptModal, setOpenApptModal] = useState(false);
   const [selectedEncounter, setSelectedEncounter] = useState<Encounter | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active'|'finished'|'all'>('active');
-  const [doctorFilterMode, setDoctorFilterMode] = useState<'my_patients' | 'all_patients'>('my_patients');
+  const [doctorFilterMode, setDoctorFilterMode] = useState<'my_patients' | 'all_patients'>(() => {
+    const role = ((user as any)?.role || '').toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return 'all_patients';
+    return 'my_patients';
+  });
   const [search, setSearch]         = useState('');
   const [activeTab, setActiveTab]   = useState(0);
+
+  useEffect(() => {
+    const role = ((user as any)?.role || '').toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+      setDoctorFilterMode('all_patients');
+    }
+  }, [user]);
 
   // Doctor Patient Transfer Modal state
   const [openTransferModal, setOpenTransferModal] = useState(false);
@@ -623,6 +636,8 @@ const OPD = () => {
   const isAssignedToCurrentDoctor = (enc: Encounter) => {
     if (doctorFilterMode === 'all_patients') return true;
     const u = user as any;
+    const role = (u?.role || '').toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return true;
 
     const currentDoctorIds = new Set(
       [u?.id, u?.userId, u?.staffId, u?.staff?.id].filter(Boolean)

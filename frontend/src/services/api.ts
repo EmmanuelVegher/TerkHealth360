@@ -7,10 +7,20 @@ export const isElectron = typeof window !== 'undefined' && (
   /electron/i.test(navigator.userAgent)
 );
 
-// Single source of truth for the API base URL (local backend in Electron, VITE_API_URL in web)
-export const API_BASE_URL = isElectron
-  ? 'http://localhost:3000/api'
-  : (import.meta.env.VITE_API_URL || '/api');
+// Single source of truth for the API base URL:
+// - Electron desktop app: connects to local backend on port 3000
+// - Web browser on any laptop/tablet on LAN: connects directly to the host laptop serving the app
+export const getApiBaseUrl = (): string => {
+  if (isElectron) {
+    return 'http://localhost:3000/api';
+  }
+  if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+    return `${window.location.origin}/api`;
+  }
+  return '/api';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

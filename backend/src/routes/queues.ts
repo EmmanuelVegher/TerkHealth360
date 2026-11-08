@@ -29,16 +29,9 @@ const priorityOverrideSchema = z.object({
 // Helper: Generate next sequential token number for department
 const generateTokenNumber = async (dept: string): Promise<string> => {
   const prefix = dept.substring(0, 3).toUpperCase();
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
   const count = await prisma.patientQueue.count({
-    where: {
-      department: dept,
-      createdAt: { gte: startOfDay },
-    },
+    where: { department: dept },
   });
-
   const nextSeq = count + 1;
   return `${prefix}-${nextSeq.toString().padStart(3, '0')}`;
 };
@@ -177,18 +170,104 @@ router.post('/check-in', authMiddleware, async (req: any, res, next) => {
 router.get('/department/:dept', authMiddleware, async (req, res, next) => {
   try {
     const dept = req.params.dept;
+    const debugLogs: string[] = [];
+    debugLogs.push(`--- GET /queues/department/${dept} at ${new Date().toISOString()} ---`);
 
-    // Fetch active admissions to exclude inpatient ward-admitted patients
-    const activeAdmissions = await prisma.admission.findMany({
-      where: { dischargedAt: null },
-      select: { patientId: true }
-    }).catch(() => []);
-    const admittedPatientIds = new Set(activeAdmissions.map(a => a.patientId));
+    // Auto-reconcile active Outpatient visits for this department so any waiting outpatients appear in queue
+    const deptStatusMap: Record<string, string[]> = {
+      CONSULTATION: ['WAITING_CONSULTATION', 'Waiting'],
+      TRIAGE:       ['WAITING_TRIAGE', 'IN_TRIAGE'],
+      BILLING:      ['AWAITING_PAYMENT', 'PAYMENT_CONFIRMED'],
+      REGISTRATION: ['REGISTERED'],
+      LABORATORY:   ['AWAITING_INVESTIGATION', 'IN_LABORATORY', 'RESULTS_AVAILABLE'],
+      PHARMACY:     ['WAITING_PHARMACY', 'MEDICATION_DISPENSED'],
+    };
 
+    const matchingStatuses = deptStatusMap[dept];
+    if (matchingStatuses && matchingStatuses.length > 0) {
+      // Find all visits currently waiting in this workflow stage
+      let activeVisits: any[] = [];
+      try {
+        activeVisits = await prisma.visit.findMany({
+          where: {
+            status: { in: matchingStatuses },
+          },
+          include: { patient: true }
+        });
+        debugLogs.push(`Found ${activeVisits.length} visits in status [${matchingStatuses.join(', ')}]`);
+      } catch (visitQueryErr: any) {
+        debugLogs.push(`ERROR querying visits: ${visitQueryErr.message}`);
+      }
+
+      for (const v of activeVisits) {
+        const vType = (v.visitType || '').toUpperCase();
+        const vStatus = (v.status || '').toUpperCase();
+
+        // STRICT INPATIENT EXCLUSION:
+        // Inpatients (visitType === 'INPATIENT' or status === 'ADMITTED') do NOT go through Queue Tracker
+        if (vType === 'INPATIENT' || vStatus === 'ADMITTED') {
+          debugLogs.push(`Skipping visit ${v.visitNumber} (${v.patient?.firstName} ${v.patient?.lastName}): INPATIENT (type=${vType}, status=${vStatus})`);
+          continue;
+        }
+
+        debugLogs.push(`Processing Outpatient visit ${v.visitNumber} (${v.patient?.firstName} ${v.patient?.lastName}): type=${vType}, status=${vStatus}`);
+
+        // Check if ticket already exists for this visit & department (or patient & department)
+        let existingTicket = await prisma.patientQueue.findFirst({
+          where: { visitId: v.id, department: dept }
+        }).catch(() => null);
+
+        if (!existingTicket) {
+          // Fallback: check if an unlinked ticket exists for this patient in this department
+          existingTicket = await prisma.patientQueue.findFirst({
+            where: { patientId: v.patientId, department: dept }
+          }).catch(() => null);
+        }
+
+        if (!existingTicket) {
+          try {
+            const tokenNumber = await generateTokenNumber(dept);
+            const created = await prisma.patientQueue.create({
+              data: {
+                patientId: v.patientId,
+                visitId: v.id,
+                tokenNumber,
+                department: dept,
+                status: 'WAITING',
+                priority: 0,
+                priorityReason: v.chiefComplaint || null,
+              }
+            });
+            debugLogs.push(`Created new queue ticket ${created.tokenNumber} for visit ${v.visitNumber} (Patient: ${v.patient?.firstName})`);
+          } catch (createErr: any) {
+            debugLogs.push(`ERROR creating ticket for visit ${v.visitNumber}: ${createErr.message}`);
+          }
+        } else {
+          debugLogs.push(`Existing ticket found for visit ${v.visitNumber}: ticket id=${existingTicket.id}, token=${existingTicket.tokenNumber}, status=${existingTicket.status}`);
+          // Ensure visitId is linked and status is active WAITING if it was completed or inactive
+          if (!existingTicket.visitId || existingTicket.status === 'COMPLETED' || existingTicket.status === 'CANCELLED') {
+            try {
+              await prisma.patientQueue.update({
+                where: { id: existingTicket.id },
+                data: {
+                  visitId: v.id,
+                  status: 'WAITING'
+                }
+              });
+              debugLogs.push(`Reactivated ticket ${existingTicket.tokenNumber} to WAITING and linked to visit ${v.visitNumber}`);
+            } catch (updErr: any) {
+              debugLogs.push(`ERROR updating ticket ${existingTicket.id}: ${updErr.message}`);
+            }
+          }
+        }
+      }
+    }
+
+    // Fetch active tickets for this department
     const list = await prisma.patientQueue.findMany({
       where: {
         department: dept,
-        status: { in: ['WAITING', 'CALLED'] }, // Exclude IN_SERVICE (in consultation), COMPLETED, and CANCELLED
+        status: { in: ['WAITING', 'CALLED'] }, // Exclude IN_SERVICE, COMPLETED, and CANCELLED
       },
       include: {
         patient: {
@@ -202,17 +281,32 @@ router.get('/department/:dept', authMiddleware, async (req, res, next) => {
       ],
     });
 
-    // Exclude admitted patients or patients whose visits are in consultation / admitted / closed / discharged
+    debugLogs.push(`Fetched ${list.length} raw queue tickets for dept ${dept}`);
+
+    // Filter out any inpatients
     const filteredList = list.filter(item => {
-      if (admittedPatientIds.has(item.patientId)) return false;
       if (item.visit) {
+        const vType = (item.visit.visitType || '').toUpperCase();
         const vStatus = (item.visit.status || '').toUpperCase();
-        if (vStatus === 'IN_CONSULTATION' || vStatus === 'ADMITTED' || vStatus === 'CLOSED' || vStatus === 'DISCHARGED') {
+        if (vType === 'INPATIENT' || vStatus === 'ADMITTED') {
+          debugLogs.push(`Filtering out ticket ${item.tokenNumber}: INPATIENT`);
+          return false;
+        }
+        if (vStatus === 'IN_CONSULTATION' || vStatus === 'CLOSED' || vStatus === 'DISCHARGED') {
+          debugLogs.push(`Filtering out ticket ${item.tokenNumber}: status=${vStatus}`);
           return false;
         }
       }
       return true;
     });
+
+    debugLogs.push(`Returning ${filteredList.length} tickets to frontend`);
+
+    // Write debug logs to file for rapid inspection
+    try {
+      const fs = await import('fs');
+      fs.appendFileSync('queue_debug.log', debugLogs.join('\n') + '\n\n');
+    } catch (_) {}
 
     res.json(filteredList);
   } catch (error) {
@@ -413,12 +507,8 @@ router.post('/priority-override', authMiddleware, async (req: any, res, next) =>
 // 5. Waiting Time & Excessive Delay Warnings Alert
 router.get('/waiting-times', authMiddleware, async (req, res, next) => {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
     const activeTickets = await prisma.patientQueue.findMany({
       where: {
-        createdAt: { gte: startOfDay },
         status: 'WAITING',
       },
       include: { patient: true },

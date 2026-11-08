@@ -895,7 +895,8 @@ router.get('/Encounter', async (req, res, next) => {
         const encStatusRaw = (e.status || '').toUpperCase();
 
         const activeAdm = activeAdmittedMap.get(e.patientId) || activeAdmittedMap.get(e.patient?.id) || e.patient?.admissions?.[0];
-        const isAdmittedInIpd = Boolean(activeAdm);
+        // Only classify as admitted in IPD if the patient is currently in an inpatient visit/status
+        const isAdmittedInIpd = Boolean(activeAdm) && (vStatusRaw === 'ADMITTED' || e.serviceType === 'INPATIENT' || e.visit?.visitType === 'INPATIENT');
 
         const isClosedOrDischarged =
           vStatusRaw === 'CLOSED' || vStatusRaw === 'DISCHARGED' || vStatusRaw === 'COMPLETED' || vStatusRaw === 'FINISHED' || vStatusRaw === 'CANCELLED' ||

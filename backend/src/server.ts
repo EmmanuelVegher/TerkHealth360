@@ -1,7 +1,11 @@
 import './utils/fetchPolyfill.js';
 import 'dotenv/config';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -119,12 +123,36 @@ app.use('/uploads', express.static('./uploads'));
 
 // ── Serve the compiled frontend for LAN / tablet access ──────────────────────
 // When running inside the packaged Electron app, FRONTEND_DIST_PATH is injected
-// by electron-main.cjs.  This lets tablets reach http://<PC_IP>:3000 and get
-// the full React SPA without needing Electron on the tablet.
-const frontendDist = process.env.FRONTEND_DIST_PATH || '';
+// by electron-main.cjs. We also automatically discover sibling frontend dist directories
+// so that tablets and other PCs can always reach http://<PC_IP>:3000 to use the full React SPA.
+function resolveFrontendDist(): string {
+  const candidates = [
+    process.env.FRONTEND_DIST_PATH,
+    path.resolve(process.cwd(), '..', 'frontend-dist'),
+    path.resolve(process.cwd(), 'frontend-dist'),
+    path.resolve(process.cwd(), '..', 'frontend', 'dist'),
+    path.resolve(process.cwd(), 'dist', 'frontend'),
+    path.resolve(__dirname, '..', '..', 'frontend', 'dist'),
+    path.resolve(__dirname, '..', 'frontend-dist'),
+    path.resolve(__dirname, 'frontend-dist'),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, 'index.html'))) {
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return '';
+}
+
+const frontendDist = resolveFrontendDist();
 if (frontendDist) {
   app.use('/', express.static(frontendDist));
   console.log('[Server] Serving frontend static files from:', frontendDist);
+} else {
+  console.warn('[Server] No frontend dist folder found for static web serving.');
 }
 
 // Health check (public — no auth required)
@@ -334,7 +362,7 @@ app.use('/api/voicebox', voiceboxRoutes);
 // This makes client-side routing work when tablets open deep links like
 // http://<PC_IP>:3000/dashboard directly.
 if (frontendDist) {
-  app.get('/*', (_req, res) => {
+  app.get('*', (_req, res) => {
     const indexPath = path.join(frontendDist, 'index.html');
     res.sendFile(indexPath, (err) => {
       if (err) res.status(404).send('Frontend not found');

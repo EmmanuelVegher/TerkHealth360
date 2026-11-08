@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, shell, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
@@ -16,7 +16,6 @@ const FRONTEND_DEV_URL_FALLBACK = 'http://127.0.0.1:5173';
 
 /**
  * Poll the Vite dev server until it responds (up to maxTries * delayMs ms).
- * Returns the first URL that responds, or null if both fail.
  */
 function waitForViteServer(maxTries = 40, delayMs = 500) {
   return new Promise((resolve) => {
@@ -35,8 +34,6 @@ function waitForViteServer(maxTries = 40, delayMs = 500) {
     function scheduleRetry() {
       attempts++;
       if (attempts >= maxTries) {
-        console.warn('[Electron] Vite dev server not reachable after ' + maxTries + ' attempts. Trying fallback URL.');
-        // Try 127.0.0.1 as one final attempt
         const fallbackReq = http.get(FRONTEND_DEV_URL_FALLBACK, (res) => {
           resolve(res.statusCode >= 200 && res.statusCode < 500 ? FRONTEND_DEV_URL_FALLBACK : null);
         });
@@ -68,21 +65,21 @@ function checkBackendHealth(port) {
 
 /**
  * Find the system Node.js executable.
- * process.execPath in a packaged Electron app is the ELECTRON binary, not node.
- * We search multiple well-known locations so the backend starts reliably.
+ * IMPORTANT: process.execPath in a packaged Electron app is the ELECTRON binary, NOT node.exe.
+ * We search multiple well-known locations so the backend starts reliably on any machine.
  */
 function findNodeBin() {
   const candidates = [
-    // 1. Bundled node.exe shipped inside resources/ (ideal for air-gapped machines)
+    // 1. Bundled node.exe shipped inside resources/ — works even with no Node installed
     app.isPackaged ? path.join(process.resourcesPath, 'node.exe') : null,
     // 2. Standard Windows install paths
     'C:\\Program Files\\nodejs\\node.exe',
     'C:\\Program Files (x86)\\nodejs\\node.exe',
     path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
     path.join(process.env.APPDATA || '', '..', 'Local', 'Programs', 'nodejs', 'node.exe'),
-    // 3. nvm-windows
+    // 3. nvm-windows default location
     path.join(process.env.APPDATA || '', 'nvm', 'current', 'node.exe'),
-    // 4. Scan every directory on PATH
+    // 4. Scan every directory on %PATH%
     ...(process.env.PATH || '').split(';').map(p => path.join(p.trim(), 'node.exe')),
   ].filter(Boolean);
 
@@ -110,7 +107,7 @@ async function ensureBackendRunning() {
   console.log('[Electron] Starting internal backend server...');
   const backendDir = app.isPackaged
     ? path.join(process.resourcesPath, 'backend')
-    : path.join(__dirname, 'backend');
+    : path.join(__dirname, '..', 'backend');
   const backendEntryPath = path.join(backendDir, 'dist', 'server.js');
 
   if (!fs.existsSync(backendEntryPath)) {
@@ -118,7 +115,8 @@ async function ensureBackendRunning() {
     return;
   }
 
-  // Read .env from the backend dir and inject into the child process environment
+  // Read .env from the backend dir and inject every variable into the child process
+  // so Prisma / dotenv gets DATABASE_URL even without a shell environment
   const envFromFile = {};
   const envFilePath = path.join(backendDir, '.env');
   if (fs.existsSync(envFilePath)) {
@@ -130,6 +128,7 @@ async function ensureBackendRunning() {
       if (eqIdx === -1) continue;
       const key = trimmed.slice(0, eqIdx).trim();
       let val = trimmed.slice(eqIdx + 1).trim();
+      // Strip surrounding quotes
       if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
@@ -140,7 +139,7 @@ async function ensureBackendRunning() {
     console.warn('[Electron] No .env file found at:', envFilePath);
   }
 
-  // Find node.exe — process.execPath is the Electron binary, NOT node
+  // Find node.exe — must NOT use process.execPath (that's the Electron binary)
   const nodeBin = findNodeBin();
   if (!nodeBin) {
     console.error('[Electron] Could not find node.exe. Backend will not start.');
@@ -155,13 +154,21 @@ async function ensureBackendRunning() {
       logStream = fs.createWriteStream(logPath, { flags: 'a' });
     } catch (_) {}
 
+    // spawn() with ['ignore', 'pipe', 'pipe'] is safe in Windows GUI subsystem (no console window)
     backendProcess = spawn(nodeBin, [backendEntryPath], {
       cwd: backendDir,
       env: {
         ...process.env,
-        ...envFromFile,
+        ...envFromFile,   // .env values take priority
         PORT: String(BACKEND_PORT),
         NODE_ENV: 'production',
+        // Path to the frontend dist so the backend can serve it for LAN/tablet access.
+        // IMPORTANT: The backend is a plain Node.js process — it CANNOT read inside
+        // the .asar archive.  We use the extraResource copy at resources/frontend-dist/
+        // which is a real filesystem directory accessible to any process.
+        FRONTEND_DIST_PATH: app.isPackaged
+          ? path.join(process.resourcesPath, 'frontend-dist')
+          : path.join(__dirname, 'dist'),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
@@ -215,7 +222,7 @@ async function ensureBackendRunning() {
  */
 function createMainWindow() {
   // Resolve icon paths — prefer .ico on Windows, fall back to .png
-  const iconBaseDev = path.join(__dirname, 'frontend', 'public');
+  const iconBaseDev = path.join(__dirname, 'public');
   const iconBaseProd = process.resourcesPath;
 
   const icoPaths = app.isPackaged
@@ -259,8 +266,8 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
-      preload: path.join(__dirname, 'frontend', 'electron-preload.cjs')
+      sandbox: false,
+      preload: path.join(__dirname, 'electron-preload.cjs')
     }
   });
 
@@ -287,72 +294,57 @@ function createMainWindow() {
 
   // Load the application
   if (isDev) {
-    // Wait for Vite dev server then load
     waitForViteServer().then((devUrl) => {
       if (devUrl) {
         console.log('[Electron] Loading dev server from:', devUrl);
         mainWindow.loadURL(devUrl).catch(() => {
           console.log('[Electron] loadURL failed, loading local build file...');
-          loadDistFile();
+          loadDistFile(mainWindow);
         });
       } else {
         console.log('[Electron] Dev server not available, loading local build file...');
-        loadDistFile();
+        loadDistFile(mainWindow);
       }
     });
   } else {
     // In production: load the frontend immediately, backend starts concurrently
-    // (API calls will naturally fail/retry until backend is ready)
-    loadDistFile();
-  }
-
-  function waitForBackendThenLoad(maxWaitMs = 30000) {
-    const start = Date.now();
-    function poll() {
-      checkBackendHealth(BACKEND_PORT).then((ok) => {
-        if (ok) {
-          console.log('[Electron] Backend ready. Loading frontend...');
-          loadDistFile();
-        } else if (Date.now() - start < maxWaitMs) {
-          setTimeout(poll, 500);
-        } else {
-          console.warn('[Electron] Backend did not start in time. Loading frontend anyway...');
-          loadDistFile();
-        }
-      });
-    }
-    poll();
-  }
-
-  function loadDistFile() {
-    // In a packaged asar, app.getAppPath() points inside the asar — check there first
-    const possiblePaths = [
-      path.join(app.getAppPath(), 'dist', 'index.html'),
-      path.join(app.getAppPath(), 'index.html'),
-      path.join(__dirname, 'dist', 'index.html'),
-      path.join(__dirname, 'frontend', 'dist', 'index.html'),
-      path.join(__dirname, 'index.html'),
-    ];
-
-    console.log('[Electron] Searching for index.html in:');
-    possiblePaths.forEach(p => {
-      const exists = (() => { try { return fs.existsSync(p); } catch { return false; } })();
-      console.log(`  [${exists ? 'FOUND' : '    '}] ${p}`);
-    });
-
-    const validPath = possiblePaths.find((p) => {
-      try { return fs.existsSync(p); } catch (e) { return false; }
-    });
-
-    const target = validPath || path.join(app.getAppPath(), 'dist', 'index.html');
-    console.log('[Electron] Loading:', target);
-    mainWindow.loadFile(target).catch((err) => {
-      console.error('[Electron] Failed to load index.html from ' + target, err);
-    });
+    loadDistFile(mainWindow);
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+/**
+ * Find and load the built dist/index.html into the given window.
+ * Works both inside an .asar archive and in an unpacked production build.
+ * @param {BrowserWindow} win
+ * @param {string} [hash] - optional hash fragment e.g. '/login'
+ */
+function loadDistFile(win, hash) {
+  const possiblePaths = [
+    path.join(app.getAppPath(), 'dist', 'index.html'),
+    path.join(app.getAppPath(), 'index.html'),
+    path.join(__dirname, 'dist', 'index.html'),
+    path.join(__dirname, 'index.html'),
+  ];
+
+  console.log('[Electron] Searching for index.html in:');
+  possiblePaths.forEach(p => {
+    const exists = (() => { try { return fs.existsSync(p); } catch { return false; } })();
+    console.log(`  [${exists ? 'FOUND' : '    '}] ${p}`);
+  });
+
+  const validPath = possiblePaths.find((p) => {
+    try { return fs.existsSync(p); } catch (e) { return false; }
+  });
+
+  const target = validPath || path.join(app.getAppPath(), 'dist', 'index.html');
+  console.log('[Electron] Loading:', target, hash ? `#${hash}` : '');
+  const opts = hash ? { hash } : undefined;
+  win.loadFile(target, opts).catch((err) => {
+    console.error('[Electron] Failed to load index.html from ' + target, err);
   });
 }
 
@@ -456,6 +448,23 @@ app.whenReady().then(async () => {
   createMenu();
   await ensureBackendRunning();
   createMainWindow();
+
+  // Handle renderer request to fully navigate to the login page after logout.
+  // Using loadFile/loadURL (full navigation) rather than just setting the hash
+  // is the ONLY reliable approach in a packaged Electron app: React Router's
+  // ProtectedRoute guard re-evaluates cleanly on a fresh page load.
+  ipcMain.on('reload-to-login', () => {
+    if (!mainWindow) return;
+    console.log('[Electron] reload-to-login: navigating to login page');
+    if (isDev) {
+      mainWindow.loadURL(FRONTEND_DEV_URL + '/#/login').catch((err) => {
+        console.error('[Electron] Dev reload-to-login failed:', err);
+        loadDistFile(mainWindow, '/login');
+      });
+    } else {
+      loadDistFile(mainWindow, '/login');
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

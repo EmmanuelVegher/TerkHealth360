@@ -63,6 +63,8 @@ async function runWithRetry(fn: (client: PrismaClient) => Promise<any>, attempt 
         errorMessage.includes('Can\'t reach database server') ||
         errorMessage.includes('exceeded the quota') ||
         errorMessage.includes('quota') ||
+        errorMessage.includes('project size limit') ||
+        errorMessage.includes('53100') ||
         errorMessage.includes('connection timeout') ||
         errorMessage.includes('timeout expired') ||
         errorMessage.includes('Server closed connection') ||
