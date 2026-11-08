@@ -15,6 +15,8 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import CloseIcon from '@mui/icons-material/Close';
 import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import { voiceboxService } from '../services/voiceboxService';
 
 export interface DoctorCallEventDetail {
   doctorName: string;
@@ -48,6 +50,12 @@ export const GlobalCallDialog: React.FC = () => {
         setCallData(customEv.detail);
         setOpen(true);
         playChime();
+        voiceboxService.announceQueueCall({
+          tokenNumber: customEv.detail.tokenNumber,
+          patientName: customEv.detail.patientName,
+          department: customEv.detail.department,
+          doctorName: customEv.detail.doctorName,
+        }).catch(() => {});
       }
     };
 
@@ -61,6 +69,12 @@ export const GlobalCallDialog: React.FC = () => {
           setCallData(ev.data);
           setOpen(true);
           playChime();
+          voiceboxService.announceQueueCall({
+            tokenNumber: ev.data.tokenNumber,
+            patientName: ev.data.patientName,
+            department: ev.data.department,
+            doctorName: ev.data.doctorName,
+          }).catch(() => {});
         }
       };
     } catch (e) {}
@@ -148,12 +162,33 @@ export const GlobalCallDialog: React.FC = () => {
           </Typography>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ p: 2, justifyContent: 'center' }}>
+      <DialogActions sx={{ p: 2, justifyContent: 'center', gap: 1 }}>
+        <Button
+          variant="outlined"
+          startIcon={<VolumeUpIcon />}
+          onClick={() => {
+            voiceboxService.announceQueueCall({
+              tokenNumber: callData.tokenNumber,
+              patientName: callData.patientName,
+              department: callData.department,
+              doctorName: callData.doctorName,
+            }).catch(() => {});
+          }}
+          sx={{
+            py: 1.2,
+            fontWeight: 700,
+            borderRadius: 2,
+            color: '#93c5fd',
+            borderColor: 'rgba(147,197,253,0.4)',
+            '&:hover': { borderColor: '#60a5fa', bgcolor: 'rgba(59,130,246,0.1)' },
+          }}
+        >
+          Replay PA Voice
+        </Button>
         <Button
           variant="contained"
           onClick={() => setOpen(false)}
-          fullWidth
-          sx={{ py: 1.2, fontWeight: 700, borderRadius: 2, bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' } }}
+          sx={{ flex: 1, py: 1.2, fontWeight: 700, borderRadius: 2, bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' } }}
         >
           Acknowledge & Dismiss
         </Button>

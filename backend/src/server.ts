@@ -78,6 +78,7 @@ import dhis2Routes from './routes/dhis2.js';
 import privacyRoutes from './routes/privacy.js';
 import diseaseClinicsRoutes from './routes/diseaseClinics.js';
 import facilitiesRoutes from './routes/facilities.js';
+import voiceboxRoutes from './routes/voicebox.js';
 
 import { getLayer } from './services/connectionManager.js';
 import { analyzerListener } from './services/analyzerListener.js';
@@ -324,6 +325,9 @@ app.use('/api/privacy', authMiddleware, privacyRoutes);
 
 // Federal Ministry of Health (FMoH) Health Facilities Registry (HFR)
 app.use('/api/facilities', facilitiesRoutes);
+
+// Local-First Voicebox AI Voice Studio Bridge (TTS, Whisper STT, Hospital PA & MCP)
+app.use('/api/voicebox', voiceboxRoutes);
 
 
 // ── SPA catch-all: return index.html for any non-API route ──────────────────

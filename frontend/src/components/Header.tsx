@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Notifications, Search, Logout, Person, Settings,
-  HealthAndSafety, Menu as MenuIcon,
+  HealthAndSafety, Menu as MenuIcon, GraphicEq,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
@@ -13,6 +13,7 @@ import { SIDEBAR_W } from './Sidebar';
 import SystemStatusBadge from './SystemStatusBadge';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { VoiceboxStudioModal } from './VoiceboxStudioModal';
 
 interface HeaderProps {
   onMobileToggle?: () => void;
@@ -25,6 +26,7 @@ const Header = ({ onMobileToggle, onToggleCollapse, sidebarCollapsed = false }: 
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
+  const [voiceboxOpen, setVoiceboxOpen] = useState(false);
   const initials = user
     ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'A';
@@ -158,6 +160,26 @@ const Header = ({ onMobileToggle, onToggleCollapse, sidebarCollapsed = false }: 
           />
         </Box>
         <Box sx={{ flex: 1 }} />
+        {/* Voicebox AI Studio Pill */}
+        <Tooltip title="Open Voicebox AI Clinical Voice Bridge (Local TTS, Whisper Dictation & PA Announcements)">
+          <Chip
+            icon={<GraphicEq sx={{ fontSize: '15px !important' }} />}
+            label="Voicebox AI"
+            size="small"
+            clickable
+            onClick={() => setVoiceboxOpen(true)}
+            sx={{
+              bgcolor: alpha('#1e2a78', 0.1),
+              color: '#1e2a78',
+              border: '1px solid rgba(30, 42, 120, 0.22)',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              height: 26,
+              '& .MuiChip-icon': { color: '#1e2a78' },
+              '&:hover': { bgcolor: alpha('#1e2a78', 0.18) },
+            }}
+          />
+        </Tooltip>
         {/* Status pill */}
         <Chip
           icon={<HealthAndSafety sx={{ fontSize: '14px !important' }} />}
@@ -306,6 +328,7 @@ const Header = ({ onMobileToggle, onToggleCollapse, sidebarCollapsed = false }: 
             <Typography variant="body2" fontWeight={600}>Sign Out</Typography>
           </MenuItem>
         </Menu>
+        <VoiceboxStudioModal open={voiceboxOpen} onClose={() => setVoiceboxOpen(false)} />
       </Toolbar>
     </AppBar>
   );

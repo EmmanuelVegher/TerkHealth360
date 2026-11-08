@@ -17,6 +17,7 @@ import {
   clearConversation,
 } from '../utils/openmedChatMemory.js';
 import { transcribeOffline, getOfflineSTTStatus } from '../utils/offlineSpeechToText.js';
+import { transcribeWithVoiceboxOrFallback, getVoiceboxStatus } from '../services/voiceboxBridge.js';
 
 const router = Router();
 
@@ -3679,27 +3680,37 @@ router.post('/refine-dental-radiology', async (req: any, res: Response, next) =>
 
 /**
  * GET /openmed/stt-status
- * Returns offline Whisper speech-to-text status
+ * Returns offline Whisper speech-to-text + Voicebox Sidecar status
  */
-router.get('/stt-status', (_req: Request, res: Response) => {
-  res.json({ success: true, data: getOfflineSTTStatus() });
+router.get('/stt-status', async (_req: Request, res: Response) => {
+  const offline = getOfflineSTTStatus();
+  const vb = await getVoiceboxStatus().catch(() => null);
+  res.json({
+    success: true,
+    data: {
+      ...offline,
+      available: Boolean(offline.available || vb?.sidecarOnline),
+      voiceboxSidecarOnline: Boolean(vb?.sidecarOnline),
+      voiceboxUrl: vb?.sidecarUrl || 'http://127.0.0.1:17493',
+    },
+  });
 });
 
 /**
  * POST /openmed/transcribe-voice
- * Transcribes voice audio offline using local Whisper ONNX engine.
+ * Transcribes voice audio offline using Voicebox Whisper Turbo (primary) or local Whisper ONNX engine (fallback).
  * Input:
  *   - pcmBase64: string (base64 of Float32Array 16 kHz mono PCM)
  *   - pcmArray: number[] (Float32Array samples)
  */
 router.post('/transcribe-voice', async (req: Request, res: Response, next) => {
   try {
-    const { pcmBase64, pcmArray } = req.body;
+    const { pcmBase64, pcmArray, language, model } = req.body;
     let float32Samples: Float32Array;
 
     if (pcmBase64 && typeof pcmBase64 === 'string') {
       const buf = Buffer.from(pcmBase64, 'base64');
-      float32Samples = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+      float32Samples = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
     } else if (Array.isArray(pcmArray)) {
       float32Samples = new Float32Array(pcmArray);
     } else {
@@ -3710,17 +3721,19 @@ router.post('/transcribe-voice', async (req: Request, res: Response, next) => {
       return res.json({ success: true, data: { text: '', model: 'none', ms: 0 } });
     }
 
-    const result = await transcribeOffline(float32Samples);
+    const result = await transcribeWithVoiceboxOrFallback(float32Samples, { language, model });
     res.json({
       success: true,
       data: {
         text: result.text,
+        rawText: result.rawText,
         model: result.model,
+        provider: result.provider,
         ms: result.ms,
       }
     });
   } catch (err: any) {
-    console.error('[OpenMed STT] Transcription error:', err);
+    console.error('[OpenMed / Voicebox STT] Transcription error:', err);
     res.status(500).json({ success: false, message: err?.message || 'Offline transcription failed' });
   }
 });

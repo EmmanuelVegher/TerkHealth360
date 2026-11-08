@@ -7,6 +7,7 @@ import {
 import { Sync, LocalHospital, VolumeUp, Campaign, AccessTime } from '@mui/icons-material';
 import { api } from '../services/api';
 import { alpha } from '@mui/material/styles';
+import { voiceboxService } from '../services/voiceboxService';
 
 const QueueBoard = () => {
   const [calledTickets, setCalledTickets] = useState<any[]>([]);
@@ -209,10 +210,24 @@ const QueueBoard = () => {
                         <Typography variant={isHero ? 'h5' : 'subtitle1'} sx={{ fontWeight: 850, color: '#f8fafc' }}>
                           {t.patient?.firstName} {t.patient?.lastName ? `${t.patient.lastName.substring(0, 1)}.` : ''}
                         </Typography>
-                        <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          mt={0.5}
+                          sx={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            const patientDisplay = `${t.patient?.firstName || 'Patient'} ${t.patient?.lastName ? t.patient.lastName.substring(0, 1) : ''}`.trim();
+                            voiceboxService.announceQueueCall({
+                              tokenNumber: t.tokenNumber,
+                              patientName: patientDisplay,
+                              department: t.department,
+                            }).catch(() => {});
+                          }}
+                        >
                           <VolumeUp sx={{ fontSize: 16, color: '#10b981' }} />
-                          <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 750 }}>
-                            {t.status === 'CALLED' ? 'Please proceed to counter' : 'Consultation in progress'}
+                          <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 750, textDecoration: 'underline' }}>
+                            {t.status === 'CALLED' ? 'Please proceed to counter (Click to Speak)' : 'Consultation in progress (Click to Speak)'}
                           </Typography>
                         </Stack>
                       </Grid>
