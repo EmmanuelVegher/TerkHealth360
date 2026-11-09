@@ -1,363 +1,463 @@
-# Faith Foundation Hospital Management System (TerkHealth360)
-## Complete Module-by-Module User Manual & Role Operational Guide
+# TerkHealth360 (Faith Foundation Hospital Management System)
+## Complete Master Installation Guide & Role-Based Departmental Operational Manual
+
+---
+
+## Document Information & System Metadata
+- **System Version**: TerkHealth360 Enterprise v1.0.0 (Release 2026.1)
+- **Deployment Architecture**: Local-First Hybrid EMR / Electron Desktop Client / High-Availability LAN Core
+- **Hardware Profile Auto-Adaptation**: Full Support for Dedicated Servers, Apple Silicon MLX, Dedicated NVIDIA/AMD GPUs, and Standard CPU-Only Laptops (e.g., Dell Intel Core i5 with Integrated Graphics)
+- **Compliance Standards**: NDPA (Nigeria Data Protection Act), WHO ICD-10 Classification, HL7 FHIR v4 Interoperability, NHIA (National Health Insurance Authority) Act 2022
 
 ---
 
 ## Table of Contents
-1. [Introduction & System Overview](#1-introduction--system-overview)
-2. [Windows Desktop App Installation & Setup Guide](#2-windows-desktop-app-installation--setup-guide)
-3. [Logging In, Navigation & Security Basics](#3-logging-in-navigation--security-basics)
-4. [Role 1: Receptionist / Medical Records (Health Records Officer)](#4-role-1-receptionist--medical-records-health-records-officer)
-   - *Patient Registration, Master Patient Index (MPI), Appointment Scheduling, Queue Check-In & Emergency Intake*
-5. [Role 2: Nursing Staff (Triage, OPD Nurse, Ward Nurse, Labour Ward)](#5-role-2-nursing-staff-triage-opd-nurse-ward-nurse-labour-ward)
-   - *Vital Signs Triage, Inpatient Bed Management, Medication Administration Record (MAR), Shift Handover*
-6. [Role 3: Doctors & Specialists (General OPD, Eye Clinic, Dental, Surgery/Theatre)](#6-role-3-doctors--specialists-general-opd-eye-clinic-dental-surgerytheatre)
-   - *Clinical Consultations, Voicebox Voice Dictation, SOAP Notes, ICD-10 Coding, Prescriptions, Lab & Imaging Orders*
-7. [Role 4: Pharmacist & Pharmacy Dispensary](#7-role-4-pharmacist--pharmacy-dispensary)
-   - *Prescription Verification, Dispensing Workflow, Batch & Expiry Tracking, Inventory Requisitions*
-8. [Role 5: Laboratory Scientist & Technologist (LIMS / Pathology)](#8-role-5-laboratory-scientist--technologist-lims--pathology)
-   - *Sample Collection, Test Processing, Analyzer Worklist, Result Validation & Sign-off*
-9. [Role 6: Radiologist & Sonographer (Radiology & PACS Imaging)](#9-role-6-radiologist--sonographer-radiology--pacs-imaging)
-   - *Imaging Orders, DICOM Viewer, Radiographic Findings, AI Voice Dictation Rewriter*
-10. [Role 7: Cashier, Billing Officer & Health Insurance (NHIA / HMO)](#10-role-7-cashier-billing-officer--health-insurance-nhia--hmo)
-    - *Point of Sale (POS) Invoicing, Copay Collections, HMO Pre-Authorization, Claims & Receipts*
-11. [Role 8: Hospital Administrator, Medical Director & HR Manager](#11-role-8-hospital-administrator-medical-director--hr-manager)
-    - *Staff Management, Duty Rostering, System Audits, Database Backups, Hospital Factory Reset*
+1. [Master Installation & Deployment Guide (Windows, macOS, Linux)](#1-master-installation--deployment-guide-windows-macos-linux)
+   - *1.1 Windows Desktop Installation (.exe)*
+   - *1.2 Apple macOS Installation (.dmg / .app)*
+   - *1.3 Linux Desktop Installation (.AppImage / .deb)*
+   - *1.4 Connecting Client Laptops to the Central Hospital LAN Server*
+2. [Hospital Cross-Cutting Clinical Architecture & Lifecycle Diagram](#2-hospital-cross-cutting-clinical-architecture--lifecycle-diagram)
+   - *How a Patient Journey Flows Seamlessly Across All Modules*
+3. [Core Security, Universal Navigation & Voicebox AI Studio](#3-core-security-universal-navigation--voicebox-ai-studio)
+4. [Section A: Health Records Officers & Receptionists (Front Desk)](#4-section-a-health-records-officers--receptionists-front-desk)
+   - *Modules: Master Patient Index (MPI), Patient Registration, Appointments, Visits, Queue Management*
+5. [Section B: Nursing Staff (Triage, Inpatient Wards, Labour Ward, Emergency & ICU)](#5-section-b-nursing-staff-triage-inpatient-wards-labour-ward-emergency--icu)
+   - *Modules: Nursing Dashboard, Triage Desk, Bed Allocation, e-MAR, Labour Ward, Emergency/Casualty, ICU*
+6. [Section C: Medical Doctors & Clinical Specialists](#6-section-c-medical-doctors--clinical-specialists)
+   - *Modules: Outpatient Care (OPD), Clinical SOAP Note, Voicebox AI Dictation, ICD-10 Auto-Derivation, Eye Clinic, Dental Clinic, Surgical Theatre, Telemedicine*
+7. [Section D: Pharmacy & Inventory Supply Chain Management (SCM)](#7-section-d-pharmacy--inventory-supply-chain-management-scm)
+   - *Modules: Pharmacy Dispensary, Drug Safety & Allergies, Narcotics Control, Inventory SCM, Procurement, Cold-Chain & FEFO Expiry Tracking*
+8. [Section E: Laboratory Information Management System (LIMS / Pathology)](#8-section-e-laboratory-information-management-system-lims--pathology)
+   - *Modules: Sample Phlebotomy & Barcoding, Analyzer Worklists, Reference Range Validation, Critical Alerts, Blood Bank & Cross-Matching*
+9. [Section F: Radiology & PACS Digital Medical Imaging](#9-section-f-radiology--pacs-digital-medical-imaging)
+   - *Modules: Imaging Worklist, DICOM Web Viewer, Voice-Assisted Radiographic Findings & Impressions*
+10. [Section G: Billing, Cashier, Finance & Health Insurance (NHIA / HMO)](#10-section-g-billing-cashier-finance--health-insurance-nhia--hmo)
+    - *Modules: Point of Sale (POS) Invoicing, NHIA / HMO Pre-Authorization, Financial General Ledger, Asset Register, Financial Audits*
+11. [Section H: Hospital Administration, HR, Medical Director & IT System Engineers](#11-section-h-hospital-administration-hr-medical-director--it-system-engineers)
+    - *Modules: Security & IAM, User Management, Duty Roster & Attendance, Automated Backups, NMRS/DHIS2 Interoperability, Factory Hard Reset*
 12. [Troubleshooting & Frequently Asked Questions (FAQ)](#12-troubleshooting--frequently-asked-questions-faq)
 
 ---
 
-## 1. Introduction & System Overview
+# 1. Master Installation & Deployment Guide (Windows, macOS, Linux)
 
-**TerkHealth360 (Faith Foundation Hospital Management System)** is a comprehensive, enterprise-grade Electronic Medical Record (EMR) and Hospital Management System. It is engineered with a **zero-trust local-first architecture**, meaning clinical services, voice dictation, laboratory records, and billing operations run entirely inside the hospital local network (LAN) without requiring internet connectivity for core healthcare delivery.
-
-### Key Architecture Highlights
-- **Single Source of Truth**: A unified Master Patient Index (MPI) ensures no duplicate medical records exist across outpatient, emergency, dental, eye, theatre, and ward departments.
-- **Role-Based Access Control (RBAC)**: Each hospital worker sees strictly what their job permits. A cashier cannot view private doctor clinical notes; a doctor cannot alter accounting ledger entries.
-- **Voicebox AI Voice Bridge**: Offline neural voice dictation and hospital queue announcements running on local CPUs and hospital servers.
+TerkHealth360 is built as a native multi-platform desktop application using Electron, powered by a high-throughput Node/Express backend and a responsive React frontend.
 
 ---
 
-## 2. Windows Desktop App Installation & Setup Guide
+### 1.1 Windows Desktop Installation (.exe)
+**Target Operating Systems**: Windows 11, Windows 10 (64-bit editions).
 
-This section is for installing the application on hospital computers (Windows 10 or Windows 11, 64-bit).
-
-### Step 2.1: Building / Packaging the Windows Installer (For IT Department)
-To generate the `.exe` installer setup file from the source repository:
-1. Open PowerShell or Terminal on the primary development/server workstation.
-2. Navigate to the frontend directory:
-   ```bash
-   cd /path/to/TerkHealth360/frontend
-   ```
-3. Run the packaging command:
-   ```bash
-   npm run dist:win
-   ```
-4. Once completed, the ready-to-distribute installer will be created inside the `release/` folder:
-   - Example: `Faith Foundation Hospital Management System Setup 1.0.0.exe`
-
----
-
-### Step 2.2: Installing on Hospital Client Laptops / Desktops (For Lay-Users)
-
-> [!NOTE]
-> No special programming or technical expertise is required to install the desktop application. Simply follow these steps:
-
-1. **Copy the Installer**:
-   - Insert the hospital USB Flash Drive containing `Faith Foundation Hospital Management System Setup.exe` into the computer, or download it from the hospital internal share folder.
-2. **Run the Setup**:
-   - Double-click `Faith Foundation Hospital Management System Setup.exe`.
-   - If Windows SmartScreen displays a blue prompt saying *"Windows protected your PC"*, click **More info** and then click **Run anyway**.
-3. **Automatic Installation**:
-   - The installer installs the hospital system files in less than 30 seconds.
-   - A blue hospital cross shortcut icon labeled **Faith Foundation Hospital** will appear automatically on your Windows Desktop and Start Menu.
-4. **Connecting to the Hospital Central Server**:
-   - On initial launch, the system automatically connects to the hospital server via your local LAN Wi-Fi or Ethernet cable.
-   - If your facility uses a centralized hospital server IP (e.g., `http://192.168.1.100:3000`), confirm with your hospital IT administrator that your computer is connected to the hospital Wi-Fi or LAN cable.
-
----
-
-## 3. Logging In, Navigation & Security Basics
-
-### Logging In
-1. Double-click the **Faith Foundation Hospital** icon on your desktop.
-2. On the Login Screen:
-   - Enter your **Username** or **Staff ID** (e.g., `doc_amara`, `nurse_chidinma`, `pharm_uche`).
-   - Enter your **Password**.
-   - Select your **Primary Working Facility / Branch** if prompted.
-   - Click **Sign In to Hospital Portal**.
-3. **Role Redirection**: The system automatically detects your professional role and opens your specific department dashboard.
-
-### Navigation Overview
-- **Left Sidebar**: Contains all clinical, operational, and financial modules assigned to your permission level. You can collapse it anytime by clicking the arrow at the top.
-- **Top Header Bar**:
-  - **Hospital Facility Pill**: Displays the current active hospital branch.
-  - **Emergency Banner**: Notifies all staff instantly if an emergency code or critical lab alert is activated.
-  - **Global Call & Voicebox Studio (Waveform Icon)**: Opens the clinical dictation pad and audio announcement studio.
-  - **User Profile Avatar (Top-Right)**: Shows your name, current shift role, and allows you to **Lock Screen** or **Log Out**.
-
----
-
-## 4. Role 1: Receptionist / Medical Records (Health Records Officer)
-
-The Receptionist and Health Records team are the first point of clinical contact. They manage patient registrations, verify hospital IDs, and direct patients to queues.
-
-```mermaid
-flowchart LR
-    A["Patient Arrives"] --> B["Search Master Patient Index (MPI)"]
-    B -->|"New Patient"| C["Register New Patient + Assign Hospital Number"]
-    B -->|"Existing Patient"| D["Open Profile & Check Insurance / NHIA"]
-    C --> E["Create Visit Encounter (OPD / Emergency / Clinic)"]
-    D --> E
-    E --> F["Send Patient to Nursing Triage Queue"]
+#### Step 1: Generating the Windows Installer (For Hospital IT Administrator)
+On the build machine or central server:
+```bash
+cd /path/to/TerkHealth360/frontend
+npm run dist:win
 ```
+This produces `release/Faith Foundation Hospital Management System Setup 1.0.0.exe`.
 
-### 4.1 Registering a New Patient
-1. On the left sidebar, click **Outpatient Care (OPD)** or **Patient Registration**.
-2. Click the green **+ New Patient Registration** button at the top-right.
-3. Fill in the **Demographics**:
-   - **First Name**, **Last Name**, **Gender**, and **Date of Birth** (or estimated Age).
-   - **Phone Number** and **Physical Residential Address**.
-   - **National Identification Number (NIN)** (if available).
-   - **Emergency Contact Next of Kin** (Name, Relationship, Phone).
-4. Select **Billing Category**:
-   - `PRIVATE / OUT-OF-POCKET CASH`
-   - `NATIONAL HEALTH INSURANCE (NHIA)`
-   - `CORPORATE / HMO PRIVATE INSURANCE` (Select HMO provider and enter Enrollee Policy ID).
-5. Click **Save & Generate Hospital Number**.
-   - The system automatically creates a unique barcode and patient identifier (e.g., `PAT-2026-00142`).
+#### Step 2: Layman Installation on Windows Client Laptops / Desktops
+1. **Copy the Installer**: Transfer `Faith Foundation Hospital Management System Setup 1.0.0.exe` via the hospital USB flash drive or download it from the hospital internal network share (`\\192.168.1.100\HospitalApps`).
+2. **Double-Click Setup**: Run the `.exe` file.
+3. **Handle Windows Defender / SmartScreen**:
+   - If Windows displays a blue screen stating: *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"*:
+   - Click the small underlined link: **More info**.
+   - Click the button: **Run anyway**.
+4. **Automated Setup**:
+   - The installer automatically creates application binaries in `%LocalAppData%\Programs\Faith Foundation Hospital Management System`.
+   - A blue Hospital Cross icon will appear on the **Windows Desktop** and in the **Start Menu**.
+5. **Launch**: Double-click the desktop shortcut to launch TerkHealth360.
 
 ---
 
-### 4.2 Checking In a Patient & Creating an Encounter
-1. In the search box at the top, type the patient's name, phone number, or hospital number.
-2. Click **Start New Visit Encounter**.
-3. Select the destination department:
-   - `General OPD (Ambulatory)`
-   - `Eye Clinic (Ophthalmology)`
-   - `Dental Clinic`
-   - `Emergency (Casualty / A&E)`
-   - `Antenatal Clinic (ANC)`
-4. Type the presenting reason (e.g., *"Routine follow-up"*, *"Severe fever and body pain"*).
-5. Click **Check-In to Nursing Triage Queue**. The patient now automatically appears on the Nurse's screen.
+### 1.2 Apple macOS Installation (.dmg / .app)
+**Target Operating Systems**: macOS 12 (Monterey), macOS 13 (Ventura), macOS 14 (Sonoma), macOS 15 (Sequoia) on Apple Silicon (M1/M2/M3/M4) and Intel Macs.
+
+#### Step 1: Generating the macOS Installer (For Hospital IT Administrator)
+```bash
+cd /path/to/TerkHealth360/frontend
+npm run dist:mac
+```
+This outputs `release/Faith Foundation Hospital Management System-1.0.0.dmg`.
+
+#### Step 2: Layman Installation on Apple MacBooks / iMacs
+1. **Mount DMG**: Double-click `Faith Foundation Hospital Management System-1.0.0.dmg`. A window opens showing the **Hospital App Icon** and the **Applications** folder shortcut.
+2. **Drag and Drop**: Drag the `Faith Foundation Hospital` icon into the **Applications** folder.
+3. **Eject Disk Image**: Right-click the mounted disk image on your desktop and select **Eject**.
+4. **First Launch (Gatekeeper Verification)**:
+   - Open Finder -> **Applications** -> Double-click **Faith Foundation Hospital**.
+   - If macOS displays *"Apple cannot check it for malicious software"* or *"Unidentified Developer"*:
+     1. Open **System Settings** (or System Preferences).
+     2. Click **Privacy & Security**.
+     3. Scroll down to the **Security** section where you will see: *"Faith Foundation Hospital was blocked from use because it is not from an identified developer"*.
+     4. Click **Open Anyway** and enter your Mac password.
+5. **Microphone Permissions (Mandatory for Voicebox AI Dictation)**:
+   - When the app launches, macOS will prompt: *"Faith Foundation Hospital would like to access the microphone"*. Click **OK**.
 
 ---
 
-## 5. Role 2: Nursing Staff (Triage, OPD Nurse, Ward Nurse, Labour Ward)
+### 1.3 Linux Desktop Installation (.AppImage / .deb)
+**Target Operating Systems**: Ubuntu 20.04/22.04/24.04 LTS, Debian 11/12, Linux Mint, Fedora, Red Hat Enterprise Linux.
 
-Nurses monitor patient flow, record vital signs, monitor inpatients, and record drug administration.
+#### Step 1: Generating the Linux Package (For Hospital IT Administrator)
+```bash
+cd /path/to/TerkHealth360/frontend
+npm run dist:linux
+```
+This generates both:
+- `release/Faith-Foundation-Hospital-1.0.0.AppImage` (Universal Portable Linux Binary)
+- `release/faith-foundation-hospital_1.0.0_amd64.deb` (Debian/Ubuntu Package)
 
-### 5.1 Recording Patient Triage & Vitals
-1. Click **Nursing Workspace** or **Triage & Vitals Desk** on the left menu.
-2. Click on the patient waiting in the queue.
-3. Enter the patient's clinical baseline measurements:
-   - **Systolic / Diastolic Blood Pressure (mmHg)** (e.g., `120/80`)
-   - **Body Temperature (°C)** (e.g., `37.2`)
-   - **Pulse Rate (bpm)** (e.g., `78`)
-   - **Respiratory Rate (cpm)** (e.g., `18`)
-   - **Oxygen Saturation (SpO₂ %)** (e.g., `98%`)
-   - **Body Weight (kg)** and **Height (cm)** (The system computes BMI automatically).
-4. **Automated NEWS2 Early Warning Alert**:
-   - If blood pressure or oxygen saturation falls outside normal parameters, the system highlights the card in **Amber** or **Red** and flags the patient for immediate medical review.
-5. Enter **Presenting Complaint**:
-   - You can type or click **🎤 Voice Dictation** to speak the patient's complaint into the microphone.
-6. Click **Save Vitals & Send to Doctor's Waiting Queue**.
+#### Step 2: Layman Installation on Ubuntu / Debian Workstations
+**Option A: Using the Portable AppImage (No installation required)**:
+1. Copy `Faith-Foundation-Hospital-1.0.0.AppImage` to your Home or Desktop folder.
+2. Right-click the file -> **Properties** -> **Permissions** tab -> Check **"Allow executing file as program"**.
+   *(Or via terminal: `chmod +x Faith-Foundation-Hospital-1.0.0.AppImage`)*.
+3. Double-click the file to immediately launch the hospital system.
 
----
-
-### 5.2 Inpatient Ward & Bed Management (IPD)
-1. On the left menu, select **Inpatient Care (IPD)** -> **Ward Beds Map**.
-2. To admit a patient recommended for admission by a doctor:
-   - Select the destination ward: *Male Medical Ward*, *Female Surgical Ward*, *Pediatric Ward*, or *ICU*.
-   - Click on an empty green bed (e.g., `Bed 04 - Male Ward`).
-   - Select the patient's name and click **Confirm Bed Allocation**.
-3. **Electronic Medication Administration Record (e-MAR)**:
-   - Click on the admitted patient's chart.
-   - Switch to the **e-MAR / Prescriptions** tab.
-   - When a prescribed dose is given to the patient, locate the scheduled medication (e.g., *IV Ceftriaxone 1g at 14:00*).
-   - Click **Administer & Sign**. The nurse's electronic signature, date, and exact minute timestamp are permanently logged.
+**Option B: Installing via Debian Package (`.deb`)**:
+1. Open terminal in the download folder and execute:
+   ```bash
+   sudo dpkg -i faith-foundation-hospital_1.0.0_amd64.deb
+   sudo apt-get install -f   # Fixes any missing system libraries
+   ```
+2. The application is now permanently installed in `/opt/Faith Foundation Hospital` and searchable in your Linux Application Launcher under **Medical / Office**.
 
 ---
 
-## 6. Role 3: Doctors & Specialists (General OPD, Eye Clinic, Dental, Surgery/Theatre)
+### 1.4 Connecting Client Laptops to the Central Hospital LAN Server
 
-Doctors conduct clinical assessments, review diagnostic investigations, make diagnoses, and prescribe medical therapies.
-
-### 6.1 Conducting an Outpatient Consultation (SOAP Note Workflow)
-1. In **Outpatient Care (OPD)**, select the patient from your **Waiting for Doctor** queue.
-2. Click **Start Clinical Consultation**. The consultation drawer opens on the right:
+In standard hospital operation, one primary computer serves as the **Hospital Database & Voicebox Server** (e.g., in the Server Room or Medical Director's Office at LAN IP `192.168.1.100`), while ward and clinic laptops connect over the secure hospital Wi-Fi/Ethernet.
 
 ```mermaid
 flowchart TD
-    S["Subjective (S): History & Symptoms (Voice or Type)"] --> O["Objective (O): Vitals & Slit-lamp/Physical Exam"]
-    O --> A["Assessment (A): ICD-10 Diagnostic Codes Auto-Derived"]
-    A --> P["Plan (P): Management Protocol & Home Care"]
-    P --> R["Prescriptions (Rx) & Diagnostic Lab/Radiology Orders"]
+    subgraph HospitalServer["Hospital Main Server (192.168.1.100)"]
+        DB[(PostgreSQL Database)]
+        BE["Backend API (:3000)"]
+        VB["Voicebox AI Sidecar (:17493)"]
+        DB <--> BE
+        BE <--> VB
+    end
+
+    subgraph ClinicClients["Hospital Workstations (LAN Clients)"]
+        W1["Reception Windows PC"] -->|"http://192.168.1.100:3000"| BE
+        W2["OPD Doctor Laptop"] -->|"Microphone Audio / Data"| BE
+        W3["Ward Nurse Tablet"] --> BE
+        W4["Pharmacy Workstation"] --> BE
+        W5["Laboratory Computer"] --> BE
+    end
 ```
 
-3. **Step 1: Subjective (S) & Voicebox AI Dictation**:
+#### Configuring the Client Desktop App to Point to the Server:
+1. On any client laptop, navigate to the installed directory or check the `frontend/.env.production` file.
+2. Set the `VITE_API_URL` to the server's static hospital IP:
+   ```env
+   VITE_API_URL=http://192.168.1.100:3000/api
+   ```
+3. When staff open the app, it instantly connects to the centralized server, meaning patient records entered at Reception are visible in OPD within milliseconds.
+
+---
+
+# 2. Hospital Cross-Cutting Clinical Architecture & Lifecycle Diagram
+
+The diagram below illustrates how a single patient admission flows across all eight hospital departments without duplicate data entry:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Patient
+    actor Rec as Receptionist
+    actor Nurse as Triage Nurse
+    actor Doc as OPD Doctor
+    actor Lab as Lab Scientist
+    actor Pharm as Pharmacist
+    actor Cashier as Billing Cashier
+
+    Patient->>Rec: Arrives at Hospital Front Desk
+    Rec->>Rec: Search Master Patient Index (MPI) or Register New
+    Rec->>Nurse: Checks-in Encounter -> Queued for Triage
+    Nurse->>Nurse: Takes Vitals (BP, Temp, Pulse, SpO2, Weight)
+    Nurse->>Doc: Vitals Saved -> Patient Moved to Doctor Queue
+    Doc->>Doc: Voice Dictates SOAP Note via Voicebox
+    Doc->>Doc: Auto-derives ICD-10 Diagnosis (e.g., B50.9)
+    Doc->>Lab: Requests Lab Order (FBC, Malaria MP)
+    Doc->>Pharm: Prescribes Medications (ACT, Paracetamol)
+    Lab->>Lab: Samples Accessioned & Results Validated
+    Lab-->>Doc: Results Instantly Visible in Patient Chart
+    Pharm->>Pharm: Verifies Drug Safety & Allots Stock (FEFO)
+    Pharm->>Cashier: Bills Transmitted to Ledger
+    Cashier->>Patient: Collects Cash / Validates HMO Pre-Auth & Prints Receipt
+    Pharm->>Patient: Dispenses Medications with Spoken Audio Guide
+```
+
+---
+
+# 3. Core Security, Universal Navigation & Voicebox AI Studio
+
+### 3.1 Security & Role-Based Access Control (RBAC)
+Every staff member is given an authenticated user profile with cryptographic session tokens.
+- **Data Confidentiality**: Only licensed clinicians can view subjective consultation notes.
+- **Audit Logging**: Every button click, patient edit, prescription deletion, or billing cancellation is cryptographically recorded in **Audit Logs** with user ID, IP address, and timestamp.
+- **Screen Lock**: If leaving your computer unattended, click your Avatar at the top right and click **Lock Screen**.
+
+### 3.2 Voicebox AI Voice Studio (Waveform Icon)
+Located in the top header bar next to the emergency banner:
+- **Zero-Cloud Audio Processing**: All transcription runs inside the hospital premises. No patient voice data leaves the hospital building.
+- **Hardware-Aware Filter**: Automatically identifies whether the computer has an Apple Silicon chip, an NVIDIA GPU, or is a standard CPU-only laptop (e.g., Dell Core i5). On CPU-only laptops, it restricts models to lightweight **Kokoro 82M** (~350 MB) and **Whisper Small** (~150 MB) to ensure fast operation without overheating.
+
+---
+
+# 4. Section A: Health Records Officers & Receptionists (Front Desk)
+
+**Assigned Staff**: Medical Records Clerks, Receptionists, Front Desk Executives.  
+**Key Modules**: `Patient Registration`, `Patients (MPI)`, `Visits`, `Appointments`, `Queue Management`.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      RECEPTION & RECORDS WORKSPACE                          │
+├─────────────────────┬───────────────────────────┬───────────────────────────┤
+│ 1. Search MPI       │ 2. Register New Patient   │ 3. Check-In & Queue       │
+│ Name, Phone, NIN,   │ Demographics, Next of Kin,│ Assign to OPD, Eye, Dental│
+│ or Hospital ID      │ Insurance / Cash category │ Casualty or ANC Triage    │
+└─────────────────────┴───────────────────────────┴───────────────────────────┘
+```
+
+### Step-by-Step Operational Instructions:
+1. **Searching the Master Patient Index (MPI)**:
+   - When a patient approaches the desk, always type their surname, phone number, or national NIN in the top search bar first.
+   - *Rule*: Never create a duplicate file if the patient already exists in the system.
+2. **Registering a First-Time Patient**:
+   - Click **+ New Patient Registration**.
+   - Input **Bio-data**: Surname, First Name, Gender, Date of Birth (or estimated age).
+   - Input **Contact**: Phone Number, Residential Address, State/LGA of Origin.
+   - Input **Next of Kin**: Name, Relationship (e.g., Spouse, Parent), Contact Phone.
+   - Select **Payer Category**:
+     - *Private Out-of-Pocket Cash*: Standard self-pay.
+     - *National Health Insurance (NHIA)*: Enter NHIA Registration Number and select Enrollee Type.
+     - *Corporate HMO*: Select HMO Company (e.g., Hygeia, Reliance, AXA Mansard) and enter Policy ID.
+   - Click **Save & Generate Hospital Number**. The system issues an automated identifier (e.g., `PAT-2026-00412`).
+3. **Queue Check-In**:
+   - Click **Start Encounter**. Select the requested clinic: `General OPD`, `Eye Clinic`, `Dental Clinic`, `ANC Maternity`, or `Emergency`.
+   - Click **Send to Nursing Triage**. The patient is now queued on the nurse's station screen.
+
+---
+
+# 5. Section B: Nursing Staff (Triage, Inpatient Wards, Labour Ward, Emergency & ICU)
+
+**Assigned Staff**: Registered Nurses (RN), Midwives (RM), Matrons, Triage Nurses.  
+**Key Modules**: `Nursing Dashboard`, `Triage Desk`, `Inpatient Care (IPD)`, `Labour Ward`, `ICU`, `Emergency`.
+
+### 5.1 Outpatient Triage & Vital Signs Desk
+1. Open **Nursing Dashboard** -> **Triage & Vitals Desk**.
+2. Select the patient from the **Waiting for Vitals** list.
+3. Enter vital sign measurements:
+   - **Blood Pressure**: Systolic and Diastolic in mmHg.
+   - **Temperature**: In Celsius (e.g., `37.4`).
+   - **Pulse Rate**: Beats per minute.
+   - **Respiratory Rate**: Breaths per minute.
+   - **Oxygen Saturation (SpO₂)**: Percentage (e.g., `98%`).
+   - **Weight & Height**: System automatically calculates BMI ($kg/m^2$).
+4. **Automated NEWS2 Clinical Early Warning Scoring**:
+   - The system automatically tallies the National Early Warning Score.
+   - If SpO₂ drops below 92% or systolic BP exceeds 180 mmHg, the card turns **RED** and sounds a triage alert.
+5. Record **Presenting Complaints**: Type or use **🎤 Voice Dictation** to speak the patient's complaints.
+6. Click **Save Vitals & Send to Doctor's Waiting Queue**.
+
+### 5.2 Inpatient Bed Management & Electronic MAR (e-MAR)
+1. Navigate to **Inpatient Care (IPD)** -> **Ward Beds Map**.
+2. **Bed Allocation**: Select the ward (*Male Medical*, *Female Surgical*, *Pediatric*, *Maternity*). Click any green bed, search the admitted patient's name, and click **Confirm Bed Allocation**.
+3. **Medication Administration (e-MAR)**:
+   - Click the patient's active bed card.
+   - View scheduled doses ordered by the attending physician (e.g., *IV Ceftriaxone 1g at 14:00*).
+   - When administered, click **Administer & Sign**. The nurse's credential and timestamp are logged permanently.
+
+---
+
+# 6. Section C: Medical Doctors & Clinical Specialists
+
+**Assigned Staff**: Medical Officers, Resident Doctors, Consultants, Ophthalmologists, Dental Surgeons.  
+**Key Modules**: `Outpatient Care (OPD)`, `Eye Clinic`, `Dental Clinic`, `Surgical Theatre`, `Specialty Disease Clinics`.
+
+### 6.1 Clinical Consultation Drawer & Voicebox Dictation (SOAP Workflow)
+In **Outpatient Care (OPD)**, select a patient from the **Waiting for Consultation** queue:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DOCTOR'S SOAP NOTE DRAWER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ [🎤 Voice Dictation]   [✨ Smart Auto-Online Assessment & Plan]             │
+│                                                                             │
+│ [S] Subjective: History of Presenting Complaint (Spoken or Typed)           │
+│ [O] Objective:  Vitals review, Systemic & Physical Examination              │
+│ [A] Assessment: ICD-10 Diagnostic Codes (Auto-Derived from Symptoms)        │
+│ [P] Plan:       Clinical Management Guidelines & Patient Instructions       │
+│                                                                             │
+│ [Tabs]: [Prescriptions & Stock]  [Lab Orders]  [Radiology Scans]  [Admit]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Subjective (S) with Voicebox AI**:
    - Click the blue **`🎤 Voice Dictation`** button.
-   - Speak into your microphone:
-     > *"Patient presents with 4-day history of high fever, rigors, headache, and joint pain. No cough or vomiting."*
+   - Speak clearly into your computer microphone:
+     > *"Patient presents with complaints of persistent fever and chills for three days, severe frontal headache, and joint pains. No vomiting or diarrhea."*
    - Click **`Stop Voice Dictation`**.
-   - Voicebox transcribes the speech, automatically cleans conversational filler words (`um`, `uh`), and normalizes medical phrasing.
-4. **Step 2: Objective (O)**:
-   - Review pre-loaded triage vitals. Add physical examination notes (e.g., *"Chest clear, abdomen soft, no organomegaly"*).
-5. **Step 3: Assessment (A) & Automatic ICD-10 Coding**:
-   - Click **Smart Auto-Online Assessment & Plan**.
-   - The system automatically matches symptoms to ICD-10 codes (e.g., `B50.9 — Plasmodium falciparum malaria & febrile illness`).
-   - You can also type into the ICD search box to add secondary diagnoses.
-6. **Step 4: Prescriptions & Diagnostic Orders**:
-   - Switch to the **Prescriptions & Stock** tab: Type drug name (e.g., *Artemether-Lumefantrine*), choose dosage, frequency (*BD*), duration (*3 days*), and click **Add Rx**.
-   - Switch to **Lab Orders & Availability**: Check required tests (e.g., *Malaria Parasite MP*, *Full Blood Count FBC*) and click **Issue Lab Order**.
-7. Click the green button: **Save & Finalize OPD Consultation Note**.
+   - Voicebox Whisper transcribes the audio, automatically strips conversational fillers (`um`, `uh`, stutters), and formats it into formal clinical language.
+2. **Objective (O)**:
+   - Add targeted examination notes (e.g., *"Chest clear bilaterally, abdomen soft, non-tender"*).
+3. **Assessment (A) & ICD-10 Coding**:
+   - Click **✨ Smart Auto-Online Assessment & Plan**.
+   - The clinical NLP engine matches symptoms to WHO ICD-10 codes (e.g., `B50.9 — Plasmodium falciparum malaria & febrile illness`, `R51.9 — Headache`).
+4. **Plan (P), Prescriptions & Orders**:
+   - In the **Prescriptions & Stock** tab: Search drug formulary, select dosage (*1 cap*), frequency (*TDS*), and duration (*5 days*). Click **Add Rx**.
+   - In the **Lab Orders & Availability** tab: Check necessary investigations (*Malaria MP*, *Full Blood Count*).
+5. Click **Save & Finalize OPD Consultation Note**.
+
+### 6.2 Eye Clinic (Ophthalmology)
+Navigate to **Eye Clinic** ([EyeClinic.tsx](file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/EyeClinic.tsx)):
+- Record **Visual Acuity**: Right Eye (OD) and Left Eye (OS) for uncorrected, pinhole, and best corrected vision.
+- Record **Tonometry (IOP)**: Intraocular pressure in mmHg.
+- Document Slit-Lamp Biomicroscopy and Fundoscopy findings.
+
+### 6.3 Dental Clinic & Odontogram
+Navigate to **Dental Clinic** ([DentalClinic.tsx](file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/DentalClinic.tsx)):
+- Interactive **FDI Tooth Chart**: Click on specific tooth numbers (e.g., `#16`, `#46`) to record caries, root canal treatments, extractions, or periodontal pocket depths.
 
 ---
 
-### 6.2 Specialized Clinics: Eye Clinic & Dental Clinic
-- **Eye Clinic (Ophthalmology)** ([EyeClinic.tsx](file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/EyeClinic.tsx)):
-  - Enter **Visual Acuity (OD / OS)** (e.g., `6/6`, `6/18`).
-  - Record **Intraocular Pressure (IOP)** by Tonometry.
-  - Document Anterior Segment (Slit-lamp) and Posterior Segment (Fundoscopy).
-- **Dental Clinic** ([DentalClinic.tsx](file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/DentalClinic.tsx)):
-  - Interactive **FDI Odontogram**: Click directly on the adult or pediatric tooth chart (e.g., `#16`, `#46`) to record restorations, caries, extractions, or endodontic treatments.
+# 7. Section D: Pharmacy & Inventory Supply Chain Management (SCM)
 
----
+**Assigned Staff**: Pharmacists, Pharmacy Technicians, Store Keepers.  
+**Key Modules**: `Pharmacy Dispensary`, `Inventory SCM`, `Drug Safety & Allergies`, `Procurement`.
 
-## 7. Role 4: Pharmacist & Pharmacy Dispensary
+```mermaid
+flowchart LR
+    Rx["Doctor Prescribes Rx in OPD/Ward"] --> Queue["Pharmacy Dispensary Queue"]
+    Queue --> Safety["Allergy & Drug Interaction Check"]
+    Safety --> FEFO["Batch & Expiry Allocation (FEFO)"]
+    FEFO --> Dispense["Confirm Dispense & Deduct Store Balance"]
+    Dispense --> Audio["Generate Spoken Patient Dosage Guide"]
+```
 
-Pharmacists verify clinical safety, check inventory availability, dispense medications, and issue dosage instructions.
-
-### 7.1 Dispensing Doctor Prescriptions
-1. On the left menu, click **Pharmacy** -> **Dispensary & Orders Queue**.
-2. Select the patient from the **Pending Dispense Queue**.
-3. **Verify Prescription Details**:
-   - Review prescribed drug, dose, frequency, and total quantity.
-   - If the patient has documented allergies in the system, a high-priority red alert appears automatically.
-4. **Batch & Expiry Allocation**:
-   - The system utilizes **First-Expiry, First-Out (FEFO)** inventory principles.
-   - Select the active batch number from the inventory dropdown. The system displays current warehouse stock balance and shelf expiry date.
-5. **Dispense**:
+### Step-by-Step Operational Instructions:
+1. **Prescription Verification**:
+   - Open **Pharmacy** -> **Dispensary Queue**.
+   - Select the patient. The system flags known drug allergies in **RED**.
+2. **Batch Allocation & Stock Deduction**:
+   - The system uses **FEFO (First-Expiry, First-Out)** principles.
+   - Select the active batch from the dropdown. View remaining stock balance and batch expiration date.
+3. **Dispensing**:
    - Click **Confirm Dispense & Deduct Stock**.
-   - The stock is automatically deducted from the pharmacy store ledger.
-6. **Patient Spoken Instructions**:
-   - Click **Generate Spoken Care Guide** to produce clear audio dosage instructions for the patient.
+   - The quantity is deducted from the pharmacy sub-store inventory.
+4. **Voice Care Guide**:
+   - Click **Generate Spoken Care Guide** to allow Voicebox to generate spoken instructions for the patient regarding drug timing, dosage, and side effects.
 
 ---
 
-## 8. Role 5: Laboratory Scientist & Technologist (LIMS / Pathology)
+# 8. Section E: Laboratory Information Management System (LIMS / Pathology)
 
-The Laboratory Information Management System (LIMS) tracks samples from phlebotomy through to result validation.
+**Assigned Staff**: Medical Laboratory Scientists (MLS), Technicians, Pathologists.  
+**Key Modules**: `LIMS & Laboratory`, `Pathology`, `Blood Bank`.
 
-### 8.1 Phlebotomy & Sample Collection
-1. On the left menu, select **LIMS & Laboratory** -> **Sample Collection**.
-2. Look up the patient under **Awaiting Sample Collection**.
-3. Verify test orders (e.g., *FBC, Lipid Profile, Urinalysis*).
-4. Click **Collect Sample & Print Barcode Label**. Attach the generated barcode to the specimen tube.
-
-### 8.2 Entering & Validating Test Results
-1. Navigate to **Worklist & Processing**.
-2. Select the accessioned sample number.
-3. Enter test parameter values (e.g., *Hemoglobin: 13.5 g/dL*, *WBC: 6,400 /µL*).
-4. **Reference Range Indicators**:
-   - Results outside the biological reference interval are automatically marked with **[H] High** (Red) or **[L] Low** (Blue).
-5. Click **Submit for Pathologist Review** or click **Validate & Electronically Sign Result**.
-   - Once validated, the result is immediately visible to the requesting doctor in real time.
+1. **Phlebotomy & Sample Accessioning**:
+   - Open **LIMS** -> **Sample Collection**.
+   - Locate the ordered test. Click **Collect Sample & Generate Barcode**.
+   - Affix the printed specimen barcode to the blood/urine container.
+2. **Entering Test Results**:
+   - Open **Worklist & Processing**. Click on the accessioned test.
+   - Enter numeric parameter values (e.g., *WBC: 7.2 x 10^9/L*, *Hemoglobin: 14.1 g/dL*).
+   - Values exceeding physiological reference intervals are highlighted with **[H] High** or **[L] Low**.
+3. **Validation & Sign-Off**:
+   - Click **Validate & Electronically Sign Result**.
+   - The result immediately synchronizes with the ordering doctor's OPD and ward chart.
 
 ---
 
-## 9. Role 6: Radiologist & Sonographer (Radiology & PACS Imaging)
+# 9. Section F: Radiology & PACS Digital Medical Imaging
 
-The Radiology module manages X-ray, Ultrasound, CT, and MRI orders with a DICOM PACS viewer.
+**Assigned Staff**: Consultant Radiologists, Sonographers, Radiographers.  
+**Key Modules**: `Radiology & PACS Scans`.
 
-### 9.1 Processing Imaging Requests
-1. Open **Radiology & PACS Scans** from the left navigation bar.
-2. Select the patient under **Awaiting Imaging**.
-3. Verify requested modality (*Chest X-Ray PA*, *Abdominal Pelvic Ultrasound*, *Dental OPG*).
-4. Perform scan and upload DICOM image file into the patient's digital imaging record.
-
-### 9.2 Drafting Radiological Reports with Voice Dictation
-1. Open the patient's imaging request and click **Draft Radiologist Report**.
-2. Under **Radiographic Findings**:
-   - Use the built-in **`🎤 Voice Dictation`** button to speak your findings (e.g., *"Lungs are clear bilaterally. Cardiothoracic ratio is within normal limits. Costophrenic angles are sharp."*).
-3. Under **Radiological Impression**:
-   - Dictate your conclusive diagnostic opinion.
-4. Click **Sign & Release Radiological Report**.
+1. **Worklist Execution**:
+   - Open **Radiology** -> **Imaging Worklist**.
+   - Verify clinical indication and modality (*X-Ray*, *Ultrasound*, *CT*, *MRI*).
+2. **Uploading Scans & DICOM Viewer**:
+   - Upload DICOM scan files.
+   - Use the built-in web PACS viewer to adjust window leveling, zoom, measure distances, and compare anatomical structures.
+3. **Drafting Reports with AI Voice Dictation**:
+   - Under **Radiographic Findings**, click **`🎤 Voice Dictation`** to speak your observations.
+   - Under **Radiological Impression**, dictate your clinical conclusion.
+   - Click **Sign & Release Radiological Report**.
 
 ---
 
-## 10. Role 7: Cashier, Billing Officer & Health Insurance (NHIA / HMO)
+# 10. Section G: Billing, Cashier, Finance & Health Insurance (NHIA / HMO)
 
-The Finance & Billing department oversees patient invoices, receipts, and health insurance pre-authorizations.
+**Assigned Staff**: Cashiers, Medical Billing Officers, HMO Desk Officers, Hospital Accountants.  
+**Key Modules**: `Billing & Cashier Desk`, `Insurance Portal (NHIA/HMO)`, `Finance & General Ledger`.
 
-### 10.1 Invoicing Out-of-Pocket Cash Patients
-1. Click **Billing & Cashier Desk** on the left menu.
-2. Select patient under **Pending Payments**.
-3. All consultation fees, lab investigations, imaging scans, and pharmacy items are aggregated into an automated itemized bill.
-4. Click **Process Payment**:
-   - Select payment method: `Cash`, `POS Card`, `Bank Transfer`, or `Mobile Money`.
-   - Enter amount received.
-5. Click **Complete Payment & Print Official Receipt**.
-   - A digital audit receipt is generated with payment confirmation.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            BILLING & CASHIER DESK                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1. Aggregate Invoices: Automatically groups OPD, Lab, Pharmacy & Bed fees   │
+│ 2. Payment Method: Cash / POS Card / Bank Transfer / Mobile Money           │
+│ 3. Health Insurance: Auto-splits 90% HMO Coverage vs 10% Patient Copay      │
+│ 4. Output: Prints Cryptographically Signed Audit Receipt                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 10.2 Processing Health Insurance (NHIA / Private HMO)
-1. Under **Billing**, select the **HMO / Insurance Claims** tab.
-2. Check authorization status for requested services.
-3. If pre-authorization is required, enter the **HMO Authorization Code** provided by the insurer.
-4. System automatically splits co-payments (e.g., 90% insurer liability, 10% patient copay) according to NHIA guidelines.
-
----
-
-## 11. Role 8: Hospital Administrator, Medical Director & HR Manager
-
-Administrators manage user security, staff rosters, enterprise analytics, database backups, and disaster recovery.
-
-### 11.1 Staff Accounts & Role-Based Permissions
-1. Go to **Security & IAM** -> **User Accounts & RBAC**.
-2. To create a new hospital staff account:
-   - Click **+ Add Staff User**.
-   - Enter Full Name, Official Hospital Email, Username, and Temporary Password.
-   - Assign Primary Role: `DOCTOR`, `NURSE`, `PHARMACIST`, `LAB_SCIENTIST`, `RADIOLOGIST`, `BILLING_OFFICER`, `RECEPTIONIST`, or `ADMIN`.
-   - Toggle **Active Status** and click **Save User**.
+1. **Processing Out-of-Pocket Cash Invoices**:
+   - Open **Billing** -> **Pending Payments**.
+   - Select patient. The invoice aggregates all consultations, lab tests, and dispensed medications.
+   - Select payment channel (*Cash*, *POS*, *Direct Transfer*).
+   - Click **Complete Payment & Print Official Receipt**.
+2. **National Health Insurance (NHIA) & HMO Pre-Authorization**:
+   - Open **Insurance Portal**.
+   - Input the **HMO Pre-Authorization Code** received from the insurance desk.
+   - The system automatically handles co-payment splits (e.g., 90% HMO liability, 10% patient copay) and prepares claims for monthly reconciliation.
 
 ---
 
-### 11.2 Automated Database Backups & Manual Restores
+# 11. Section H: Hospital Administration, HR, Medical Director & IT System Engineers
+
+**Assigned Staff**: Hospital Administrators, Medical Directors, HR Executives, IT System Administrators.  
+**Key Modules**: `Security & IAM`, `User Management`, `Workforce HR & Rosters`, `Infrastructure & Security`, `Settings`.
+
+### 11.1 Managing Staff Accounts & Permissions
+1. Navigate to **Security & IAM** -> **User Accounts & RBAC**.
+2. Click **+ Add Staff User**.
+3. Enter Name, Official Email, Username, Password, and Role (`DOCTOR`, `NURSE`, `PHARMACIST`, `LAB_SCIENTIST`, `RADIOLOGIST`, `BILLING_OFFICER`, `RECEPTIONIST`, `ADMIN`).
+4. Click **Save User**.
+
+### 11.2 Automated Database Backups & Recovery
 Located under **System Architecture** -> **Infrastructure & Security**:
-- **Automated Daily Backups**: The system automatically executes a daily database snapshot at `02:00 AM`, keeping strictly the **10 most recent backups** and automatically pruning older versions.
-- **Trigger Manual Backup**: Click the yellow **Trigger Backup** button anytime before major maintenance.
-- **Restore from Backup File**:
-  - Click **Restore from File**.
-  - Select your saved `.dump` file and confirm the action to restore patient records and hospital configuration.
-- **Delete Backup**: You can manually click the delete icon on any snapshot row to manage disk storage.
-
----
+- **Automated Daily Backups**: Executes every morning at `02:00 AM`, keeping strictly the **10 most recent backups** and automatically removing older snapshots to preserve disk storage.
+- **Manual Backup**: Click the yellow **Trigger Backup** button anytime before system maintenance.
+- **Restore from File**: Click **Restore from File**, select a previously saved `.dump` file, and confirm to restore records.
 
 ### 11.3 Hospital Hard Reset (Factory Wipe)
 Located under **Settings** -> **Hospital Deployment Reset**:
 > [!CAUTION]
-> **Complete Factory Reset**: This action permanently clears all operational patient records, consultation notes, laboratory tests, inpatient records, and financial invoices while preserving system configuration (Super Admin account, Drug Formulary, ICD-10 libraries, and facility master setups).
-- Requires typing `HARD-RESET` in capital letters and confirming Super Admin credentials.
+> Typing `HARD-RESET` wipes operational clinical encounters, inpatient visits, and bills for new hospital commissioning, while preserving your Super Admin login, Drug Formulary, and ICD-10 libraries.
 
 ---
 
-## 12. Troubleshooting & Frequently Asked Questions (FAQ)
+# 12. Troubleshooting & Frequently Asked Questions (FAQ)
 
 ### Q1: The microphone dictation button does not record my voice. What should I check?
-1. Ensure your computer microphone is plugged in and not muted.
-2. In Windows Settings -> **Privacy & Security** -> **Microphone**, ensure **"Let desktop apps access your microphone"** is set to **On**.
-3. If accessing TerkHealth360 via a web browser on another computer over the hospital LAN, ensure the URL is using **HTTPS** (or `localhost`). Modern browsers block microphone access on insecure HTTP connections.
+1. Ensure your physical microphone is connected and not muted.
+2. In Windows Settings -> **Privacy & Security** -> **Microphone**, ensure desktop app microphone access is enabled.
+3. On macOS, ensure System Settings -> **Privacy & Security** -> **Microphone** has `Faith Foundation Hospital` toggled **ON**.
+4. If accessing via a web browser over the LAN, modern browsers block microphone access on unencrypted `http://`. Ensure you are using the installed **Electron Desktop App** or an `https://` local certificate.
 
-### Q2: Voicebox sidecar status shows "Hybrid Fallback Mode". Does voice dictation still work?
-**Yes.** In Hybrid Fallback Mode, TerkHealth360 uses its built-in local Whisper speech-to-text engine. You can dictate patient notes without interruptions. If you launch the **Voicebox** desktop app on the hospital server, it will automatically switch to **Voicebox Sidecar Online**.
+### Q2: Can the system run when internet cables are completely disconnected?
+**Yes.** TerkHealth360 is engineered as a **100% local-first hospital EMR**. All database queries, vital signs tracking, e-MAR, billing, and offline Whisper/Voicebox voice transcriptions run inside your hospital LAN with zero internet dependencies.
 
-### Q3: A doctor cannot see their assigned patients in the OPD queue.
-1. Check that the patient was properly triaged by the nurse and moved to the **Doctor Waiting Queue**.
-2. Verify that the doctor has selected the correct department filter at the top of the OPD screen (e.g., *General OPD* vs. *Eye Clinic*).
-
-### Q4: How do I export hospital statistical reports for Ministry of Health / NMRS?
-1. On the left menu, select **Reports & Analytics** -> **NMRS Interoperability**.
-2. Select reporting period (Month/Year) and click **Export FHIR / DHIS2 Statistical Report**.
+### Q3: How do we back up hospital data to an external hard drive?
+1. Open **System Architecture** -> **Infrastructure & Security**.
+2. Under **Disaster Recovery (DR) Database Snapshots**, locate the latest snapshot and click the **Download** icon.
+3. Copy the downloaded `.dump` file to your external encrypted drive.
 
 ---
 *Faith Foundation Hospital Management System (TerkHealth360) — Built by Terk-Age LTD.*
