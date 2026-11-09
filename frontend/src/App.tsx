@@ -74,6 +74,7 @@ import EyeClinic from './pages/EyeClinic';
 import ClinicsHub from './pages/clinics/ClinicsHub';
 import ClinicDashboard from './pages/clinics/ClinicDashboard';
 import ClinicPatientWorkspace from './pages/clinics/ClinicPatientWorkspace';
+import HospitalManual from './pages/HospitalManual';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -305,6 +306,8 @@ function App() {
         <Route path="architecture"  element={<TechnicalArchitecture />} />
         <Route path="architecture/*" element={<TechnicalArchitecture />} />
         <Route path="data-dictionary" element={<DataDictionary />} />
+        <Route path="manual"       element={<HospitalManual />} />
+        <Route path="manual/*"     element={<HospitalManual />} />
         {/* Catch-all for authenticated shell */}
         <Route path="*"            element={<Navigate to="/" replace />} />
       </Route>

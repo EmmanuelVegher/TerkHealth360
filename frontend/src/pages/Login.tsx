@@ -9,7 +9,7 @@ import {
 import {
   Visibility, VisibilityOff, Lock, Person, Key, Email, ArrowBack,
   Shield, Sync, ArrowForward, CheckCircle, RadioButtonUnchecked,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, MenuBook, Download,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
@@ -1326,6 +1326,77 @@ const Login = () => {
               >
                 ANGLICAN DIOCESE OF NSUKKA
               </Typography>
+            </Box>
+
+            {/* Hospital Master Operational Manual Quick Link */}
+            <Box
+              sx={{
+                width: '100%',
+                mb: 2.5,
+                p: 1.5,
+                borderRadius: '12px',
+                bgcolor: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1.5,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <MenuBook sx={{ fontSize: 20, color: '#1e2a78' }} />
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#0d2560', display: 'block', lineHeight: 1.2 }}>
+                    Staff Operational Manual
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Role Guides, Installation (Win/Mac/Linux) & Workflows
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Link
+                  href="/docs/manual.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: '#1e2a78',
+                    textDecoration: 'none',
+                    bgcolor: '#ffffff',
+                    px: 1.2,
+                    py: 0.5,
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    '&:hover': { bgcolor: '#f8fafc', textDecoration: 'underline' },
+                  }}
+                >
+                  Read Online
+                </Link>
+                <Link
+                  href="/docs/Hospital_Master_Operational_Manual.pdf"
+                  download="Faith_Foundation_Hospital_Master_Operational_Manual.pdf"
+                  sx={{
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    color: '#ffffff',
+                    textDecoration: 'none',
+                    bgcolor: '#0ca678',
+                    px: 1.2,
+                    py: 0.5,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.3,
+                    '&:hover': { bgcolor: '#099268' },
+                  }}
+                >
+                  <Download sx={{ fontSize: 13 }} />
+                  PDF
+                </Link>
+              </Box>
             </Box>
 
             {/* Footer Text */}

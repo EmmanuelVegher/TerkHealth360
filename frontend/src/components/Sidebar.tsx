@@ -987,6 +987,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, collapsed = false }
         },
         { text: 'Workflow Config', icon: <Policy />,           path: '/workflow-config', permission: 'settings:read', allowedDesignations: ['Admin'] },
         { text: 'Data Dictionary',  icon: <MenuBook />,         path: '/data-dictionary', permission: 'settings:read', allowedDesignations: ['Doctor', 'Lab Technician', 'Pathologist', 'Admin'] },
+        { text: 'Operational Manual', icon: <MenuBook />,       path: '/manual',       badge: 'PDF' },
         { text: 'Settings',     icon: <Settings />,            path: '/settings',     permission: 'settings:read', allowedDesignations: ['Admin'] },
       ],
     },

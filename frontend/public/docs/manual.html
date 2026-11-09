@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TerkHealth360 - Master Operational Manual</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm 16mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    color: #1e293b;
+    font-size: 10.5pt;
+    padding: 0 10px;
+  }
+  h1 {
+    color: #0d1550;
+    font-size: 20pt;
+    border-bottom: 3px solid #1e2a78;
+    padding-bottom: 8px;
+    margin-top: 0;
+  }
+  h2 {
+    color: #1e2a78;
+    font-size: 14pt;
+    border-bottom: 1.5px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 24pt;
+    page-break-after: avoid;
+  }
+  h3 {
+    color: #0369a1;
+    font-size: 12pt;
+    margin-top: 16pt;
+    page-break-after: avoid;
+  }
+  h4 {
+    color: #334155;
+    font-size: 11pt;
+    margin-top: 12pt;
+    page-break-after: avoid;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14pt 0;
+    font-size: 9pt;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 6pt 8pt;
+    text-align: left;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+  pre, code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 8.8pt;
+  }
+  pre {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10pt;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  p > code, li > code {
+    background-color: #f1f5f9;
+    padding: 1.5pt 4pt;
+    border-radius: 4px;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+  }
+  blockquote {
+    border-left: 4px solid #38bdf8;
+    margin: 12pt 0;
+    padding: 6pt 12pt;
+    background-color: #f0f9ff;
+    color: #0369a1;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 20pt 0;
+  }
+  ul, ol {
+    padding-left: 18pt;
+  }
+  li {
+    margin-bottom: 4pt;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 8pt;
+  }
+</style>
+</head>
+<body>
+<h1 id="terkhealth360-faith-foundation-hospital-management-system">TerkHealth360 (Faith Foundation Hospital Management System)</h1>
+<h2 id="complete-master-installation-guide-role-based-departmental-operational-manual">Complete Master Installation Guide &amp; Role-Based Departmental Operational Manual</h2>
+<hr />
+<h2 id="document-information-system-metadata">Document Information &amp; System Metadata</h2>
+<ul>
+<li><strong>System Version</strong>: TerkHealth360 Enterprise v1.0.0 (Release 2026.1)</li>
+<li><strong>Deployment Architecture</strong>: Local-First Hybrid EMR / Electron Desktop Client / High-Availability LAN Core</li>
+<li><strong>Hardware Profile Auto-Adaptation</strong>: Full Support for Dedicated Servers, Apple Silicon MLX, Dedicated NVIDIA/AMD GPUs, and Standard CPU-Only Laptops (e.g., Dell Intel Core i5 with Integrated Graphics)</li>
+<li><strong>Compliance Standards</strong>: NDPA (Nigeria Data Protection Act), WHO ICD-10 Classification, HL7 FHIR v4 Interoperability, NHIA (National Health Insurance Authority) Act 2022</li>
+</ul>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-master-installation--deployment-guide-windows-macos-linux">Master Installation &amp; Deployment Guide (Windows, macOS, Linux)</a></li>
+<li><em>1.1 Windows Desktop Installation (.exe)</em></li>
+<li><em>1.2 Apple macOS Installation (.dmg / .app)</em></li>
+<li><em>1.3 Linux Desktop Installation (.AppImage / .deb)</em></li>
+<li><em>1.4 Connecting Client Laptops to the Central Hospital LAN Server</em></li>
+<li><a href="#2-hospital-cross-cutting-clinical-architecture--lifecycle-diagram">Hospital Cross-Cutting Clinical Architecture &amp; Lifecycle Diagram</a></li>
+<li><em>How a Patient Journey Flows Seamlessly Across All Modules</em></li>
+<li><a href="#3-core-security-universal-navigation--voicebox-ai-studio">Core Security, Universal Navigation &amp; Voicebox AI Studio</a></li>
+<li><a href="#4-section-a-health-records-officers--receptionists-front-desk">Section A: Health Records Officers &amp; Receptionists (Front Desk)</a></li>
+<li><em>Modules: Master Patient Index (MPI), Patient Registration, Appointments, Visits, Queue Management</em></li>
+<li><a href="#5-section-b-nursing-staff-triage-inpatient-wards-labour-ward-emergency--icu">Section B: Nursing Staff (Triage, Inpatient Wards, Labour Ward, Emergency &amp; ICU)</a></li>
+<li><em>Modules: Nursing Dashboard, Triage Desk, Bed Allocation, e-MAR, Labour Ward, Emergency/Casualty, ICU</em></li>
+<li><a href="#6-section-c-medical-doctors--clinical-specialists">Section C: Medical Doctors &amp; Clinical Specialists</a></li>
+<li><em>Modules: Outpatient Care (OPD), Clinical SOAP Note, Voicebox AI Dictation, ICD-10 Auto-Derivation, Eye Clinic, Dental Clinic, Surgical Theatre, Telemedicine</em></li>
+<li><a href="#7-section-d-pharmacy--inventory-supply-chain-management-scm">Section D: Pharmacy &amp; Inventory Supply Chain Management (SCM)</a></li>
+<li><em>Modules: Pharmacy Dispensary, Drug Safety &amp; Allergies, Narcotics Control, Inventory SCM, Procurement, Cold-Chain &amp; FEFO Expiry Tracking</em></li>
+<li><a href="#8-section-e-laboratory-information-management-system-lims--pathology">Section E: Laboratory Information Management System (LIMS / Pathology)</a></li>
+<li><em>Modules: Sample Phlebotomy &amp; Barcoding, Analyzer Worklists, Reference Range Validation, Critical Alerts, Blood Bank &amp; Cross-Matching</em></li>
+<li><a href="#9-section-f-radiology--pacs-digital-medical-imaging">Section F: Radiology &amp; PACS Digital Medical Imaging</a></li>
+<li><em>Modules: Imaging Worklist, DICOM Web Viewer, Voice-Assisted Radiographic Findings &amp; Impressions</em></li>
+<li><a href="#10-section-g-billing-cashier-finance--health-insurance-nhia--hmo">Section G: Billing, Cashier, Finance &amp; Health Insurance (NHIA / HMO)</a><ul>
+<li><em>Modules: Point of Sale (POS) Invoicing, NHIA / HMO Pre-Authorization, Financial General Ledger, Asset Register, Financial Audits</em></li>
+</ul>
+</li>
+<li><a href="#11-section-h-hospital-administration-hr-medical-director--it-system-engineers">Section H: Hospital Administration, HR, Medical Director &amp; IT System Engineers</a><ul>
+<li><em>Modules: Security &amp; IAM, User Management, Duty Roster &amp; Attendance, Automated Backups, NMRS/DHIS2 Interoperability, Factory Hard Reset</em></li>
+</ul>
+</li>
+<li><a href="#12-troubleshooting--frequently-asked-questions-faq">Troubleshooting &amp; Frequently Asked Questions (FAQ)</a></li>
+</ol>
+<hr />
+<h1 id="1-master-installation-deployment-guide-windows-macos-linux">1. Master Installation &amp; Deployment Guide (Windows, macOS, Linux)</h1>
+<p>TerkHealth360 is built as a native multi-platform desktop application using Electron, powered by a high-throughput Node/Express backend and a responsive React frontend.</p>
+<hr />
+<h3 id="11-windows-desktop-installation-exe">1.1 Windows Desktop Installation (.exe)</h3>
+<p><strong>Target Operating Systems</strong>: Windows 11, Windows 10 (64-bit editions).</p>
+<h4 id="step-1-generating-the-windows-installer-for-hospital-it-administrator">Step 1: Generating the Windows Installer (For Hospital IT Administrator)</h4>
+<p>On the build machine or central server:</p>
+<pre><code class="language-bash">cd /path/to/TerkHealth360/frontend
+npm run dist:win
+</code></pre>
+<p>This produces <code>release/Faith Foundation Hospital Management System Setup 1.0.0.exe</code>.</p>
+<h4 id="step-2-layman-installation-on-windows-client-laptops-desktops">Step 2: Layman Installation on Windows Client Laptops / Desktops</h4>
+<ol>
+<li><strong>Copy the Installer</strong>: Transfer <code>Faith Foundation Hospital Management System Setup 1.0.0.exe</code> via the hospital USB flash drive or download it from the hospital internal network share (<code>\\192.168.1.100\HospitalApps</code>).</li>
+<li><strong>Double-Click Setup</strong>: Run the <code>.exe</code> file.</li>
+<li><strong>Handle Windows Defender / SmartScreen</strong>:</li>
+<li>If Windows displays a blue screen stating: <em>"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"</em>:</li>
+<li>Click the small underlined link: <strong>More info</strong>.</li>
+<li>Click the button: <strong>Run anyway</strong>.</li>
+<li><strong>Automated Setup</strong>:</li>
+<li>The installer automatically creates application binaries in <code>%LocalAppData%\Programs\Faith Foundation Hospital Management System</code>.</li>
+<li>A blue Hospital Cross icon will appear on the <strong>Windows Desktop</strong> and in the <strong>Start Menu</strong>.</li>
+<li><strong>Launch</strong>: Double-click the desktop shortcut to launch TerkHealth360.</li>
+</ol>
+<hr />
+<h3 id="12-apple-macos-installation-dmg-app">1.2 Apple macOS Installation (.dmg / .app)</h3>
+<p><strong>Target Operating Systems</strong>: macOS 12 (Monterey), macOS 13 (Ventura), macOS 14 (Sonoma), macOS 15 (Sequoia) on Apple Silicon (M1/M2/M3/M4) and Intel Macs.</p>
+<h4 id="step-1-generating-the-macos-installer-for-hospital-it-administrator">Step 1: Generating the macOS Installer (For Hospital IT Administrator)</h4>
+<pre><code class="language-bash">cd /path/to/TerkHealth360/frontend
+npm run dist:mac
+</code></pre>
+<p>This outputs <code>release/Faith Foundation Hospital Management System-1.0.0.dmg</code>.</p>
+<h4 id="step-2-layman-installation-on-apple-macbooks-imacs">Step 2: Layman Installation on Apple MacBooks / iMacs</h4>
+<ol>
+<li><strong>Mount DMG</strong>: Double-click <code>Faith Foundation Hospital Management System-1.0.0.dmg</code>. A window opens showing the <strong>Hospital App Icon</strong> and the <strong>Applications</strong> folder shortcut.</li>
+<li><strong>Drag and Drop</strong>: Drag the <code>Faith Foundation Hospital</code> icon into the <strong>Applications</strong> folder.</li>
+<li><strong>Eject Disk Image</strong>: Right-click the mounted disk image on your desktop and select <strong>Eject</strong>.</li>
+<li><strong>First Launch (Gatekeeper Verification)</strong>:</li>
+<li>Open Finder -&gt; <strong>Applications</strong> -&gt; Double-click <strong>Faith Foundation Hospital</strong>.</li>
+<li>If macOS displays <em>"Apple cannot check it for malicious software"</em> or <em>"Unidentified Developer"</em>:<ol>
+<li>Open <strong>System Settings</strong> (or System Preferences).</li>
+<li>Click <strong>Privacy &amp; Security</strong>.</li>
+<li>Scroll down to the <strong>Security</strong> section where you will see: <em>"Faith Foundation Hospital was blocked from use because it is not from an identified developer"</em>.</li>
+<li>Click <strong>Open Anyway</strong> and enter your Mac password.</li>
+</ol>
+</li>
+<li><strong>Microphone Permissions (Mandatory for Voicebox AI Dictation)</strong>:</li>
+<li>When the app launches, macOS will prompt: <em>"Faith Foundation Hospital would like to access the microphone"</em>. Click <strong>OK</strong>.</li>
+</ol>
+<hr />
+<h3 id="13-linux-desktop-installation-appimage-deb">1.3 Linux Desktop Installation (.AppImage / .deb)</h3>
+<p><strong>Target Operating Systems</strong>: Ubuntu 20.04/22.04/24.04 LTS, Debian 11/12, Linux Mint, Fedora, Red Hat Enterprise Linux.</p>
+<h4 id="step-1-generating-the-linux-package-for-hospital-it-administrator">Step 1: Generating the Linux Package (For Hospital IT Administrator)</h4>
+<pre><code class="language-bash">cd /path/to/TerkHealth360/frontend
+npm run dist:linux
+</code></pre>
+<p>This generates both:
+- <code>release/Faith-Foundation-Hospital-1.0.0.AppImage</code> (Universal Portable Linux Binary)
+- <code>release/faith-foundation-hospital_1.0.0_amd64.deb</code> (Debian/Ubuntu Package)</p>
+<h4 id="step-2-layman-installation-on-ubuntu-debian-workstations">Step 2: Layman Installation on Ubuntu / Debian Workstations</h4>
+<p><strong>Option A: Using the Portable AppImage (No installation required)</strong>:
+1. Copy <code>Faith-Foundation-Hospital-1.0.0.AppImage</code> to your Home or Desktop folder.
+2. Right-click the file -&gt; <strong>Properties</strong> -&gt; <strong>Permissions</strong> tab -&gt; Check <strong>"Allow executing file as program"</strong>.
+   <em>(Or via terminal: <code>chmod +x Faith-Foundation-Hospital-1.0.0.AppImage</code>)</em>.
+3. Double-click the file to immediately launch the hospital system.</p>
+<p><strong>Option B: Installing via Debian Package (<code>.deb</code>)</strong>:
+1. Open terminal in the download folder and execute:
+   <code>bash
+   sudo dpkg -i faith-foundation-hospital_1.0.0_amd64.deb
+   sudo apt-get install -f   # Fixes any missing system libraries</code>
+2. The application is now permanently installed in <code>/opt/Faith Foundation Hospital</code> and searchable in your Linux Application Launcher under <strong>Medical / Office</strong>.</p>
+<hr />
+<h3 id="14-connecting-client-laptops-to-the-central-hospital-lan-server">1.4 Connecting Client Laptops to the Central Hospital LAN Server</h3>
+<p>In standard hospital operation, one primary computer serves as the <strong>Hospital Database &amp; Voicebox Server</strong> (e.g., in the Server Room or Medical Director's Office at LAN IP <code>192.168.1.100</code>), while ward and clinic laptops connect over the secure hospital Wi-Fi/Ethernet.</p>
+<pre><code class="language-mermaid">flowchart TD
+    subgraph HospitalServer[&quot;Hospital Main Server (192.168.1.100)&quot;]
+        DB[(PostgreSQL Database)]
+        BE[&quot;Backend API (:3000)&quot;]
+        VB[&quot;Voicebox AI Sidecar (:17493)&quot;]
+        DB &lt;--&gt; BE
+        BE &lt;--&gt; VB
+    end
+
+    subgraph ClinicClients[&quot;Hospital Workstations (LAN Clients)&quot;]
+        W1[&quot;Reception Windows PC&quot;] --&gt;|&quot;http://192.168.1.100:3000&quot;| BE
+        W2[&quot;OPD Doctor Laptop&quot;] --&gt;|&quot;Microphone Audio / Data&quot;| BE
+        W3[&quot;Ward Nurse Tablet&quot;] --&gt; BE
+        W4[&quot;Pharmacy Workstation&quot;] --&gt; BE
+        W5[&quot;Laboratory Computer&quot;] --&gt; BE
+    end
+</code></pre>
+<h4 id="configuring-the-client-desktop-app-to-point-to-the-server">Configuring the Client Desktop App to Point to the Server:</h4>
+<ol>
+<li>On any client laptop, navigate to the installed directory or check the <code>frontend/.env.production</code> file.</li>
+<li>Set the <code>VITE_API_URL</code> to the server's static hospital IP:
+   <code>env
+   VITE_API_URL=http://192.168.1.100:3000/api</code></li>
+<li>When staff open the app, it instantly connects to the centralized server, meaning patient records entered at Reception are visible in OPD within milliseconds.</li>
+</ol>
+<hr />
+<h1 id="2-hospital-cross-cutting-clinical-architecture-lifecycle-diagram">2. Hospital Cross-Cutting Clinical Architecture &amp; Lifecycle Diagram</h1>
+<p>The diagram below illustrates how a single patient admission flows across all eight hospital departments without duplicate data entry:</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    autonumber
+    actor Patient
+    actor Rec as Receptionist
+    actor Nurse as Triage Nurse
+    actor Doc as OPD Doctor
+    actor Lab as Lab Scientist
+    actor Pharm as Pharmacist
+    actor Cashier as Billing Cashier
+
+    Patient-&gt;&gt;Rec: Arrives at Hospital Front Desk
+    Rec-&gt;&gt;Rec: Search Master Patient Index (MPI) or Register New
+    Rec-&gt;&gt;Nurse: Checks-in Encounter -&gt; Queued for Triage
+    Nurse-&gt;&gt;Nurse: Takes Vitals (BP, Temp, Pulse, SpO2, Weight)
+    Nurse-&gt;&gt;Doc: Vitals Saved -&gt; Patient Moved to Doctor Queue
+    Doc-&gt;&gt;Doc: Voice Dictates SOAP Note via Voicebox
+    Doc-&gt;&gt;Doc: Auto-derives ICD-10 Diagnosis (e.g., B50.9)
+    Doc-&gt;&gt;Lab: Requests Lab Order (FBC, Malaria MP)
+    Doc-&gt;&gt;Pharm: Prescribes Medications (ACT, Paracetamol)
+    Lab-&gt;&gt;Lab: Samples Accessioned &amp; Results Validated
+    Lab--&gt;&gt;Doc: Results Instantly Visible in Patient Chart
+    Pharm-&gt;&gt;Pharm: Verifies Drug Safety &amp; Allots Stock (FEFO)
+    Pharm-&gt;&gt;Cashier: Bills Transmitted to Ledger
+    Cashier-&gt;&gt;Patient: Collects Cash / Validates HMO Pre-Auth &amp; Prints Receipt
+    Pharm-&gt;&gt;Patient: Dispenses Medications with Spoken Audio Guide
+</code></pre>
+<hr />
+<h1 id="3-core-security-universal-navigation-voicebox-ai-studio">3. Core Security, Universal Navigation &amp; Voicebox AI Studio</h1>
+<h3 id="31-security-role-based-access-control-rbac">3.1 Security &amp; Role-Based Access Control (RBAC)</h3>
+<p>Every staff member is given an authenticated user profile with cryptographic session tokens.
+- <strong>Data Confidentiality</strong>: Only licensed clinicians can view subjective consultation notes.
+- <strong>Audit Logging</strong>: Every button click, patient edit, prescription deletion, or billing cancellation is cryptographically recorded in <strong>Audit Logs</strong> with user ID, IP address, and timestamp.
+- <strong>Screen Lock</strong>: If leaving your computer unattended, click your Avatar at the top right and click <strong>Lock Screen</strong>.</p>
+<h3 id="32-voicebox-ai-voice-studio-waveform-icon">3.2 Voicebox AI Voice Studio (Waveform Icon)</h3>
+<p>Located in the top header bar next to the emergency banner:
+- <strong>Zero-Cloud Audio Processing</strong>: All transcription runs inside the hospital premises. No patient voice data leaves the hospital building.
+- <strong>Hardware-Aware Filter</strong>: Automatically identifies whether the computer has an Apple Silicon chip, an NVIDIA GPU, or is a standard CPU-only laptop (e.g., Dell Core i5). On CPU-only laptops, it restricts models to lightweight <strong>Kokoro 82M</strong> (~350 MB) and <strong>Whisper Small</strong> (~150 MB) to ensure fast operation without overheating.</p>
+<hr />
+<h1 id="4-section-a-health-records-officers-receptionists-front-desk">4. Section A: Health Records Officers &amp; Receptionists (Front Desk)</h1>
+<p><strong>Assigned Staff</strong>: Medical Records Clerks, Receptionists, Front Desk Executives.<br />
+<strong>Key Modules</strong>: <code>Patient Registration</code>, <code>Patients (MPI)</code>, <code>Visits</code>, <code>Appointments</code>, <code>Queue Management</code>.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                      RECEPTION &amp; RECORDS WORKSPACE                          │
+├─────────────────────┬───────────────────────────┬───────────────────────────┤
+│ 1. Search MPI       │ 2. Register New Patient   │ 3. Check-In &amp; Queue       │
+│ Name, Phone, NIN,   │ Demographics, Next of Kin,│ Assign to OPD, Eye, Dental│
+│ or Hospital ID      │ Insurance / Cash category │ Casualty or ANC Triage    │
+└─────────────────────┴───────────────────────────┴───────────────────────────┘
+</code></pre>
+<h3 id="step-by-step-operational-instructions">Step-by-Step Operational Instructions:</h3>
+<ol>
+<li><strong>Searching the Master Patient Index (MPI)</strong>:</li>
+<li>When a patient approaches the desk, always type their surname, phone number, or national NIN in the top search bar first.</li>
+<li><em>Rule</em>: Never create a duplicate file if the patient already exists in the system.</li>
+<li><strong>Registering a First-Time Patient</strong>:</li>
+<li>Click <strong>+ New Patient Registration</strong>.</li>
+<li>Input <strong>Bio-data</strong>: Surname, First Name, Gender, Date of Birth (or estimated age).</li>
+<li>Input <strong>Contact</strong>: Phone Number, Residential Address, State/LGA of Origin.</li>
+<li>Input <strong>Next of Kin</strong>: Name, Relationship (e.g., Spouse, Parent), Contact Phone.</li>
+<li>Select <strong>Payer Category</strong>:<ul>
+<li><em>Private Out-of-Pocket Cash</em>: Standard self-pay.</li>
+<li><em>National Health Insurance (NHIA)</em>: Enter NHIA Registration Number and select Enrollee Type.</li>
+<li><em>Corporate HMO</em>: Select HMO Company (e.g., Hygeia, Reliance, AXA Mansard) and enter Policy ID.</li>
+</ul>
+</li>
+<li>Click <strong>Save &amp; Generate Hospital Number</strong>. The system issues an automated identifier (e.g., <code>PAT-2026-00412</code>).</li>
+<li><strong>Queue Check-In</strong>:</li>
+<li>Click <strong>Start Encounter</strong>. Select the requested clinic: <code>General OPD</code>, <code>Eye Clinic</code>, <code>Dental Clinic</code>, <code>ANC Maternity</code>, or <code>Emergency</code>.</li>
+<li>Click <strong>Send to Nursing Triage</strong>. The patient is now queued on the nurse's station screen.</li>
+</ol>
+<hr />
+<h1 id="5-section-b-nursing-staff-triage-inpatient-wards-labour-ward-emergency-icu">5. Section B: Nursing Staff (Triage, Inpatient Wards, Labour Ward, Emergency &amp; ICU)</h1>
+<p><strong>Assigned Staff</strong>: Registered Nurses (RN), Midwives (RM), Matrons, Triage Nurses.<br />
+<strong>Key Modules</strong>: <code>Nursing Dashboard</code>, <code>Triage Desk</code>, <code>Inpatient Care (IPD)</code>, <code>Labour Ward</code>, <code>ICU</code>, <code>Emergency</code>.</p>
+<h3 id="51-outpatient-triage-vital-signs-desk">5.1 Outpatient Triage &amp; Vital Signs Desk</h3>
+<ol>
+<li>Open <strong>Nursing Dashboard</strong> -&gt; <strong>Triage &amp; Vitals Desk</strong>.</li>
+<li>Select the patient from the <strong>Waiting for Vitals</strong> list.</li>
+<li>Enter vital sign measurements:</li>
+<li><strong>Blood Pressure</strong>: Systolic and Diastolic in mmHg.</li>
+<li><strong>Temperature</strong>: In Celsius (e.g., <code>37.4</code>).</li>
+<li><strong>Pulse Rate</strong>: Beats per minute.</li>
+<li><strong>Respiratory Rate</strong>: Breaths per minute.</li>
+<li><strong>Oxygen Saturation (SpO₂)</strong>: Percentage (e.g., <code>98%</code>).</li>
+<li><strong>Weight &amp; Height</strong>: System automatically calculates BMI ($kg/m^2$).</li>
+<li><strong>Automated NEWS2 Clinical Early Warning Scoring</strong>:</li>
+<li>The system automatically tallies the National Early Warning Score.</li>
+<li>If SpO₂ drops below 92% or systolic BP exceeds 180 mmHg, the card turns <strong>RED</strong> and sounds a triage alert.</li>
+<li>Record <strong>Presenting Complaints</strong>: Type or use <strong>🎤 Voice Dictation</strong> to speak the patient's complaints.</li>
+<li>Click <strong>Save Vitals &amp; Send to Doctor's Waiting Queue</strong>.</li>
+</ol>
+<h3 id="52-inpatient-bed-management-electronic-mar-e-mar">5.2 Inpatient Bed Management &amp; Electronic MAR (e-MAR)</h3>
+<ol>
+<li>Navigate to <strong>Inpatient Care (IPD)</strong> -&gt; <strong>Ward Beds Map</strong>.</li>
+<li><strong>Bed Allocation</strong>: Select the ward (<em>Male Medical</em>, <em>Female Surgical</em>, <em>Pediatric</em>, <em>Maternity</em>). Click any green bed, search the admitted patient's name, and click <strong>Confirm Bed Allocation</strong>.</li>
+<li><strong>Medication Administration (e-MAR)</strong>:</li>
+<li>Click the patient's active bed card.</li>
+<li>View scheduled doses ordered by the attending physician (e.g., <em>IV Ceftriaxone 1g at 14:00</em>).</li>
+<li>When administered, click <strong>Administer &amp; Sign</strong>. The nurse's credential and timestamp are logged permanently.</li>
+</ol>
+<hr />
+<h1 id="6-section-c-medical-doctors-clinical-specialists">6. Section C: Medical Doctors &amp; Clinical Specialists</h1>
+<p><strong>Assigned Staff</strong>: Medical Officers, Resident Doctors, Consultants, Ophthalmologists, Dental Surgeons.<br />
+<strong>Key Modules</strong>: <code>Outpatient Care (OPD)</code>, <code>Eye Clinic</code>, <code>Dental Clinic</code>, <code>Surgical Theatre</code>, <code>Specialty Disease Clinics</code>.</p>
+<h3 id="61-clinical-consultation-drawer-voicebox-dictation-soap-workflow">6.1 Clinical Consultation Drawer &amp; Voicebox Dictation (SOAP Workflow)</h3>
+<p>In <strong>Outpatient Care (OPD)</strong>, select a patient from the <strong>Waiting for Consultation</strong> queue:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DOCTOR'S SOAP NOTE DRAWER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ [🎤 Voice Dictation]   [✨ Smart Auto-Online Assessment &amp; Plan]             │
+│                                                                             │
+│ [S] Subjective: History of Presenting Complaint (Spoken or Typed)           │
+│ [O] Objective:  Vitals review, Systemic &amp; Physical Examination              │
+│ [A] Assessment: ICD-10 Diagnostic Codes (Auto-Derived from Symptoms)        │
+│ [P] Plan:       Clinical Management Guidelines &amp; Patient Instructions       │
+│                                                                             │
+│ [Tabs]: [Prescriptions &amp; Stock]  [Lab Orders]  [Radiology Scans]  [Admit]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<ol>
+<li><strong>Subjective (S) with Voicebox AI</strong>:</li>
+<li>Click the blue <strong><code>🎤 Voice Dictation</code></strong> button.</li>
+<li>Speak clearly into your computer microphone:
+     &gt; <em>"Patient presents with complaints of persistent fever and chills for three days, severe frontal headache, and joint pains. No vomiting or diarrhea."</em></li>
+<li>Click <strong><code>Stop Voice Dictation</code></strong>.</li>
+<li>Voicebox Whisper transcribes the audio, automatically strips conversational fillers (<code>um</code>, <code>uh</code>, stutters), and formats it into formal clinical language.</li>
+<li><strong>Objective (O)</strong>:</li>
+<li>Add targeted examination notes (e.g., <em>"Chest clear bilaterally, abdomen soft, non-tender"</em>).</li>
+<li><strong>Assessment (A) &amp; ICD-10 Coding</strong>:</li>
+<li>Click <strong>✨ Smart Auto-Online Assessment &amp; Plan</strong>.</li>
+<li>The clinical NLP engine matches symptoms to WHO ICD-10 codes (e.g., <code>B50.9 — Plasmodium falciparum malaria &amp; febrile illness</code>, <code>R51.9 — Headache</code>).</li>
+<li><strong>Plan (P), Prescriptions &amp; Orders</strong>:</li>
+<li>In the <strong>Prescriptions &amp; Stock</strong> tab: Search drug formulary, select dosage (<em>1 cap</em>), frequency (<em>TDS</em>), and duration (<em>5 days</em>). Click <strong>Add Rx</strong>.</li>
+<li>In the <strong>Lab Orders &amp; Availability</strong> tab: Check necessary investigations (<em>Malaria MP</em>, <em>Full Blood Count</em>).</li>
+<li>Click <strong>Save &amp; Finalize OPD Consultation Note</strong>.</li>
+</ol>
+<h3 id="62-eye-clinic-ophthalmology">6.2 Eye Clinic (Ophthalmology)</h3>
+<p>Navigate to <strong>Eye Clinic</strong> (<a href="file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/EyeClinic.tsx">EyeClinic.tsx</a>):
+- Record <strong>Visual Acuity</strong>: Right Eye (OD) and Left Eye (OS) for uncorrected, pinhole, and best corrected vision.
+- Record <strong>Tonometry (IOP)</strong>: Intraocular pressure in mmHg.
+- Document Slit-Lamp Biomicroscopy and Fundoscopy findings.</p>
+<h3 id="63-dental-clinic-odontogram">6.3 Dental Clinic &amp; Odontogram</h3>
+<p>Navigate to <strong>Dental Clinic</strong> (<a href="file:///Users/mac/Downloads/TerkHealth360/frontend/src/pages/DentalClinic.tsx">DentalClinic.tsx</a>):
+- Interactive <strong>FDI Tooth Chart</strong>: Click on specific tooth numbers (e.g., <code>#16</code>, <code>#46</code>) to record caries, root canal treatments, extractions, or periodontal pocket depths.</p>
+<hr />
+<h1 id="7-section-d-pharmacy-inventory-supply-chain-management-scm">7. Section D: Pharmacy &amp; Inventory Supply Chain Management (SCM)</h1>
+<p><strong>Assigned Staff</strong>: Pharmacists, Pharmacy Technicians, Store Keepers.<br />
+<strong>Key Modules</strong>: <code>Pharmacy Dispensary</code>, <code>Inventory SCM</code>, <code>Drug Safety &amp; Allergies</code>, <code>Procurement</code>.</p>
+<pre><code class="language-mermaid">flowchart LR
+    Rx[&quot;Doctor Prescribes Rx in OPD/Ward&quot;] --&gt; Queue[&quot;Pharmacy Dispensary Queue&quot;]
+    Queue --&gt; Safety[&quot;Allergy &amp; Drug Interaction Check&quot;]
+    Safety --&gt; FEFO[&quot;Batch &amp; Expiry Allocation (FEFO)&quot;]
+    FEFO --&gt; Dispense[&quot;Confirm Dispense &amp; Deduct Store Balance&quot;]
+    Dispense --&gt; Audio[&quot;Generate Spoken Patient Dosage Guide&quot;]
+</code></pre>
+<h3 id="step-by-step-operational-instructions_1">Step-by-Step Operational Instructions:</h3>
+<ol>
+<li><strong>Prescription Verification</strong>:</li>
+<li>Open <strong>Pharmacy</strong> -&gt; <strong>Dispensary Queue</strong>.</li>
+<li>Select the patient. The system flags known drug allergies in <strong>RED</strong>.</li>
+<li><strong>Batch Allocation &amp; Stock Deduction</strong>:</li>
+<li>The system uses <strong>FEFO (First-Expiry, First-Out)</strong> principles.</li>
+<li>Select the active batch from the dropdown. View remaining stock balance and batch expiration date.</li>
+<li><strong>Dispensing</strong>:</li>
+<li>Click <strong>Confirm Dispense &amp; Deduct Stock</strong>.</li>
+<li>The quantity is deducted from the pharmacy sub-store inventory.</li>
+<li><strong>Voice Care Guide</strong>:</li>
+<li>Click <strong>Generate Spoken Care Guide</strong> to allow Voicebox to generate spoken instructions for the patient regarding drug timing, dosage, and side effects.</li>
+</ol>
+<hr />
+<h1 id="8-section-e-laboratory-information-management-system-lims-pathology">8. Section E: Laboratory Information Management System (LIMS / Pathology)</h1>
+<p><strong>Assigned Staff</strong>: Medical Laboratory Scientists (MLS), Technicians, Pathologists.<br />
+<strong>Key Modules</strong>: <code>LIMS &amp; Laboratory</code>, <code>Pathology</code>, <code>Blood Bank</code>.</p>
+<ol>
+<li><strong>Phlebotomy &amp; Sample Accessioning</strong>:</li>
+<li>Open <strong>LIMS</strong> -&gt; <strong>Sample Collection</strong>.</li>
+<li>Locate the ordered test. Click <strong>Collect Sample &amp; Generate Barcode</strong>.</li>
+<li>Affix the printed specimen barcode to the blood/urine container.</li>
+<li><strong>Entering Test Results</strong>:</li>
+<li>Open <strong>Worklist &amp; Processing</strong>. Click on the accessioned test.</li>
+<li>Enter numeric parameter values (e.g., <em>WBC: 7.2 x 10^9/L</em>, <em>Hemoglobin: 14.1 g/dL</em>).</li>
+<li>Values exceeding physiological reference intervals are highlighted with <strong>[H] High</strong> or <strong>[L] Low</strong>.</li>
+<li><strong>Validation &amp; Sign-Off</strong>:</li>
+<li>Click <strong>Validate &amp; Electronically Sign Result</strong>.</li>
+<li>The result immediately synchronizes with the ordering doctor's OPD and ward chart.</li>
+</ol>
+<hr />
+<h1 id="9-section-f-radiology-pacs-digital-medical-imaging">9. Section F: Radiology &amp; PACS Digital Medical Imaging</h1>
+<p><strong>Assigned Staff</strong>: Consultant Radiologists, Sonographers, Radiographers.<br />
+<strong>Key Modules</strong>: <code>Radiology &amp; PACS Scans</code>.</p>
+<ol>
+<li><strong>Worklist Execution</strong>:</li>
+<li>Open <strong>Radiology</strong> -&gt; <strong>Imaging Worklist</strong>.</li>
+<li>Verify clinical indication and modality (<em>X-Ray</em>, <em>Ultrasound</em>, <em>CT</em>, <em>MRI</em>).</li>
+<li><strong>Uploading Scans &amp; DICOM Viewer</strong>:</li>
+<li>Upload DICOM scan files.</li>
+<li>Use the built-in web PACS viewer to adjust window leveling, zoom, measure distances, and compare anatomical structures.</li>
+<li><strong>Drafting Reports with AI Voice Dictation</strong>:</li>
+<li>Under <strong>Radiographic Findings</strong>, click <strong><code>🎤 Voice Dictation</code></strong> to speak your observations.</li>
+<li>Under <strong>Radiological Impression</strong>, dictate your clinical conclusion.</li>
+<li>Click <strong>Sign &amp; Release Radiological Report</strong>.</li>
+</ol>
+<hr />
+<h1 id="10-section-g-billing-cashier-finance-health-insurance-nhia-hmo">10. Section G: Billing, Cashier, Finance &amp; Health Insurance (NHIA / HMO)</h1>
+<p><strong>Assigned Staff</strong>: Cashiers, Medical Billing Officers, HMO Desk Officers, Hospital Accountants.<br />
+<strong>Key Modules</strong>: <code>Billing &amp; Cashier Desk</code>, <code>Insurance Portal (NHIA/HMO)</code>, <code>Finance &amp; General Ledger</code>.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                            BILLING &amp; CASHIER DESK                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1. Aggregate Invoices: Automatically groups OPD, Lab, Pharmacy &amp; Bed fees   │
+│ 2. Payment Method: Cash / POS Card / Bank Transfer / Mobile Money           │
+│ 3. Health Insurance: Auto-splits 90% HMO Coverage vs 10% Patient Copay      │
+│ 4. Output: Prints Cryptographically Signed Audit Receipt                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<ol>
+<li><strong>Processing Out-of-Pocket Cash Invoices</strong>:</li>
+<li>Open <strong>Billing</strong> -&gt; <strong>Pending Payments</strong>.</li>
+<li>Select patient. The invoice aggregates all consultations, lab tests, and dispensed medications.</li>
+<li>Select payment channel (<em>Cash</em>, <em>POS</em>, <em>Direct Transfer</em>).</li>
+<li>Click <strong>Complete Payment &amp; Print Official Receipt</strong>.</li>
+<li><strong>National Health Insurance (NHIA) &amp; HMO Pre-Authorization</strong>:</li>
+<li>Open <strong>Insurance Portal</strong>.</li>
+<li>Input the <strong>HMO Pre-Authorization Code</strong> received from the insurance desk.</li>
+<li>The system automatically handles co-payment splits (e.g., 90% HMO liability, 10% patient copay) and prepares claims for monthly reconciliation.</li>
+</ol>
+<hr />
+<h1 id="11-section-h-hospital-administration-hr-medical-director-it-system-engineers">11. Section H: Hospital Administration, HR, Medical Director &amp; IT System Engineers</h1>
+<p><strong>Assigned Staff</strong>: Hospital Administrators, Medical Directors, HR Executives, IT System Administrators.<br />
+<strong>Key Modules</strong>: <code>Security &amp; IAM</code>, <code>User Management</code>, <code>Workforce HR &amp; Rosters</code>, <code>Infrastructure &amp; Security</code>, <code>Settings</code>.</p>
+<h3 id="111-managing-staff-accounts-permissions">11.1 Managing Staff Accounts &amp; Permissions</h3>
+<ol>
+<li>Navigate to <strong>Security &amp; IAM</strong> -&gt; <strong>User Accounts &amp; RBAC</strong>.</li>
+<li>Click <strong>+ Add Staff User</strong>.</li>
+<li>Enter Name, Official Email, Username, Password, and Role (<code>DOCTOR</code>, <code>NURSE</code>, <code>PHARMACIST</code>, <code>LAB_SCIENTIST</code>, <code>RADIOLOGIST</code>, <code>BILLING_OFFICER</code>, <code>RECEPTIONIST</code>, <code>ADMIN</code>).</li>
+<li>Click <strong>Save User</strong>.</li>
+</ol>
+<h3 id="112-automated-database-backups-recovery">11.2 Automated Database Backups &amp; Recovery</h3>
+<p>Located under <strong>System Architecture</strong> -&gt; <strong>Infrastructure &amp; Security</strong>:
+- <strong>Automated Daily Backups</strong>: Executes every morning at <code>02:00 AM</code>, keeping strictly the <strong>10 most recent backups</strong> and automatically removing older snapshots to preserve disk storage.
+- <strong>Manual Backup</strong>: Click the yellow <strong>Trigger Backup</strong> button anytime before system maintenance.
+- <strong>Restore from File</strong>: Click <strong>Restore from File</strong>, select a previously saved <code>.dump</code> file, and confirm to restore records.</p>
+<h3 id="113-hospital-hard-reset-factory-wipe">11.3 Hospital Hard Reset (Factory Wipe)</h3>
+<p>Located under <strong>Settings</strong> -&gt; <strong>Hospital Deployment Reset</strong>:</p>
+<blockquote>
+<p>[!CAUTION]
+Typing <code>HARD-RESET</code> wipes operational clinical encounters, inpatient visits, and bills for new hospital commissioning, while preserving your Super Admin login, Drug Formulary, and ICD-10 libraries.</p>
+</blockquote>
+<hr />
+<h1 id="12-troubleshooting-frequently-asked-questions-faq">12. Troubleshooting &amp; Frequently Asked Questions (FAQ)</h1>
+<h3 id="q1-the-microphone-dictation-button-does-not-record-my-voice-what-should-i-check">Q1: The microphone dictation button does not record my voice. What should I check?</h3>
+<ol>
+<li>Ensure your physical microphone is connected and not muted.</li>
+<li>In Windows Settings -&gt; <strong>Privacy &amp; Security</strong> -&gt; <strong>Microphone</strong>, ensure desktop app microphone access is enabled.</li>
+<li>On macOS, ensure System Settings -&gt; <strong>Privacy &amp; Security</strong> -&gt; <strong>Microphone</strong> has <code>Faith Foundation Hospital</code> toggled <strong>ON</strong>.</li>
+<li>If accessing via a web browser over the LAN, modern browsers block microphone access on unencrypted <code>http://</code>. Ensure you are using the installed <strong>Electron Desktop App</strong> or an <code>https://</code> local certificate.</li>
+</ol>
+<h3 id="q2-can-the-system-run-when-internet-cables-are-completely-disconnected">Q2: Can the system run when internet cables are completely disconnected?</h3>
+<p><strong>Yes.</strong> TerkHealth360 is engineered as a <strong>100% local-first hospital EMR</strong>. All database queries, vital signs tracking, e-MAR, billing, and offline Whisper/Voicebox voice transcriptions run inside your hospital LAN with zero internet dependencies.</p>
+<h3 id="q3-how-do-we-back-up-hospital-data-to-an-external-hard-drive">Q3: How do we back up hospital data to an external hard drive?</h3>
+<ol>
+<li>Open <strong>System Architecture</strong> -&gt; <strong>Infrastructure &amp; Security</strong>.</li>
+<li>Under <strong>Disaster Recovery (DR) Database Snapshots</strong>, locate the latest snapshot and click the <strong>Download</strong> icon.</li>
+<li>Copy the downloaded <code>.dump</code> file to your external encrypted drive.</li>
+</ol>
+<hr />
+<p><em>Faith Foundation Hospital Management System (TerkHealth360) — Built by Terk-Age LTD.</em></p>
+</body>
+</html>
